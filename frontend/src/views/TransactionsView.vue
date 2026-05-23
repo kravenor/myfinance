@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import RowActions from '@/components/ui/RowActions.vue'
 import type { Account, Category, Paginated, Transaction, TransactionType } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<Transaction>('transactions')
@@ -217,9 +218,8 @@ onMounted(async () => {
             </td>
             <td>{{ tx.description ?? '—' }}</td>
             <td class="text-right font-medium">{{ tx.amount }} {{ tx.currency }}</td>
-            <td class="text-right space-x-2">
-              <button class="text-indigo-600 hover:underline text-sm" @click="startEdit(tx)">Modifica</button>
-              <button class="text-red-600 hover:underline text-sm" @click="onDelete(tx)">Elimina</button>
+            <td class="text-right">
+              <RowActions @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">

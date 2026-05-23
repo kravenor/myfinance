@@ -35,7 +35,7 @@ async function onLogout() {
           :key="item.name"
           :to="{ name: item.name }"
           class="block px-4 py-2 rounded text-sm font-medium hover:bg-slate-800"
-          active-class="bg-slate-800 text-white"
+          exact-active-class="bg-slate-800 text-white"
         >
           {{ item.label }}
         </RouterLink>

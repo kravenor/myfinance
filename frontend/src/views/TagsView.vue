@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
+import RowActions from '@/components/ui/RowActions.vue'
 import type { Tag } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<Tag>('tags')
@@ -80,9 +81,8 @@ onMounted(() => list())
               <span v-if="t.color" class="inline-block w-4 h-4 rounded-full align-middle mr-2" :style="{ background: t.color }" />
               {{ t.color ?? '—' }}
             </td>
-            <td class="text-right space-x-2">
-              <button class="text-indigo-600 hover:underline text-sm" @click="startEdit(t)">Modifica</button>
-              <button class="text-red-600 hover:underline text-sm" @click="onDelete(t)">Elimina</button>
+            <td class="text-right">
+              <RowActions @edit="startEdit(t)" @delete="onDelete(t)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">

@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import RowActions from '@/components/ui/RowActions.vue'
 import type { Account, Cadence, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<RecurringTransaction>('recurring-transactions')
@@ -199,9 +200,8 @@ onMounted(async () => {
             <td>
               <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'">●</span>
             </td>
-            <td class="text-right space-x-2">
-              <button class="text-indigo-600 hover:underline text-sm" @click="startEdit(r)">Modifica</button>
-              <button class="text-red-600 hover:underline text-sm" @click="onDelete(r)">Elimina</button>
+            <td class="text-right">
+              <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">

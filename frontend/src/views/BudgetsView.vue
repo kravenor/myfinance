@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import RowActions from '@/components/ui/RowActions.vue'
 import type { Budget, Category, Paginated } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<Budget>('budgets')
@@ -150,9 +151,8 @@ onMounted(async () => {
                 />
               </div>
             </td>
-            <td class="text-right space-x-2">
-              <button class="text-indigo-600 hover:underline text-sm" @click="startEdit(b)">Modifica</button>
-              <button class="text-red-600 hover:underline text-sm" @click="onDelete(b)">Elimina</button>
+            <td class="text-right">
+              <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">

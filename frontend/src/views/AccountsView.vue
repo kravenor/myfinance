@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
+import RowActions from '@/components/ui/RowActions.vue'
 import type { Account, AccountType } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<Account>('accounts')
@@ -108,9 +109,8 @@ onMounted(() => list())
             <td class="capitalize">{{ acc.type }}</td>
             <td>{{ acc.currency }}</td>
             <td class="text-right">{{ acc.initial_balance }}</td>
-            <td class="text-right space-x-2">
-              <button class="text-indigo-600 hover:underline text-sm" @click="startEdit(acc)">Modifica</button>
-              <button class="text-red-600 hover:underline text-sm" @click="onDelete(acc)">Elimina</button>
+            <td class="text-right">
+              <RowActions @edit="startEdit(acc)" @delete="onDelete(acc)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">
