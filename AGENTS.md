@@ -122,27 +122,74 @@ Finance/
 
 In **produzione** sostituire il proxy a Vite con il servizio di file statici buildati da `npm run build` (da pianificare in Fase 9).
 
+## 4.1 Setup da zero (post-clone)
+
+Dopo aver clonato il repo su una nuova macchina:
+
+```bash
+git clone <repo>
+cd Finance
+
+# (opzionale) allinea UID/GID all'utente host
+#   Linux user standard: UID=1000 GID=1000 (già default)
+#   macOS: edit .env dopo bootstrap → UID=$(id -u) GID=$(id -g) (tipicamente 501/20)
+
+make bootstrap
+```
+
+`make bootstrap` esegue in ordine:
+1. `cp .env.example .env` e `cp backend/.env.example backend/.env` (solo se mancanti).
+2. `docker compose build` (UID/GID nel .env diventano args del build).
+3. `docker compose up -d` (tutti i servizi).
+4. `composer install` nel container php.
+5. `php artisan key:generate` (popola `APP_KEY` in `backend/.env`).
+6. `php artisan migrate --seed` (crea schema + utente demo + categorie).
+7. Stampa URL e credenziali demo (`demo@finance.local` / `password`).
+
+A fine bootstrap, `http://localhost:${APP_PORT:-8080}` è pronto.
+
+**Comandi atomici** se serve solo un pezzo:
+- `make key-generate` — rigenera `APP_KEY` se hai cancellato/sostituito `backend/.env`.
+- `make build` — rebuild immagini (necessario dopo modifiche ai Dockerfile o cambi UID/GID).
+- `make fresh` — `migrate:fresh --seed` per ripartire da DB vuoto.
+
+**Troubleshooting comune**
+- *Errore `No application encryption key has been specified`* → `make key-generate`.
+- *Errore `EACCES` nel container `node`* sui `node_modules` → l'entrypoint script chowna il volume al boot, ma serve un'immagine aggiornata: `make build` (o `docker compose build --no-cache node`) dopo un `git pull`.
+- *502 Bad Gateway sulla root* → il container `node` non sta servendo Vite. `docker compose logs node` per diagnosi.
+
 ## 5. Comandi essenziali
 
 Tutti via `make`:
 
 ```bash
+make bootstrap       # setup completo post-clone (vedi 4.1)
 make up              # avvia stack
 make down            # ferma stack
+make restart         # riavvia stack
+make build           # rebuild immagini
 make logs            # tail log
+make ps              # stato container
 make shell-php       # shell nel container PHP
 make shell-node      # shell nel container Node
 make shell-mysql     # client MySQL
 
-make laravel-new     # bootstrap Laravel in backend/ (una tantum)
-make vue-new         # bootstrap Vue in frontend/ (una tantum)
+make key-generate    # genera APP_KEY Laravel
 
 make composer-install
 make migrate
 make fresh           # migrate:fresh --seed
 make seed
-make test
-make pint
+make test            # PHPUnit feature tests
+make pint            # formatter PHP
+make stan            # Larastan / PHPStan
+make lint            # ESLint frontend
+make type-check      # vue-tsc
+make check           # pipeline completa (pint + stan + test + lint + type-check)
+
+make prod-build      # build immagini produzione
+make prod-up         # avvia stack produzione
+make prod-down       # ferma stack produzione
 ```
 
 ## 6. Convenzioni di sviluppo

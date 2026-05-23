@@ -1,10 +1,25 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down
+.PHONY: help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down
 
 help: ## Mostra i comandi disponibili
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+
+bootstrap: ## Setup completo da repo appena clonato (env, build, install, key, migrate)
+	@if [ ! -f .env ]; then cp .env.example .env; echo "✓ creato .env (verifica UID/GID con 'id -u' / 'id -g')"; fi
+	@if [ ! -f backend/.env ]; then cp backend/.env.example backend/.env; echo "✓ creato backend/.env"; fi
+	$(COMPOSE) build
+	$(COMPOSE) up -d
+	$(COMPOSE) exec php composer install
+	$(COMPOSE) exec php php artisan key:generate
+	$(COMPOSE) exec php php artisan migrate --seed
+	@echo ""
+	@echo "✓ Stack pronto su http://localhost:$${APP_PORT:-8080}"
+	@echo "  Login demo: demo@finance.local / password"
+
+key-generate: ## Genera APP_KEY Laravel
+	$(COMPOSE) exec php php artisan key:generate
 
 up: ## Avvia i container
 	$(COMPOSE) up -d
