@@ -1,0 +1,26 @@
+<?php
+
+use App\Http\Controllers\AccountController;
+use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\RecurringTransactionController;
+use App\Http\Controllers\TagController;
+use App\Http\Controllers\TransactionController;
+use Illuminate\Support\Facades\Route;
+
+Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
+Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
+    Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+
+    Route::apiResource('accounts', AccountController::class);
+    Route::apiResource('categories', CategoryController::class);
+    Route::apiResource('tags', TagController::class);
+    Route::apiResource('transactions', TransactionController::class);
+    Route::apiResource('budgets', BudgetController::class);
+    Route::apiResource('recurring-transactions', RecurringTransactionController::class)
+        ->parameter('recurring-transactions', 'recurring_transaction');
+});

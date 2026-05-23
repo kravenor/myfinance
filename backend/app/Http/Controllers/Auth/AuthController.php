@@ -1,0 +1,83 @@
+<?php
+
+namespace App\Http\Controllers\Auth;
+
+use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Resources\UserResource;
+use App\Models\User;
+use Database\Seeders\CategorySeeder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+
+class AuthController extends Controller
+{
+    public function register(RegisterRequest $request): JsonResponse
+    {
+        $data = $request->validated();
+
+        $user = DB::transaction(function () use ($data) {
+            $user = User::create([
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'currency' => $data['currency'] ?? 'EUR',
+                'locale' => $data['locale'] ?? 'it',
+            ]);
+
+            (new CategorySeeder)->seedFor($user);
+
+            return $user;
+        });
+
+        Auth::login($user);
+
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+
+        return (new UserResource($user))
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    public function login(LoginRequest $request): UserResource
+    {
+        $request->authenticate();
+
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+
+        /** @var User $user */
+        $user = $request->user();
+
+        return new UserResource($user);
+    }
+
+    public function logout(Request $request): Response
+    {
+        Auth::guard('web')->logout();
+        Auth::guard('sanctum')->forgetUser();
+
+        if ($request->hasSession()) {
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
+
+        return response()->noContent();
+    }
+
+    public function me(Request $request): UserResource
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        return new UserResource($user);
+    }
+}
