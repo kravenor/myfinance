@@ -37,5 +37,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('by-category', 'byCategory')->name('reports.by-category');
         Route::get('timeline', 'timeline')->name('reports.timeline');
         Route::get('net-worth', 'netWorth')->name('reports.net-worth');
+        Route::get('period-comparison', 'periodComparison')->name('reports.period-comparison');
+        Route::get('category-trend', 'categoryTrend')->name('reports.category-trend');
+        Route::get('top-transactions', 'topTransactions')->name('reports.top-transactions');
+        Route::get('cash-flow-forecast', 'cashFlowForecast')->name('reports.cash-flow-forecast');
     });
 });

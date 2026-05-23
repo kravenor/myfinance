@@ -29,6 +29,7 @@ export const router = createRouter({
         { path: 'budgets', name: 'budgets', component: () => import('@/views/BudgetsView.vue') },
         { path: 'recurring', name: 'recurring', component: () => import('@/views/RecurringView.vue') },
         { path: 'reports', name: 'reports', component: () => import('@/views/ReportsView.vue') },
+        { path: 'stats', name: 'stats', component: () => import('@/views/StatsView.vue') },
         { path: 'import-export', name: 'import-export', component: () => import('@/views/ImportExportView.vue') },
       ],
     },

@@ -49,6 +49,68 @@ class ReportController extends Controller
         ]);
     }
 
+    public function periodComparison(Request $request): JsonResponse
+    {
+        $request->validate([
+            'unit' => ['nullable', 'in:month,year'],
+            'reference' => ['nullable', 'date'],
+        ]);
+
+        $unit = $request->string('unit')->value() ?: 'month';
+        $reference = $request->filled('reference')
+            ? Carbon::parse($request->string('reference'))
+            : Carbon::now();
+
+        return response()->json([
+            'data' => $this->reports->periodComparison($reference, $unit),
+        ]);
+    }
+
+    public function categoryTrend(Request $request): JsonResponse
+    {
+        $request->validate([
+            'type' => ['nullable', 'in:income,expense'],
+            'top' => ['nullable', 'integer', 'min:1', 'max:20'],
+        ]);
+
+        [$from, $to] = $this->range($request, defaultMonths: 12);
+        $type = $request->string('type', 'expense')->value();
+        $top = $request->integer('top') ?: 5;
+
+        return response()->json([
+            'data' => $this->reports->categoryTrend($from, $to, $type, $top),
+        ]);
+    }
+
+    public function topTransactions(Request $request): JsonResponse
+    {
+        $request->validate([
+            'type' => ['nullable', 'in:income,expense,transfer'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        [$from, $to] = $this->range($request);
+        $type = $request->string('type')->value();
+        $limit = $request->integer('limit') ?: 10;
+
+        return response()->json([
+            'data' => $this->reports->topTransactions($from, $to, $type, $limit),
+        ]);
+    }
+
+    public function cashFlowForecast(Request $request): JsonResponse
+    {
+        $request->validate([
+            'months' => ['nullable', 'integer', 'min:1', 'max:24'],
+        ]);
+
+        $months = $request->integer('months') ?: 6;
+
+        return response()->json([
+            'data' => $this->reports->cashFlowForecast($months),
+        ]);
+    }
+
     /**
      * @return array{0: Carbon, 1: Carbon}
      */

@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-23**
-Fase corrente: **Fase 9 — Qualità, CI, deploy (COMPLETATA)** — roadmap base completata
+Fase corrente: **Estensione — Statistiche avanzate (COMPLETATA)**
 
 ---
 
@@ -180,6 +180,7 @@ make pint
 - [x] **Fase 7** — Dashboard & report (endpoint /api/reports/*, Dashboard KPI + grafici, /reports view)
 - [x] **Fase 8** — Import/Export (CSV export, import con preview + mapping colonne)
 - [x] **Fase 9** — Qualità, CI, deploy (Larastan livello 5, ESLint/Prettier, GitHub Actions, stack produzione Docker)
+- [x] **Estensione** — Statistiche avanzate (saving rate, confronto periodi, trend categorie, cash-flow forecast, top transazioni)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -385,6 +386,31 @@ Su VM senza container scheduler, usare cron host:
 ### Note open
 - HTTPS termination: aggiungere reverse proxy (Caddy/Traefik/Nginx host) davanti al container nginx, oppure montare certificati e ascoltare 443.
 - Backup MySQL e Redis: scriptare dump giornaliero (fuori scope di questa fase).
+
+## 13. Statistiche avanzate (estensione)
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Risposta |
+|--------|------|----------|
+| GET | `/api/reports/period-comparison?unit=month\|year&reference=YYYY-MM-DD` | `{unit, current, previous, delta: {income, income_pct, expense, expense_pct, net}}`. Default `unit=month`, `reference=now`. |
+| GET | `/api/reports/category-trend?from=&to=&type=expense\|income&top=5` | `{periods: ["YYYY-MM",…], categories: [{category_id, category_name, values: [string,…]}]}` per top N categorie. |
+| GET | `/api/reports/top-transactions?from=&to=&type=&limit=10` | `[{id, occurred_at, type, amount, currency, account_name, category_name, description}]` ordinato per amount desc. `type` opzionale (income/expense/transfer). |
+| GET | `/api/reports/cash-flow-forecast?months=6` | `[{period, income, expense, net, projected_net_worth}]` — proiezione mensile basata sulle ricorrenti income/expense attive (ignora transfer). Patrimonio proiettato = patrimonio attuale + Σ net mensili. |
+
+Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100` (formato `xx.xx`, `0.00` se income = 0).
+
+### Logica (in [ReportService](backend/app/Services/ReportService.php))
+- `periodComparison`: confronta totali income/expense/net del periodo `current` con il `previous` equivalente. Calcola delta assoluto e percentuale (`null` se previous = 0). Per `month` usa `start/endOfMonth` + `subMonthNoOverflow`; per `year` `start/endOfYear` + `subYearNoOverflow`.
+- `categoryTrend`: identifica le top N categorie per totale nel range (SQL `GROUP BY category_id ORDER BY SUM DESC LIMIT N`), poi crea una serie mensile per ognuna con bucket inizializzati a 0 (mesi senza dati = 0). Le 12 colorate via palette frontend.
+- `topTransactions`: ordina per `amount DESC`, opzionalmente filtra per `type`. Risolve `account_name` e `category_name` con un singolo `whereIn`.
+- `cashFlowForecast`: parte dal mese corrente per N mesi (1–24). Itera ogni ricorrente attiva chiamando `advance($cadence, $interval)` (match esaustivo come il runner), incrementa i buckets mensili. Patrimonio proiettato cumulato a partire da `cumulativeBalance(now - 1 day)`.
+
+### Frontend
+- [StatsView.vue](frontend/src/views/StatsView.vue) (`/stats` in sidebar):
+  1. **Confronto periodi** — 3 KPI card (income/expense/net) con valore corrente, precedente, delta assoluto e %, colore semantico (spese in verde se calano, in rosso se salgono).
+  2. **Trend top 5 categorie** — Line chart multi-serie con switch type expense/income.
+  3. **Cash flow forecast** — Line con 2 assi: net mensile previsto (sx) e patrimonio proiettato (dx). Selector 1–24 mesi.
+  4. **Top transazioni del mese** — tabella ordinata, filtro type.
 
 ## 9. Per gli agenti: regole operative
 
