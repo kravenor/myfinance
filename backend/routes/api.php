@@ -8,6 +8,7 @@ use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TransactionController;
+use App\Http\Controllers\TransactionImportExportController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
@@ -20,6 +21,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('accounts', AccountController::class);
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('tags', TagController::class);
+    Route::get('transactions/export', [TransactionImportExportController::class, 'export'])
+        ->name('transactions.export');
+    Route::post('transactions/import/preview', [TransactionImportExportController::class, 'importPreview'])
+        ->name('transactions.import.preview');
+    Route::post('transactions/import', [TransactionImportExportController::class, 'importCommit'])
+        ->name('transactions.import.commit');
     Route::apiResource('transactions', TransactionController::class);
     Route::apiResource('budgets', BudgetController::class);
     Route::apiResource('recurring-transactions', RecurringTransactionController::class)

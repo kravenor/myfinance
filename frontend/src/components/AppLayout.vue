@@ -14,6 +14,7 @@ const nav = [
   { name: 'budgets', label: 'Budget' },
   { name: 'recurring', label: 'Ricorrenti' },
   { name: 'reports', label: 'Report' },
+  { name: 'import-export', label: 'Import / Export' },
 ]
 
 async function onLogout() {

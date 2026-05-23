@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-23**
-Fase corrente: **Fase 7 — Dashboard & report (COMPLETATA)**
+Fase corrente: **Fase 8 — Import/Export CSV (COMPLETATA)**
 
 ---
 
@@ -178,7 +178,7 @@ make pint
 - [x] **Fase 5** — Budget & transazioni ricorrenti (CRUD + RecurringTransactionRunner + schedule `recurring:run` giornaliero)
 - [x] **Fase 6** — Frontend Vue (bootstrap, auth flow Sanctum SPA, layout + pagine CRUD per tutte le entità)
 - [x] **Fase 7** — Dashboard & report (endpoint /api/reports/*, Dashboard KPI + grafici, /reports view)
-- [ ] **Fase 8** — Import/Export
+- [x] **Fase 8** — Import/Export (CSV export, import con preview + mapping colonne)
 - [ ] **Fase 9** — Qualità, CI, deploy
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -334,6 +334,25 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 - Libreria: `chart.js` + `vue-chartjs`.
 - [DashboardView](frontend/src/views/DashboardView.vue): 4 KPI cards (income/expense/net mese + patrimonio netto), saldi conti, donut categorie del mese, bar income vs expense 12 mesi.
 - [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, bar timeline, line net-worth, tabella categorie.
+
+## 11. Import / Export CSV (Fase 8)
+
+### Endpoint (`auth:sanctum`)
+| Metodo | Path | Risposta / Body |
+|--------|------|-----------------|
+| GET | `/api/transactions/export` | Stream `text/csv` con header `Content-Disposition: attachment`. Filtri: `account_id`, `type`, `from`, `to`. Colonne: `occurred_at,type,amount,currency,account,transfer_account,category,description,notes,external_id` |
+| POST | `/api/transactions/import/preview` | multipart `file` (CSV ≤ 5MB). Ritorna `{headers, sample (max 10 righe), suggested: {date, amount, description, type, category}}` |
+| POST | `/api/transactions/import` | multipart `file`, `account_id`, `mapping[date]`, `mapping[amount]`, `mapping[description]?`, `mapping[type]?`, `mapping[category]?`, `date_format?` (default `Y-m-d`), `currency?`. Ritorna `{imported, skipped, errors: [{row, message}]}` |
+
+### Logica
+- [TransactionExportService](backend/app/Services/TransactionExportService.php): stream via `php://output` con `fputcsv`, chunk 500, scoping per user via global scope.
+- [TransactionImportService](backend/app/Services/TransactionImportService.php): auto-detect delimitatore (`,`, `;`, `\t`), parse importo in stile italiano (`1.234,56`) e standard, inferenza `type` da segno (negativo→expense, positivo→income), match categoria per nome (case-insensitive) sull'utente corrente. Righe vuote ignorate, errori per riga raccolti senza interrompere il batch.
+- `mapping` suggerito su euristica per chiavi `data/date/occurred`, `importo/amount/value`, `descrizione/description/causale/memo`, `tipo/type`, `categoria/category`.
+
+### Frontend
+- [ImportExportView.vue](frontend/src/views/ImportExportView.vue) — accessibile da `/import-export` nella sidebar.
+- Export: filtri (conto/tipo/range), download diretto del blob CSV.
+- Import: upload file → analizza → preview tabella + select mapping per ogni campo → conferma → mostra count import/skip + dettaglio errori per riga.
 
 ## 9. Per gli agenti: regole operative
 
