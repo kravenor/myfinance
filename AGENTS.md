@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-23**
-Fase corrente: **Fase 5 — Budget & transazioni ricorrenti (COMPLETATA)**
+Fase corrente: **Fase 6 — Frontend Vue (COMPLETATA)**
 
 ---
 
@@ -75,9 +75,25 @@ Finance/
 │   ├── .env               # config (mysql, redis, sanctum)
 │   └── ...
 │
-├── frontend/              # progetto Vue (vuoto in Fase 1, popolato in Fase 6)
+├── frontend/              # progetto Vue 3 + TypeScript + Vite
 │   ├── Dockerfile         # immagine Node per dev
-│   └── ...
+│   ├── package.json       # vue, vue-router, pinia, axios, tailwindcss
+│   ├── vite.config.ts     # alias @, host 0.0.0.0, HMR via nginx :8080
+│   ├── tailwind.config.js
+│   ├── postcss.config.js
+│   ├── tsconfig.json
+│   ├── index.html
+│   └── src/
+│       ├── main.ts            # bootstrap (Pinia + Router)
+│       ├── App.vue            # root + onMounted fetchMe
+│       ├── style.css          # Tailwind directives + componenti (btn, input, card, table)
+│       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
+│       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
+│       ├── stores/auth.ts     # Pinia: user, login, register, logout, fetchMe
+│       ├── composables/useCrud.ts  # list/create/update/destroy generico
+│       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
+│       ├── components/AppLayout.vue
+│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, Transactions, Budgets, Recurring
 │
 ├── docker/
 │   ├── php/
@@ -160,7 +176,7 @@ make pint
 - [x] **Fase 3** — Auth & utenti (controller register/login/logout/me, policy, global scope per user_id)
 - [x] **Fase 4** — CRUD conti e transazioni (Account, Category, Tag, Transaction con filtri, tags sync, transfer rules)
 - [x] **Fase 5** — Budget & transazioni ricorrenti (CRUD + RecurringTransactionRunner + schedule `recurring:run` giornaliero)
-- [ ] **Fase 6** — Frontend Vue (layout, pagine, store)
+- [x] **Fase 6** — Frontend Vue (bootstrap, auth flow Sanctum SPA, layout + pagine CRUD per tutte le entità)
 - [ ] **Fase 7** — Dashboard & report (grafici)
 - [ ] **Fase 8** — Import/Export
 - [ ] **Fase 9** — Qualità, CI, deploy
@@ -267,6 +283,38 @@ Validazione di appartenenza: tutti i `*_id` riferiti a risorse di dominio passan
 - Service `App\Services\RecurringTransactionRunner::run(?Carbon $until)`: cicla su tutte le ricorrenti attive con `next_run_at <= $until`, materializza Transaction collegate (`recurring_transaction_id` impostato), aggiorna `last_run_at`, calcola `next_run_at` secondo `cadence`/`interval` (`daily/weekly/biweekly/monthly/quarterly/yearly`, `*NoOverflow` per evitare salti di mese). Se `ends_on` superato → `is_active=false`. Itera finché c'è backlog.
 - Command Artisan `php artisan recurring:run [--date=YYYY-MM-DD]`.
 - Schedule giornaliero in [routes/console.php](backend/routes/console.php) alle 02:00 (richiede `php artisan schedule:work` o cron `php artisan schedule:run` ogni minuto in produzione — da pianificare in Fase 9).
+
+## 9. Frontend (Fase 6)
+
+### Stack runtime
+- Vue 3 + `<script setup>` + TypeScript, Vite 5, Pinia, Vue Router 4, Axios, TailwindCSS 3.
+- Container `node` espone `:5173`, nginx proxa la root a Vite e `/api/*`,`/sanctum/*` a Laravel.
+
+### Auth (Sanctum SPA cookie)
+1. Allo startup `App.vue` chiama `auth.fetchMe()` per ripristinare la sessione.
+2. Il primo POST/PUT/PATCH/DELETE invoca `ensureCsrf()` che fa GET `/sanctum/csrf-cookie`.
+3. axios è configurato con `withCredentials: true` e `withXSRFToken: true`: invia automaticamente `X-XSRF-TOKEN` letto dal cookie.
+4. Login/register settano `user` nello store, logout azzera lo stato.
+5. Router guard:
+   - `requiresAuth` → redirect a `/login?redirect=…` se non autenticato.
+   - `guest` (login/register) → redirect a `/` se già autenticato.
+
+### Rotte frontend
+| Path | View | Note |
+|------|------|------|
+| `/login` | LoginView | precompila `demo@finance.local` / `password` per il seed locale |
+| `/register` | RegisterView | conferma password obbligatoria |
+| `/` | DashboardView | cards conti + ultime 5 transazioni |
+| `/accounts` | AccountsView | CRUD inline |
+| `/categories` | CategoriesView | CRUD + parent select filtrato per type |
+| `/tags` | TagsView | CRUD + swatch colore |
+| `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date), supporto transfer |
+| `/budgets` | BudgetsView | filtro anno/mese, progresso barra con `spent / amount` |
+| `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
+
+### Fix backend collegati
+- `routes/web.php` espone una rotta nominata `login` che ritorna JSON 401 (evita `RouteNotFoundException` quando `auth:sanctum` cerca di redirigere richieste non-JSON).
+- `bootstrap/app.php`: `shouldRenderJsonWhen` e custom render per `AuthenticationException` su path `api/*`.
 
 ## 9. Per gli agenti: regole operative
 
