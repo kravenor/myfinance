@@ -2,9 +2,13 @@
 
 namespace App\Http\Resources;
 
+use App\Models\RecurringTransaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * @mixin RecurringTransaction
+ */
 class RecurringTransactionResource extends JsonResource
 {
     /**
@@ -23,9 +27,9 @@ class RecurringTransactionResource extends JsonResource
             'description' => $this->description,
             'cadence' => $this->cadence,
             'interval' => $this->interval,
-            'starts_on' => $this->starts_on?->toDateString(),
+            'starts_on' => $this->starts_on->toDateString(),
             'ends_on' => $this->ends_on?->toDateString(),
-            'next_run_at' => $this->next_run_at?->toDateString(),
+            'next_run_at' => $this->next_run_at->toDateString(),
             'last_run_at' => $this->last_run_at?->toDateString(),
             'is_active' => $this->is_active,
             'created_at' => $this->created_at?->toIso8601String(),

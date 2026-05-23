@@ -67,7 +67,7 @@ class UpdateRecurringTransactionRequest extends FormRequest
                 $validator->errors()->add('transfer_account_id', 'Consentito solo per type=transfer.');
             }
 
-            $startsOn = $this->input('starts_on', $recurring->starts_on?->toDateString());
+            $startsOn = $this->input('starts_on', $recurring->starts_on->toDateString());
             $endsOn = $this->has('ends_on') ? $this->input('ends_on') : $recurring->ends_on?->toDateString();
             if ($startsOn && $endsOn && $endsOn < $startsOn) {
                 $validator->errors()->add('ends_on', 'ends_on deve essere uguale o successivo a starts_on.');

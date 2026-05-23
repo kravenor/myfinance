@@ -38,11 +38,7 @@ class RecurringTransactionRunner
         $count = 0;
 
         DB::transaction(function () use ($recurring, $until, &$count) {
-            while (
-                $recurring->is_active
-                && $recurring->next_run_at
-                && $recurring->next_run_at->lte($until)
-            ) {
+            while ($recurring->is_active && $recurring->next_run_at->lte($until)) {
                 $occurredAt = $recurring->next_run_at->copy();
 
                 Transaction::withoutGlobalScopes()->create([
@@ -83,6 +79,7 @@ class RecurringTransactionRunner
             'monthly' => $from->copy()->addMonthsNoOverflow($interval),
             'quarterly' => $from->copy()->addMonthsNoOverflow(3 * $interval),
             'yearly' => $from->copy()->addYearsNoOverflow($interval),
+            default => throw new \UnexpectedValueException("Cadenza non supportata: {$cadence}"),
         };
     }
 }

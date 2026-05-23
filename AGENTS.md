@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-23**
-Fase corrente: **Fase 8 — Import/Export CSV (COMPLETATA)**
+Fase corrente: **Fase 9 — Qualità, CI, deploy (COMPLETATA)** — roadmap base completata
 
 ---
 
@@ -179,7 +179,7 @@ make pint
 - [x] **Fase 6** — Frontend Vue (bootstrap, auth flow Sanctum SPA, layout + pagine CRUD per tutte le entità)
 - [x] **Fase 7** — Dashboard & report (endpoint /api/reports/*, Dashboard KPI + grafici, /reports view)
 - [x] **Fase 8** — Import/Export (CSV export, import con preview + mapping colonne)
-- [ ] **Fase 9** — Qualità, CI, deploy
+- [x] **Fase 9** — Qualità, CI, deploy (Larastan livello 5, ESLint/Prettier, GitHub Actions, stack produzione Docker)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -353,6 +353,38 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 - [ImportExportView.vue](frontend/src/views/ImportExportView.vue) — accessibile da `/import-export` nella sidebar.
 - Export: filtri (conto/tipo/range), download diretto del blob CSV.
 - Import: upload file → analizza → preview tabella + select mapping per ogni campo → conferma → mostra count import/skip + dettaglio errori per riga.
+
+## 12. Qualità & CI (Fase 9)
+
+### Static analysis & lint
+- **Backend**: `larastan/larastan` con `backend/phpstan.neon` livello 5. Modelli annotati con `@property`, Resource con `@mixin {Model}`. Eseguito via `make stan`.
+- **Frontend**: ESLint 9 (flat config) + `@vue/eslint-config-typescript` + `@vue/eslint-config-prettier` (`frontend/eslint.config.js`), Prettier (`frontend/.prettierrc.json`). Script `npm run lint`, `lint:fix`, `format`, `type-check`. Esposti via `make lint` / `make type-check`.
+- Aggregato: **`make check`** lancia pint → stan → test → lint → type-check.
+
+### CI — GitHub Actions
+[.github/workflows/ci.yml](.github/workflows/ci.yml) — trigger su `push`/`pull_request` su `main`. Due job:
+- **backend**: PHP 8.3 + estensioni, cache vendor, `pint --test`, `phpstan analyse`, `php artisan test` (SQLite in-memory da `phpunit.xml`).
+- **frontend**: Node 20 con cache npm, `npm ci`, `type-check`, `lint`, `build`.
+
+### Stack produzione
+File:
+- [docker/php/Dockerfile.prod](docker/php/Dockerfile.prod) — multi-stage (vendor install + runtime), opcache + JIT in [php.prod.ini](docker/php/php.prod.ini), composer `--no-dev --classmap-authoritative`, codice copiato (no volume mount).
+- [docker/nginx/Dockerfile.prod](docker/nginx/Dockerfile.prod) — multi-stage: stage 1 builda la SPA (`npm ci && npm run build`), stage 2 nginx serve `dist/` + proxy FastCGI verso PHP.
+- [docker/nginx/prod.conf](docker/nginx/prod.conf) — SPA fallback su `index.html`, cache 30d su `/assets/*` (asset Vite hash-immutable), API routing identico al dev.
+- [docker-compose.prod.yml](docker-compose.prod.yml) — servizi `nginx`, `php`, `scheduler` (`php artisan schedule:work`), `mysql`, `redis`. Volume `laravel_app` condiviso tra php/nginx/scheduler (read-only su nginx). Niente container `node` in prod.
+- [.env.production.example](.env.production.example) — template (rinominare in `.env.production`).
+
+Target Makefile: `make prod-build`, `make prod-up`, `make prod-down`.
+
+### Cron host (alternativa a scheduler container)
+Su VM senza container scheduler, usare cron host:
+```
+* * * * * docker compose -f /path/to/docker-compose.prod.yml exec -T php php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Note open
+- HTTPS termination: aggiungere reverse proxy (Caddy/Traefik/Nginx host) davanti al container nginx, oppure montare certificati e ascoltare 443.
+- Backup MySQL e Redis: scriptare dump giornaliero (fuori scope di questa fase).
 
 ## 9. Per gli agenti: regole operative
 

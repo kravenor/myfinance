@@ -7,7 +7,23 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $user_id
+ * @property int $account_id
+ * @property int|null $category_id
+ * @property int|null $transfer_account_id
+ * @property int|null $recurring_transaction_id
+ * @property string $type
+ * @property string $amount
+ * @property string $currency
+ * @property Carbon $occurred_at
+ * @property string|null $description
+ * @property string|null $notes
+ * @property string|null $external_id
+ */
 class Transaction extends Model
 {
     use BelongsToUser, HasFactory;

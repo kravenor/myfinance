@@ -2,9 +2,15 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Budget;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * @mixin Budget
+ *
+ * @property string|null $spent
+ */
 class BudgetResource extends JsonResource
 {
     /**

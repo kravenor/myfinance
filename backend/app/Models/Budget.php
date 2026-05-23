@@ -7,6 +7,14 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $user_id
+ * @property int $category_id
+ * @property int $year
+ * @property int $month
+ * @property string $amount
+ */
 class Budget extends Model
 {
     use BelongsToUser, HasFactory;

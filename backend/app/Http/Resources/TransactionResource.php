@@ -2,9 +2,13 @@
 
 namespace App\Http\Resources;
 
+use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/**
+ * @mixin Transaction
+ */
 class TransactionResource extends JsonResource
 {
     /**
@@ -21,7 +25,7 @@ class TransactionResource extends JsonResource
             'type' => $this->type,
             'amount' => $this->amount,
             'currency' => $this->currency,
-            'occurred_at' => $this->occurred_at?->toDateString(),
+            'occurred_at' => $this->occurred_at->toDateString(),
             'description' => $this->description,
             'notes' => $this->notes,
             'external_id' => $this->external_id,

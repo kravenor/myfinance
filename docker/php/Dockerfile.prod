@@ -1,0 +1,40 @@
+FROM php:8.3-fpm-alpine AS base
+
+RUN apk add --no-cache \
+    bash git curl unzip \
+    icu-dev libzip-dev oniguruma-dev libpng-dev libjpeg-turbo-dev freetype-dev \
+    mysql-client autoconf g++ make linux-headers
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
+ && docker-php-ext-install -j$(nproc) \
+    pdo pdo_mysql mbstring intl zip bcmath gd opcache pcntl sockets
+
+RUN pecl install redis && docker-php-ext-enable redis
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+COPY php.ini /usr/local/etc/php/conf.d/zz-app.ini
+COPY php.prod.ini /usr/local/etc/php/conf.d/zzz-prod.ini
+
+WORKDIR /var/www/html
+
+# --- build stage: install vendor with prod optimizations ---
+FROM base AS vendor
+
+COPY backend/composer.json backend/composer.lock ./
+RUN composer install --no-dev --no-interaction --no-progress --prefer-dist --no-scripts --no-autoloader
+
+COPY backend/ ./
+RUN composer dump-autoload --classmap-authoritative --no-dev \
+ && php artisan package:discover --ansi || true
+
+# --- runtime ---
+FROM base AS runtime
+
+RUN addgroup -g 1000 -S app && adduser -u 1000 -S app -G app
+
+COPY --from=vendor --chown=app:app /var/www/html /var/www/html
+
+USER app
+EXPOSE 9000
+CMD ["php-fpm"]

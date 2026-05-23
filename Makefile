@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint
+.PHONY: help up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down
 
 help: ## Mostra i comandi disponibili
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -56,3 +56,23 @@ test: ## Esegue test PHPUnit
 
 pint: ## Formatta codice PHP con Pint
 	$(COMPOSE) exec php ./vendor/bin/pint
+
+stan: ## Static analysis con Larastan/PHPStan
+	$(COMPOSE) exec php ./vendor/bin/phpstan analyse --memory-limit=512M
+
+lint: ## ESLint sul frontend
+	$(COMPOSE) exec node npm run lint
+
+type-check: ## vue-tsc type-check
+	$(COMPOSE) exec node npm run type-check
+
+check: pint stan test lint type-check ## Esegue tutti i check di qualità
+
+prod-build: ## Build stack produzione (richiede .env.production)
+	$(COMPOSE) -f docker-compose.prod.yml --env-file .env.production build
+
+prod-up: ## Avvia stack produzione
+	$(COMPOSE) -f docker-compose.prod.yml --env-file .env.production up -d
+
+prod-down: ## Ferma stack produzione
+	$(COMPOSE) -f docker-compose.prod.yml --env-file .env.production down

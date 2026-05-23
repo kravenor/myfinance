@@ -7,7 +7,26 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $user_id
+ * @property int $account_id
+ * @property int|null $category_id
+ * @property int|null $transfer_account_id
+ * @property string $type
+ * @property string $amount
+ * @property string $currency
+ * @property string|null $description
+ * @property string $cadence
+ * @property int $interval
+ * @property Carbon $starts_on
+ * @property Carbon|null $ends_on
+ * @property Carbon $next_run_at
+ * @property Carbon|null $last_run_at
+ * @property bool $is_active
+ */
 class RecurringTransaction extends Model
 {
     use BelongsToUser, HasFactory;

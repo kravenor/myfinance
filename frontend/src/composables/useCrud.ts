@@ -1,9 +1,9 @@
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { api } from '@/lib/api'
 import type { Paginated } from '@/types/api'
 
 export function useCrud<T extends { id: number }>(resource: string) {
-  const items = ref<T[]>([]) as { value: T[] }
+  const items = ref<T[]>([]) as Ref<T[]>
   const loading = ref(false)
   const error = ref<string | null>(null)
 

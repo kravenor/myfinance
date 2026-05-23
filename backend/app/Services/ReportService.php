@@ -59,7 +59,7 @@ class ReportService
         return $rows->map(fn ($row) => [
             'category_id' => $row->category_id,
             'category_name' => $row->category_id ? ($categories[$row->category_id] ?? '—') : 'Senza categoria',
-            'total' => $this->fmt((float) $row->total),
+            'total' => $this->fmt((float) $row->getAttribute('total')),
         ])->all();
     }
 

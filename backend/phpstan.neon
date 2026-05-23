@@ -1,0 +1,22 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - app/
+        - bootstrap/app.php
+        - config/
+        - database/factories/
+        - database/seeders/
+        - routes/
+
+    level: 5
+
+    excludePaths:
+        - bootstrap/cache/*
+
+    ignoreErrors:
+        # SanctumGuard::forgetUser() esiste a runtime ma non sull'interface StatefulGuard
+        -
+            message: '#Call to an undefined method Illuminate\\Contracts\\Auth\\StatefulGuard::forgetUser\(\)#'
+            path: app/Http/Controllers/Auth/AuthController.php
