@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\RecurringTransactionController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -23,4 +24,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('budgets', BudgetController::class);
     Route::apiResource('recurring-transactions', RecurringTransactionController::class)
         ->parameter('recurring-transactions', 'recurring_transaction');
+
+    Route::prefix('reports')->controller(ReportController::class)->group(function () {
+        Route::get('summary', 'summary')->name('reports.summary');
+        Route::get('by-category', 'byCategory')->name('reports.by-category');
+        Route::get('timeline', 'timeline')->name('reports.timeline');
+        Route::get('net-worth', 'netWorth')->name('reports.net-worth');
+    });
 });

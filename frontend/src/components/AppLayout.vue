@@ -13,6 +13,7 @@ const nav = [
   { name: 'tags', label: 'Tag' },
   { name: 'budgets', label: 'Budget' },
   { name: 'recurring', label: 'Ricorrenti' },
+  { name: 'reports', label: 'Report' },
 ]
 
 async function onLogout() {

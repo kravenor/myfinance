@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-23**
-Fase corrente: **Fase 6 — Frontend Vue (COMPLETATA)**
+Fase corrente: **Fase 7 — Dashboard & report (COMPLETATA)**
 
 ---
 
@@ -177,7 +177,7 @@ make pint
 - [x] **Fase 4** — CRUD conti e transazioni (Account, Category, Tag, Transaction con filtri, tags sync, transfer rules)
 - [x] **Fase 5** — Budget & transazioni ricorrenti (CRUD + RecurringTransactionRunner + schedule `recurring:run` giornaliero)
 - [x] **Fase 6** — Frontend Vue (bootstrap, auth flow Sanctum SPA, layout + pagine CRUD per tutte le entità)
-- [ ] **Fase 7** — Dashboard & report (grafici)
+- [x] **Fase 7** — Dashboard & report (endpoint /api/reports/*, Dashboard KPI + grafici, /reports view)
 - [ ] **Fase 8** — Import/Export
 - [ ] **Fase 9** — Qualità, CI, deploy
 
@@ -315,6 +315,25 @@ Validazione di appartenenza: tutti i `*_id` riferiti a risorse di dominio passan
 ### Fix backend collegati
 - `routes/web.php` espone una rotta nominata `login` che ritorna JSON 401 (evita `RouteNotFoundException` quando `auth:sanctum` cerca di redirigere richieste non-JSON).
 - `bootstrap/app.php`: `shouldRenderJsonWhen` e custom render per `AuthenticationException` su path `api/*`.
+
+## 10. Report & dashboard (Fase 7)
+
+### Endpoint (`auth:sanctum`)
+Tutti i range accettano `?from=YYYY-MM-DD&to=YYYY-MM-DD`; se omessi: default mese corrente (summary/by-category) o ultimi 12 mesi (timeline/net-worth).
+
+| Metodo | Path | Risposta |
+|--------|------|----------|
+| GET | `/api/reports/summary` | `{from, to, income, expense, net, net_worth, accounts: [{id, name, currency, balance}]}` |
+| GET | `/api/reports/by-category?type=expense\|income` | `[{category_id, category_name, total}]` ordinato per total desc |
+| GET | `/api/reports/timeline` | `[{period: "YYYY-MM", income, expense, net}]` |
+| GET | `/api/reports/net-worth` | `[{period: "YYYY-MM", net_worth}]` cumulato (initial_balance + Σ income - Σ expense fino a fine mese) |
+
+Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per conto = `initial_balance + Σ income (account_id) - Σ (expense+transfer con account_id) + Σ transfer con transfer_account_id`. Le transfer si compensano nel net worth aggregato e quindi sono escluse dal cumulato.
+
+### Frontend
+- Libreria: `chart.js` + `vue-chartjs`.
+- [DashboardView](frontend/src/views/DashboardView.vue): 4 KPI cards (income/expense/net mese + patrimonio netto), saldi conti, donut categorie del mese, bar income vs expense 12 mesi.
+- [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, bar timeline, line net-worth, tabella categorie.
 
 ## 9. Per gli agenti: regole operative
 

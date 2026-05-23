@@ -28,6 +28,7 @@ export const router = createRouter({
         { path: 'transactions', name: 'transactions', component: () => import('@/views/TransactionsView.vue') },
         { path: 'budgets', name: 'budgets', component: () => import('@/views/BudgetsView.vue') },
         { path: 'recurring', name: 'recurring', component: () => import('@/views/RecurringView.vue') },
+        { path: 'reports', name: 'reports', component: () => import('@/views/ReportsView.vue') },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
