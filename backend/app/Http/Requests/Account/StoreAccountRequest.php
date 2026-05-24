@@ -25,6 +25,7 @@ class StoreAccountRequest extends FormRequest
             'icon' => ['nullable', 'string', 'max:64'],
             'is_archived' => ['sometimes', 'boolean'],
             'include_in_net_worth' => ['sometimes', 'boolean'],
+            'is_primary' => ['sometimes', 'boolean'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
     }

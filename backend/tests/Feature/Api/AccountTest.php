@@ -55,6 +55,53 @@ class AccountTest extends TestCase
         ]);
     }
 
+    public function test_first_account_becomes_primary_by_default(): void
+    {
+        $user = User::factory()->create();
+
+        $payload = [
+            'name' => 'Conto iniziale',
+            'type' => 'cash',
+            'currency' => 'EUR',
+            'initial_balance' => 0,
+        ];
+
+        $this->actingAs($user)
+            ->postJson('/api/accounts', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.is_primary', true);
+
+        $this->assertDatabaseHas('accounts', [
+            'user_id' => $user->id,
+            'name' => 'Conto iniziale',
+            'is_primary' => true,
+        ]);
+    }
+
+    public function test_store_with_primary_true_clears_previous_primary(): void
+    {
+        $user = User::factory()->create();
+        $first = Account::factory()->for($user)->create(['is_primary' => true]);
+
+        $payload = [
+            'name' => 'Conto secondario',
+            'type' => 'bank',
+            'currency' => 'EUR',
+            'initial_balance' => 100,
+            'is_primary' => true,
+        ];
+
+        $this->actingAs($user)
+            ->postJson('/api/accounts', $payload)
+            ->assertCreated()
+            ->assertJsonPath('data.is_primary', true);
+
+        $this->assertDatabaseHas('accounts', [
+            'id' => $first->id,
+            'is_primary' => false,
+        ]);
+    }
+
     public function test_store_validates_type(): void
     {
         $user = User::factory()->create();

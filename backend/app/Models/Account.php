@@ -34,6 +34,7 @@ class Account extends Model
         'icon',
         'is_archived',
         'include_in_net_worth',
+        'is_primary',
         'notes',
     ];
 
@@ -43,7 +44,68 @@ class Account extends Model
             'initial_balance' => 'decimal:2',
             'is_archived' => 'boolean',
             'include_in_net_worth' => 'boolean',
+            'is_primary' => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::saving(function (Account $account) {
+            if (! $account->exists && ! $account->is_primary) {
+                $hasPrimary = static::withoutGlobalScopes()
+                    ->where('user_id', $account->user_id)
+                    ->where('is_primary', true)
+                    ->exists();
+
+                if (! $hasPrimary) {
+                    $account->is_primary = true;
+                }
+            }
+
+            if ($account->is_primary) {
+                static::withoutGlobalScopes()
+                    ->where('user_id', $account->user_id)
+                    ->where('id', '!=', $account->id ?? 0)
+                    ->where('is_primary', true)
+                    ->update(['is_primary' => false]);
+            }
+        });
+
+        static::saved(function (Account $account) {
+            if (! $account->is_primary) {
+                $hasPrimary = static::withoutGlobalScopes()
+                    ->where('user_id', $account->user_id)
+                    ->where('is_primary', true)
+                    ->exists();
+
+                if (! $hasPrimary) {
+                    $replacement = static::withoutGlobalScopes()
+                        ->where('user_id', $account->user_id)
+                        ->where('id', '!=', $account->id)
+                        ->orderBy('created_at')
+                        ->first();
+
+                    if ($replacement) {
+                        $replacement->is_primary = true;
+                        $replacement->saveQuietly();
+                    }
+                }
+            }
+        });
+
+        static::deleted(function (Account $account) {
+            if ($account->is_primary) {
+                $replacement = static::withoutGlobalScopes()
+                    ->where('user_id', $account->user_id)
+                    ->orderBy('created_at')
+                    ->first();
+
+                if ($replacement) {
+                    $replacement->is_primary = true;
+                    $replacement->saveQuietly();
+                }
+            }
+        });
     }
 
     public function transactions(): HasMany

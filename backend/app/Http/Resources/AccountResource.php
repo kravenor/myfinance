@@ -26,6 +26,7 @@ class AccountResource extends JsonResource
             'icon' => $this->icon,
             'is_archived' => $this->is_archived,
             'include_in_net_worth' => $this->include_in_net_worth,
+            'is_primary' => $this->is_primary,
             'notes' => $this->notes,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),

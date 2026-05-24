@@ -25,6 +25,7 @@ class UpdateAccountRequest extends FormRequest
             'icon' => ['sometimes', 'nullable', 'string', 'max:64'],
             'is_archived' => ['sometimes', 'boolean'],
             'include_in_net_worth' => ['sometimes', 'boolean'],
+            'is_primary' => ['sometimes', 'boolean'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ];
     }
