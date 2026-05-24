@@ -88,6 +88,9 @@ class Account extends Model
                     if ($replacement) {
                         $replacement->is_primary = true;
                         $replacement->saveQuietly();
+                    } else {
+                        $account->is_primary = true;
+                        $account->saveQuietly();
                     }
                 }
             }
