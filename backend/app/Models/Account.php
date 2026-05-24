@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Auth;
 
 /**
  * @property int $id
@@ -51,9 +52,11 @@ class Account extends Model
     protected static function booted(): void
     {
         static::saving(function (Account $account) {
+            $userId = $account->user_id ?? Auth::id();
+
             if (! $account->exists && ! $account->is_primary) {
                 $hasPrimary = static::withoutGlobalScopes()
-                    ->where('user_id', $account->user_id)
+                    ->where('user_id', $userId)
                     ->where('is_primary', true)
                     ->exists();
 
@@ -64,7 +67,7 @@ class Account extends Model
 
             if ($account->is_primary) {
                 static::withoutGlobalScopes()
-                    ->where('user_id', $account->user_id)
+                    ->where('user_id', $userId)
                     ->where('id', '!=', $account->id ?? 0)
                     ->where('is_primary', true)
                     ->update(['is_primary' => false]);
@@ -72,15 +75,17 @@ class Account extends Model
         });
 
         static::saved(function (Account $account) {
+            $userId = $account->user_id ?? Auth::id();
+
             if (! $account->is_primary) {
                 $hasPrimary = static::withoutGlobalScopes()
-                    ->where('user_id', $account->user_id)
+                    ->where('user_id', $userId)
                     ->where('is_primary', true)
                     ->exists();
 
                 if (! $hasPrimary) {
                     $replacement = static::withoutGlobalScopes()
-                        ->where('user_id', $account->user_id)
+                        ->where('user_id', $userId)
                         ->where('id', '!=', $account->id)
                         ->orderBy('created_at')
                         ->first();
