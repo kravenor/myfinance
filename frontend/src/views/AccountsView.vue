@@ -21,7 +21,14 @@ const form = ref({
 
 function reset() {
   editing.value = null
-  form.value = { name: '', type: 'bank', currency: 'EUR', initial_balance: '0.00', notes: '' }
+  form.value = {
+    name: '',
+    type: 'bank' as AccountType,
+    currency: 'EUR',
+    initial_balance: '0.00',
+    is_primary: false,
+    notes: '',
+  }
 }
 
 function startEdit(acc: Account) {
