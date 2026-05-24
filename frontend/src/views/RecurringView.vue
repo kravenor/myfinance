@@ -29,7 +29,7 @@ const form = ref({
 function reset() {
   editing.value = null
   form.value = {
-    account_id: accounts.value[0]?.id ?? 0,
+    account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     transfer_account_id: null,
     type: 'expense',
     amount: '',
@@ -62,6 +62,11 @@ function startEdit(r: RecurringTransaction) {
 function accountName(id: number | null): string {
   if (!id) return '—'
   return accounts.value.find((a) => a.id === id)?.name ?? `#${id}`
+}
+
+function isPrimaryAccount(id: number | null): boolean {
+  if (!id) return false
+  return !!accounts.value.find((a) => a.id === id && a.is_primary)
 }
 
 async function onSubmit() {
@@ -124,14 +129,14 @@ onMounted(async () => {
       <div>
         <label class="label">Conto</label>
         <select v-model.number="form.account_id" class="input" required>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
         </select>
       </div>
       <div v-if="form.type === 'transfer'">
         <label class="label">Conto destinazione</label>
         <select v-model.number="form.transfer_account_id" class="input" required>
           <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
-            {{ a.name }}
+            {{ a.name }}{{ a.is_primary ? ' ★' : '' }}
           </option>
         </select>
       </div>
@@ -191,7 +196,10 @@ onMounted(async () => {
             <td>{{ r.description ?? '—' }}</td>
             <td class="capitalize">{{ r.type }}</td>
             <td>
-              {{ accountName(r.account_id) }}
+              <span class="inline-flex items-center gap-2">
+                <span>{{ accountName(r.account_id) }}</span>
+                <span v-if="isPrimaryAccount(r.account_id)" class="text-amber-500" title="Conto principale">★</span>
+              </span>
               <span v-if="r.type === 'transfer'" class="text-slate-400"> → {{ accountName(r.transfer_account_id) }}</span>
             </td>
             <td>every {{ r.interval }} {{ r.cadence }}</td>

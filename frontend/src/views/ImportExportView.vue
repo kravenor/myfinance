@@ -130,7 +130,7 @@ const canImport = computed(
 onMounted(async () => {
   const { data } = await api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } })
   accounts.value = data.data
-  importAccount.value = accounts.value[0]?.id ?? 0
+  importAccount.value = accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0
 })
 </script>
 
@@ -145,7 +145,7 @@ onMounted(async () => {
           <label class="label">Conto</label>
           <select v-model="exportFilters.account_id" class="input">
             <option value="">Tutti</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
           </select>
         </div>
         <div>
@@ -184,7 +184,7 @@ onMounted(async () => {
         <div>
           <label class="label">Conto destinazione</label>
           <select v-model.number="importAccount" class="input">
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
           </select>
         </div>
       </div>

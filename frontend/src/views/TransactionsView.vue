@@ -33,10 +33,15 @@ function accountName(id: number | null | undefined): string {
   return accounts.value.find((a) => a.id === id)?.name ?? `#${id}`
 }
 
+function isPrimaryAccount(id: number | null | undefined): boolean {
+  if (!id) return false
+  return !!accounts.value.find((a) => a.id === id && a.is_primary)
+}
+
 function reset() {
   editing.value = null
   form.value = {
-    account_id: accounts.value[0]?.id ?? 0,
+    account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     category_id: null,
     transfer_account_id: null,
     type: 'expense',
@@ -122,7 +127,7 @@ onMounted(async () => {
         <label class="label">Conto</label>
         <select v-model="filters.account_id" class="input">
           <option value="">Tutti</option>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
         </select>
       </div>
       <div>
@@ -159,7 +164,7 @@ onMounted(async () => {
       <div>
         <label class="label">Conto</label>
         <select v-model.number="form.account_id" class="input" required>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
         </select>
       </div>
       <div v-if="form.type === 'transfer'">
@@ -213,7 +218,10 @@ onMounted(async () => {
             <td>{{ tx.occurred_at }}</td>
             <td class="capitalize">{{ tx.type }}</td>
             <td>
-              {{ accountName(tx.account_id) }}
+              <span class="inline-flex items-center gap-2">
+                <span>{{ accountName(tx.account_id) }}</span>
+                <span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500" title="Conto principale">★</span>
+              </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
             <td>{{ tx.description ?? '—' }}</td>
