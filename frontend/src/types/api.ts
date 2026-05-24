@@ -31,6 +31,7 @@ export interface Account {
   icon: string | null
   is_archived: boolean
   include_in_net_worth: boolean
+  is_primary: boolean
   notes: string | null
   created_at: string
   updated_at: string
