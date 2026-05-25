@@ -77,11 +77,11 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-2xl font-semibold">Dashboard</h1>
+    <h1 class="text-xl sm:text-2xl font-semibold">Dashboard</h1>
     <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
 
     <template v-else-if="summary">
-      <section class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Income mese</p>
           <p class="text-2xl font-semibold text-green-600 mt-1">{{ summary.income }}</p>
@@ -107,7 +107,7 @@ onMounted(async () => {
 
       <section>
         <h2 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-2">Saldi conti</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div v-for="acc in summary.accounts" :key="acc.id" class="card p-4">
             <p class="text-sm text-slate-600">{{ acc.name }}</p>
             <p class="text-xl font-semibold mt-1">{{ acc.balance }} {{ acc.currency }}</p>
@@ -123,7 +123,7 @@ onMounted(async () => {
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Spese per categoria (mese)
           </h3>
-          <div class="h-72">
+          <div class="h-60 sm:h-72">
             <Doughnut v-if="categories.length" :data="donutData()" :options="chartOptions" />
             <p v-else class="text-sm text-slate-500">Nessuna spesa nel periodo.</p>
           </div>
@@ -132,7 +132,7 @@ onMounted(async () => {
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Income vs Expense (ultimi 12 mesi)
           </h3>
-          <div class="h-72">
+          <div class="h-60 sm:h-72">
             <Bar :data="barData()" :options="chartOptions" />
           </div>
         </div>

@@ -136,11 +136,11 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-2xl font-semibold">Import / Export</h1>
+    <h1 class="text-xl sm:text-2xl font-semibold">Import / Export</h1>
 
     <section class="card p-4 space-y-4">
       <h2 class="font-medium">Export CSV</h2>
-      <form class="grid grid-cols-1 md:grid-cols-5 gap-3" @submit.prevent="downloadExport">
+      <form class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="downloadExport">
         <div>
           <label class="label">Conto</label>
           <select v-model="exportFilters.account_id" class="input">
@@ -165,7 +165,7 @@ onMounted(async () => {
           <label class="label">A</label>
           <input v-model="exportFilters.to" type="date" class="input" />
         </div>
-        <div class="flex items-end">
+        <div class="flex items-end sm:col-span-2 md:col-span-1">
           <button class="btn-primary w-full" :disabled="exporting" type="submit">
             {{ exporting ? 'Download…' : 'Scarica CSV' }}
           </button>
@@ -196,7 +196,7 @@ onMounted(async () => {
       </div>
 
       <div v-if="preview" class="space-y-4">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
           <div v-for="field in ['date','amount','description','type','category'] as const" :key="field">
             <label class="label capitalize">{{ field }}{{ ['date','amount'].includes(field) ? ' *' : '' }}</label>
             <select v-model="mapping[field]" class="input">

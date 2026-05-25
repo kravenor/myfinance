@@ -110,14 +110,14 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Transazioni ricorrenti</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Transazioni ricorrenti</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuova ricorrente' }}
       </button>
     </div>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
+    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div>
         <label class="label">Tipo</label>
         <select v-model="form.type" class="input">
@@ -162,21 +162,21 @@ onMounted(async () => {
         <label class="label">Fine (opzionale)</label>
         <input v-model="form.ends_on" type="date" class="input" />
       </div>
-      <div class="md:col-span-3">
+      <div class="sm:col-span-2 md:col-span-3">
         <label class="label">Descrizione</label>
         <input v-model="form.description" class="input" />
       </div>
-      <div class="md:col-span-3 flex items-center gap-2">
+      <div class="sm:col-span-2 md:col-span-3 flex items-center gap-2">
         <input id="is_active" v-model="form.is_active" type="checkbox" />
         <label for="is_active" class="text-sm">Attiva</label>
       </div>
-      <div class="md:col-span-3 flex gap-2 justify-end">
+      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
       </div>
     </form>
 
-    <div class="card overflow-x-auto">
+    <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
       <table v-else class="table">
         <thead class="bg-slate-100">
@@ -193,22 +193,22 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="r in items" :key="r.id">
-            <td>{{ r.description ?? '—' }}</td>
-            <td class="capitalize">{{ r.type }}</td>
-            <td>
+            <td data-label="Descrizione">{{ r.description ?? '—' }}</td>
+            <td data-label="Tipo" class="capitalize">{{ r.type }}</td>
+            <td data-label="Conto">
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(r.account_id) }}</span>
                 <span v-if="isPrimaryAccount(r.account_id)" class="text-amber-500" title="Conto principale">★</span>
               </span>
               <span v-if="r.type === 'transfer'" class="text-slate-400"> → {{ accountName(r.transfer_account_id) }}</span>
             </td>
-            <td>every {{ r.interval }} {{ r.cadence }}</td>
-            <td>{{ r.next_run_at }}</td>
-            <td class="text-right font-medium">{{ r.amount }} {{ r.currency }}</td>
-            <td>
+            <td data-label="Cadenza">every {{ r.interval }} {{ r.cadence }}</td>
+            <td data-label="Prossima">{{ r.next_run_at }}</td>
+            <td data-label="Importo" class="md:text-right font-medium">{{ r.amount }} {{ r.currency }}</td>
+            <td data-label="Attiva">
               <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'">●</span>
             </td>
-            <td class="text-right">
+            <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />
             </td>
           </tr>

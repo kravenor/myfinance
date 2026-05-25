@@ -45,14 +45,14 @@ onMounted(() => list({ per_page: 100 }))
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Categorie</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Categorie</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuova categoria' }}
       </button>
     </div>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
+    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div>
         <label class="label">Nome</label>
         <input v-model="form.name" class="input" required />
@@ -73,13 +73,13 @@ onMounted(() => list({ per_page: 100 }))
           </option>
         </select>
       </div>
-      <div class="md:col-span-3 flex gap-2 justify-end">
+      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
       </div>
     </form>
 
-    <div class="card overflow-x-auto">
+    <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
       <table v-else class="table">
         <thead class="bg-slate-100">
@@ -92,10 +92,10 @@ onMounted(() => list({ per_page: 100 }))
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="cat in items" :key="cat.id">
-            <td class="font-medium">{{ cat.name }}</td>
-            <td class="capitalize">{{ cat.type }}</td>
-            <td>{{ items.find((c) => c.id === cat.parent_id)?.name ?? '—' }}</td>
-            <td class="text-right">
+            <td data-label="Nome" class="font-medium">{{ cat.name }}</td>
+            <td data-label="Tipo" class="capitalize">{{ cat.type }}</td>
+            <td data-label="Parent">{{ items.find((c) => c.id === cat.parent_id)?.name ?? '—' }}</td>
+            <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(cat)" @delete="onDelete(cat)" />
             </td>
           </tr>

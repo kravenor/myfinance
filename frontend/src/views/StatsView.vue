@@ -132,15 +132,15 @@ onMounted(refresh)
 
 <template>
   <div class="space-y-6">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Statistiche</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Statistiche</h1>
       <button class="btn-secondary" :disabled="loading" @click="refresh">
         {{ loading ? 'Aggiorno…' : 'Aggiorna' }}
       </button>
     </div>
 
     <section class="card p-4 space-y-4">
-      <div class="flex items-center justify-between">
+      <div class="flex flex-wrap items-center justify-between gap-2">
         <h2 class="font-medium">Confronto periodi</h2>
         <select v-model="unit" class="input md:w-40" @change="refresh">
           <option value="month">Mese vs precedente</option>
@@ -201,7 +201,7 @@ onMounted(refresh)
           <option value="income">Entrate</option>
         </select>
       </div>
-      <div class="h-80">
+      <div class="h-64 sm:h-80">
         <Line v-if="trend && trend.categories.length" :data="trendData" :options="chartOptions" />
         <p v-else class="text-sm text-slate-500">Nessun dato.</p>
       </div>
@@ -222,7 +222,7 @@ onMounted(refresh)
           />
         </div>
       </div>
-      <div class="h-80">
+      <div class="h-64 sm:h-80">
         <Line v-if="forecast.length" :data="forecastData" :options="forecastOptions" />
         <p v-else class="text-sm text-slate-500">Nessuna ricorrente attiva per la proiezione.</p>
       </div>
@@ -240,7 +240,7 @@ onMounted(refresh)
           <option value="income">Entrate</option>
         </select>
       </div>
-      <div class="overflow-x-auto">
+      <div class="table-responsive md:overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>
@@ -254,12 +254,12 @@ onMounted(refresh)
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="t in top" :key="t.id">
-              <td>{{ t.occurred_at }}</td>
-              <td class="capitalize">{{ t.type }}</td>
-              <td>{{ t.account_name ?? '—' }}</td>
-              <td>{{ t.category_name ?? '—' }}</td>
-              <td>{{ t.description ?? '—' }}</td>
-              <td class="text-right font-medium">{{ t.amount }} {{ t.currency }}</td>
+              <td data-label="Data">{{ t.occurred_at }}</td>
+              <td data-label="Tipo" class="capitalize">{{ t.type }}</td>
+              <td data-label="Conto">{{ t.account_name ?? '—' }}</td>
+              <td data-label="Categoria">{{ t.category_name ?? '—' }}</td>
+              <td data-label="Descrizione">{{ t.description ?? '—' }}</td>
+              <td data-label="Importo" class="md:text-right font-medium">{{ t.amount }} {{ t.currency }}</td>
             </tr>
             <tr v-if="top.length === 0">
               <td colspan="6" class="text-center text-slate-500 py-6">Nessuna transazione nel periodo.</td>

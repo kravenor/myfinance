@@ -72,8 +72,8 @@ onMounted(() => list())
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Conti</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Conti</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuovo conto' }}
       </button>
@@ -112,7 +112,7 @@ onMounted(() => list())
       </div>
     </form>
 
-    <div class="card overflow-x-auto">
+    <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
       <table v-else class="table">
         <thead class="bg-slate-100">
@@ -126,27 +126,29 @@ onMounted(() => list())
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="acc in items" :key="acc.id">
-            <td class="font-medium flex items-center gap-2">
-              <button
-                type="button"
-                class="text-yellow-500"
-                :title="acc.is_primary ? 'Primario' : 'Imposta come primario'"
-                @click="setPrimary(acc)"
-              >
-                <svg v-if="acc.is_primary" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1 0 0 0 .95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.386 2.46a1 1 0 0 0-.364 1.118l1.287 3.966c.3.921-.755 1.688-1.54 1.118l-3.386-2.46a1 1 0 0 0-1.175 0l-3.386 2.46c-.784.57-1.84-.197-1.54-1.118l1.287-3.966a1 1 0 0 0-.364-1.118L2.047 9.393c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 0 0 .95-.69l1.286-3.966z" />
-                </svg>
-                <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1 0 0 0 .95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.386 2.46a1 1 0 0 0-.364 1.118l1.287 3.966c.3.921-.755 1.688-1.54 1.118l-3.386-2.46a1 1 0 0 0-1.175 0l-3.386 2.46c-.784.57-1.84-.197-1.54-1.118l1.287-3.966a1 1 0 0 0-.364-1.118L2.047 9.393c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 0 0 .95-.69l1.286-3.966z" />
-                </svg>
-              </button>
-              {{ acc.name }}
-              <span v-if="acc.is_primary" class="ml-2 text-xs text-slate-500">(Principale)</span>
+            <td data-label="Nome" class="font-medium md:flex md:items-center md:gap-2">
+              <span class="inline-flex items-center gap-2">
+                <button
+                  type="button"
+                  class="text-yellow-500"
+                  :title="acc.is_primary ? 'Primario' : 'Imposta come primario'"
+                  @click="setPrimary(acc)"
+                >
+                  <svg v-if="acc.is_primary" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1 0 0 0 .95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.386 2.46a1 1 0 0 0-.364 1.118l1.287 3.966c.3.921-.755 1.688-1.54 1.118l-3.386-2.46a1 1 0 0 0-1.175 0l-3.386 2.46c-.784.57-1.84-.197-1.54-1.118l1.287-3.966a1 1 0 0 0-.364-1.118L2.047 9.393c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 0 0 .95-.69l1.286-3.966z" />
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1 0 0 0 .95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.386 2.46a1 1 0 0 0-.364 1.118l1.287 3.966c.3.921-.755 1.688-1.54 1.118l-3.386-2.46a1 1 0 0 0-1.175 0l-3.386 2.46c-.784.57-1.84-.197-1.54-1.118l1.287-3.966a1 1 0 0 0-.364-1.118L2.047 9.393c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 0 0 .95-.69l1.286-3.966z" />
+                  </svg>
+                </button>
+                {{ acc.name }}
+                <span v-if="acc.is_primary" class="text-xs text-slate-500">(Principale)</span>
+              </span>
             </td>
-            <td class="capitalize">{{ acc.type }}</td>
-            <td>{{ acc.currency }}</td>
-            <td class="text-right">{{ acc.initial_balance }}</td>
-            <td class="text-right">
+            <td data-label="Tipo" class="capitalize">{{ acc.type }}</td>
+            <td data-label="Valuta">{{ acc.currency }}</td>
+            <td data-label="Saldo iniziale" class="md:text-right">{{ acc.initial_balance }}</td>
+            <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(acc)" @delete="onDelete(acc)" />
             </td>
           </tr>

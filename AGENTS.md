@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-05-23**
+Ultimo aggiornamento: **2026-05-25**
 Fase corrente: **Estensione — Statistiche avanzate (COMPLETATA)**
 
 ---
@@ -211,6 +211,7 @@ make prod-down       # ferma stack produzione
 - **HTTP**: client axios centralizzato in `src/lib/api.ts` con interceptor CSRF e gestione errori
 - **Routing**: lazy import per ogni route
 - **Stile**: Tailwind utility-first, componenti riusabili in `src/components/ui/`
+- **Responsive / mobile**: layout mobile-first. Sidebar di `AppLayout` diventa drawer < `lg` con topbar + hamburger; le griglie usano breakpoint `sm/md/lg`. Le tabelle dati sono wrappate in `.table-responsive` (utility in `style.css`) che sotto `md` collassa le righe in card stack: ogni `<td>` deve avere `data-label="…"`, la cella delle azioni la classe `actions-cell`. Gli `input/select/textarea` partono da 16px (no zoom iOS), si riducono da `sm` in su.
 
 ### Git
 - Branch: `main` (stabile), feature branch `feat/...`, `fix/...`

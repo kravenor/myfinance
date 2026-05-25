@@ -108,9 +108,9 @@ onMounted(refresh)
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-2xl font-semibold">Report</h1>
+    <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
 
-    <form class="card p-4 grid grid-cols-1 md:grid-cols-4 gap-3" @submit.prevent="refresh">
+    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" @submit.prevent="refresh">
       <div>
         <label class="label">Da</label>
         <input v-model="filters.from" type="date" class="input" required />
@@ -139,7 +139,7 @@ onMounted(refresh)
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Totali per categoria ({{ categoryType }})
           </h3>
-          <div class="h-80">
+          <div class="h-64 sm:h-80">
             <Doughnut v-if="categories.length" :data="donutData()" :options="chartOptions" />
             <p v-else class="text-sm text-slate-500">Nessun dato nel periodo.</p>
           </div>
@@ -148,7 +148,7 @@ onMounted(refresh)
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Income vs Expense (mensile)
           </h3>
-          <div class="h-80">
+          <div class="h-64 sm:h-80">
             <Bar :data="barData()" :options="chartOptions" />
           </div>
         </div>
@@ -158,12 +158,12 @@ onMounted(refresh)
         <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
           Patrimonio netto (cumulato)
         </h3>
-        <div class="h-80">
+        <div class="h-64 sm:h-80">
           <Line :data="lineData()" :options="chartOptions" />
         </div>
       </div>
 
-      <div class="card overflow-x-auto">
+      <div class="card table-responsive md:overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>
@@ -173,8 +173,8 @@ onMounted(refresh)
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="c in categories" :key="c.category_id ?? 0">
-              <td class="font-medium">{{ c.category_name }}</td>
-              <td class="text-right">{{ c.total }}</td>
+              <td data-label="Categoria" class="font-medium">{{ c.category_name }}</td>
+              <td data-label="Totale" class="md:text-right">{{ c.total }}</td>
             </tr>
             <tr v-if="categories.length === 0">
               <td colspan="2" class="text-center text-slate-500 py-6">Nessuna categoria.</td>

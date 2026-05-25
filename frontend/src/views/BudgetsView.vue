@@ -77,14 +77,14 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Budget</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuovo budget' }}
       </button>
     </div>
 
-    <form class="card p-4 grid grid-cols-1 md:grid-cols-3 gap-3" @submit.prevent="refresh">
+    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" @submit.prevent="refresh">
       <div>
         <label class="label">Anno</label>
         <input v-model.number="filters.year" type="number" min="2000" max="2100" class="input" />
@@ -98,7 +98,7 @@ onMounted(async () => {
       </div>
     </form>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-4 gap-4" @submit.prevent="onSubmit">
+    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" @submit.prevent="onSubmit">
       <div>
         <label class="label">Categoria</label>
         <select v-model.number="form.category_id" class="input" required>
@@ -117,13 +117,13 @@ onMounted(async () => {
         <label class="label">Importo</label>
         <input v-model="form.amount" type="number" step="0.01" class="input" required />
       </div>
-      <div class="md:col-span-4 flex gap-2 justify-end">
+      <div class="sm:col-span-2 md:col-span-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
       </div>
     </form>
 
-    <div class="card overflow-x-auto">
+    <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
       <table v-else class="table">
         <thead class="bg-slate-100">
@@ -138,11 +138,11 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="b in items" :key="b.id">
-            <td class="font-medium">{{ categoryName(b.category_id) }}</td>
-            <td>{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</td>
-            <td class="text-right">{{ b.amount }}</td>
-            <td class="text-right">{{ b.spent ?? '0.00' }}</td>
-            <td>
+            <td data-label="Categoria" class="font-medium">{{ categoryName(b.category_id) }}</td>
+            <td data-label="Periodo">{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</td>
+            <td data-label="Budget" class="md:text-right">{{ b.amount }}</td>
+            <td data-label="Speso" class="md:text-right">{{ b.spent ?? '0.00' }}</td>
+            <td data-label="Progresso">
               <div class="w-full bg-slate-200 rounded h-2">
                 <div
                   class="h-2 rounded"
@@ -151,7 +151,7 @@ onMounted(async () => {
                 />
               </div>
             </td>
-            <td class="text-right">
+            <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
             </td>
           </tr>

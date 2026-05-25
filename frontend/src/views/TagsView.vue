@@ -42,14 +42,14 @@ onMounted(() => list())
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Tag</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Tag</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuovo tag' }}
       </button>
     </div>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
+    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div class="md:col-span-2">
         <label class="label">Nome</label>
         <input v-model="form.name" class="input" required maxlength="64" />
@@ -58,13 +58,13 @@ onMounted(() => list())
         <label class="label">Colore</label>
         <input v-model="form.color" class="input" placeholder="#aabbcc" />
       </div>
-      <div class="md:col-span-3 flex gap-2 justify-end">
+      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
       </div>
     </form>
 
-    <div class="card overflow-x-auto">
+    <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
       <table v-else class="table">
         <thead class="bg-slate-100">
@@ -76,12 +76,12 @@ onMounted(() => list())
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="t in items" :key="t.id">
-            <td class="font-medium">{{ t.name }}</td>
-            <td>
+            <td data-label="Nome" class="font-medium">{{ t.name }}</td>
+            <td data-label="Colore">
               <span v-if="t.color" class="inline-block w-4 h-4 rounded-full align-middle mr-2" :style="{ background: t.color }" />
               {{ t.color ?? '—' }}
             </td>
-            <td class="text-right">
+            <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(t)" @delete="onDelete(t)" />
             </td>
           </tr>

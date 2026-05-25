@@ -2,6 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  @media (min-width: 640px) {
+    input,
+    select,
+    textarea {
+      font-size: 0.875rem;
+    }
+  }
+}
+
 @layer components {
   .btn {
     @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
@@ -44,5 +62,49 @@
   }
   .icon-btn-delete {
     @apply text-slate-500 hover:bg-red-50 hover:text-red-600 focus:ring-red-500;
+  }
+
+  /* Lista a card per tabelle su mobile.
+     Wrap della tabella con .table-responsive: sotto md la tabella diventa
+     uno stack di righe, ogni cella mostra il label tramite data-label. */
+  .table-responsive {
+    @apply w-full;
+  }
+  @media (max-width: 767px) {
+    .table-responsive table {
+      @apply block w-full;
+    }
+    .table-responsive thead {
+      @apply hidden;
+    }
+    .table-responsive tbody,
+    .table-responsive tr {
+      @apply block w-full;
+    }
+    .table-responsive tbody {
+      @apply divide-y divide-slate-100;
+    }
+    .table-responsive tr {
+      @apply px-4 py-3 space-y-1;
+    }
+    .table-responsive td {
+      @apply block w-full border-0 px-0 py-1 text-sm whitespace-normal text-left;
+    }
+    .table-responsive td::before {
+      content: attr(data-label);
+      @apply block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-0.5;
+    }
+    .table-responsive td[data-label=''] ::before,
+    .table-responsive td:not([data-label])::before {
+      content: '';
+      @apply hidden;
+    }
+    .table-responsive td.actions-cell {
+      @apply flex justify-end pt-2;
+    }
+    .table-responsive td.actions-cell::before {
+      content: '';
+      @apply hidden;
+    }
   }
 }

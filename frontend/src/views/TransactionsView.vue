@@ -115,14 +115,14 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4">
-    <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold">Transazioni</h1>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuova transazione' }}
       </button>
     </div>
 
-    <form class="card p-4 grid grid-cols-1 md:grid-cols-5 gap-3" @submit.prevent="applyFilters">
+    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters">
       <div>
         <label class="label">Conto</label>
         <select v-model="filters.account_id" class="input">
@@ -147,12 +147,12 @@ onMounted(async () => {
         <label class="label">A</label>
         <input v-model="filters.to" type="date" class="input" />
       </div>
-      <div class="flex items-end">
+      <div class="flex items-end sm:col-span-2 md:col-span-1">
         <button type="submit" class="btn-secondary w-full">Filtra</button>
       </div>
     </form>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
+    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div>
         <label class="label">Tipo</label>
         <select v-model="form.type" class="input">
@@ -190,17 +190,17 @@ onMounted(async () => {
         <label class="label">Data</label>
         <input v-model="form.occurred_at" type="date" class="input" required />
       </div>
-      <div class="md:col-span-3">
+      <div class="sm:col-span-2 md:col-span-3">
         <label class="label">Descrizione</label>
         <input v-model="form.description" class="input" />
       </div>
-      <div class="md:col-span-3 flex gap-2 justify-end">
+      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
       </div>
     </form>
 
-    <div class="card overflow-x-auto">
+    <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
       <table v-else class="table">
         <thead class="bg-slate-100">
@@ -215,18 +215,18 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="tx in items" :key="tx.id">
-            <td>{{ tx.occurred_at }}</td>
-            <td class="capitalize">{{ tx.type }}</td>
-            <td>
+            <td data-label="Data">{{ tx.occurred_at }}</td>
+            <td data-label="Tipo" class="capitalize">{{ tx.type }}</td>
+            <td data-label="Conto">
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(tx.account_id) }}</span>
                 <span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500" title="Conto principale">★</span>
               </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
-            <td>{{ tx.description ?? '—' }}</td>
-            <td class="text-right font-medium">{{ tx.amount }} {{ tx.currency }}</td>
-            <td class="text-right">
+            <td data-label="Descrizione">{{ tx.description ?? '—' }}</td>
+            <td data-label="Importo" class="md:text-right font-medium">{{ tx.amount }} {{ tx.currency }}</td>
+            <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </td>
           </tr>
