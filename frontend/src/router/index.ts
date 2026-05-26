@@ -25,6 +25,11 @@ export const router = createRouter({
         { path: 'accounts', name: 'accounts', component: () => import('@/views/AccountsView.vue') },
         { path: 'categories', name: 'categories', component: () => import('@/views/CategoriesView.vue') },
         { path: 'tags', name: 'tags', component: () => import('@/views/TagsView.vue') },
+        {
+          path: 'categorization-rules',
+          name: 'categorization-rules',
+          component: () => import('@/views/CategorizationRulesView.vue'),
+        },
         { path: 'transactions', name: 'transactions', component: () => import('@/views/TransactionsView.vue') },
         { path: 'budgets', name: 'budgets', component: () => import('@/views/BudgetsView.vue') },
         { path: 'recurring', name: 'recurring', component: () => import('@/views/RecurringView.vue') },

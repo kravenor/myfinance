@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { api, ensureCsrf } from '@/lib/api'
 import type { Account, Paginated } from '@/types/api'
 
@@ -18,7 +19,14 @@ interface PreviewResult {
 interface ImportResult {
   imported: number
   skipped: number
+  auto_categorized: number
   errors: { row: number; message: string }[]
+}
+
+interface Prediction {
+  category_id: number | null
+  category_name: string | null
+  rule_id: number | null
 }
 
 const accounts = ref<Account[]>([])
@@ -63,6 +71,8 @@ const importResult = ref<ImportResult | null>(null)
 const importing = ref(false)
 const previewLoading = ref(false)
 const importError = ref<string | null>(null)
+const predictions = ref<Prediction[]>([])
+const predictionsLoading = ref(false)
 
 function onFileChange(e: Event) {
   const target = e.target as HTMLInputElement
@@ -70,6 +80,31 @@ function onFileChange(e: Event) {
   preview.value = null
   importResult.value = null
   importError.value = null
+  predictions.value = []
+}
+
+async function loadPredictions() {
+  if (!importFile.value || !mapping.value.date || !mapping.value.amount) return
+  predictionsLoading.value = true
+  try {
+    await ensureCsrf()
+    const form = new FormData()
+    form.append('file', importFile.value)
+    form.append('mapping[date]', mapping.value.date)
+    form.append('mapping[amount]', mapping.value.amount)
+    if (mapping.value.description) form.append('mapping[description]', mapping.value.description)
+    if (mapping.value.type) form.append('mapping[type]', mapping.value.type)
+    if (mapping.value.category) form.append('mapping[category]', mapping.value.category)
+    const { data } = await api.post<{ data: Prediction[] }>(
+      '/transactions/import/preview-predictions',
+      form,
+    )
+    predictions.value = data.data
+  } catch {
+    predictions.value = []
+  } finally {
+    predictionsLoading.value = false
+  }
 }
 
 async function runPreview() {
@@ -89,6 +124,7 @@ async function runPreview() {
       type: data.data.suggested.type ?? '',
       category: data.data.suggested.category ?? '',
     }
+    await loadPredictions()
   } catch (e: unknown) {
     const err = e as { response?: { data?: { message?: string } } }
     importError.value = err.response?.data?.message ?? 'Errore nella lettura del file.'
@@ -125,6 +161,19 @@ async function runImport() {
 
 const canImport = computed(
   () => !!importFile.value && !!importAccount.value && !!mapping.value.date && !!mapping.value.amount,
+)
+
+watch(
+  () => [
+    mapping.value.description,
+    mapping.value.type,
+    mapping.value.category,
+    mapping.value.date,
+    mapping.value.amount,
+  ],
+  () => {
+    if (preview.value) loadPredictions()
+  },
 )
 
 onMounted(async () => {
@@ -210,16 +259,35 @@ onMounted(async () => {
           <input v-model="dateFormat" class="input md:w-48" placeholder="Y-m-d" />
         </div>
 
+        <div class="flex items-center justify-between gap-3 text-sm">
+          <div>
+            <span class="text-slate-500">
+              Categoria suggerita dalle
+              <RouterLink :to="{ name: 'categorization-rules' }" class="underline">
+                regole di categorizzazione
+              </RouterLink>.
+            </span>
+            <span v-if="predictionsLoading" class="ml-2 text-slate-400">Calcolo…</span>
+          </div>
+        </div>
+
         <div class="overflow-x-auto">
           <table class="table">
             <thead class="bg-slate-100">
               <tr>
                 <th v-for="h in preview.headers" :key="h">{{ h }}</th>
+                <th>Categoria suggerita</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
               <tr v-for="(row, idx) in preview.sample" :key="idx">
                 <td v-for="h in preview.headers" :key="h">{{ row[h] }}</td>
+                <td class="text-sm">
+                  <span v-if="predictions[idx]?.category_name" class="text-slate-700">
+                    {{ predictions[idx].category_name }}
+                  </span>
+                  <span v-else class="text-slate-400">—</span>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -236,8 +304,14 @@ onMounted(async () => {
 
       <div v-if="importResult" class="card bg-slate-50 p-4 space-y-2">
         <p class="text-sm">
-          <span class="font-medium text-green-700">{{ importResult.imported }}</span> importate,
+          <span class="font-medium text-green-700">{{ importResult.imported }}</span> importate ·
+          <span class="font-medium text-sky-700">{{ importResult.auto_categorized }}</span> auto-categorizzate ·
           <span class="font-medium text-amber-700">{{ importResult.skipped }}</span> saltate.
+        </p>
+        <p class="text-xs text-slate-500">
+          <RouterLink :to="{ name: 'categorization-rules' }" class="underline">
+            Gestisci regole →
+          </RouterLink>
         </p>
         <details v-if="importResult.errors.length" class="text-sm">
           <summary class="cursor-pointer">{{ importResult.errors.length }} errori</summary>

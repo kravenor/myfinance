@@ -64,4 +64,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Tag::class);
     }
+
+    public function categorizationRules(): HasMany
+    {
+        return $this->hasMany(CategorizationRule::class);
+    }
 }

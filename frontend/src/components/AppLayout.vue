@@ -13,6 +13,7 @@ const nav = [
   { name: 'transactions', label: 'Transazioni' },
   { name: 'categories', label: 'Categorie' },
   { name: 'tags', label: 'Tag' },
+  { name: 'categorization-rules', label: 'Regole categoria' },
   { name: 'budgets', label: 'Budget' },
   { name: 'recurring', label: 'Ricorrenti' },
   { name: 'reports', label: 'Report' },

@@ -9,6 +9,10 @@ use Illuminate\Support\Carbon;
 
 class TransactionImportService
 {
+    public function __construct(
+        private readonly CategorizationRuleMatcher $matcher,
+    ) {}
+
     /**
      * Legge il CSV e ritorna headers + righe campione + mapping suggerito.
      *
@@ -23,6 +27,62 @@ class TransactionImportService
             'sample' => $rows,
             'suggested' => $this->suggestMapping($headers),
         ];
+    }
+
+    /**
+     * Per le righe campione, predice categoria via regole utente.
+     *
+     * @param  array{date: string, amount: string, description?: ?string, type?: ?string, category?: ?string}  $mapping
+     * @return array<int, array{category_id: ?int, category_name: ?string, rule_id: ?int}>
+     */
+    public function previewPredictions(UploadedFile $file, array $mapping, int $sampleSize = 50): array
+    {
+        [, $rows] = $this->parse($file, $sampleSize);
+
+        $byName = Category::query()->get()->keyBy(fn ($c) => mb_strtolower($c->name));
+        $this->matcher->reset();
+        $this->matcher->preload();
+
+        $predictions = [];
+        foreach ($rows as $row) {
+            $type = $this->safeResolveType($mapping, $row);
+            $description = isset($mapping['description']) && $mapping['description']
+                ? trim((string) ($row[$mapping['description']] ?? '')) ?: null
+                : null;
+
+            $categoryId = null;
+            $categoryName = null;
+            $ruleId = null;
+
+            if (! empty($mapping['category'])) {
+                $name = trim((string) ($row[$mapping['category']] ?? ''));
+                if ($name !== '') {
+                    $cat = $byName->get(mb_strtolower($name));
+                    if ($cat) {
+                        $categoryId = $cat->id;
+                        $categoryName = $cat->name;
+                    }
+                }
+            }
+
+            if ($categoryId === null) {
+                $rule = $this->matcher->match($description, $type);
+                if ($rule) {
+                    $ruleId = $rule->id;
+                    $categoryId = $rule->category_id;
+                    $cat = $byName->first(fn ($c) => $c->id === $rule->category_id);
+                    $categoryName = $cat?->name;
+                }
+            }
+
+            $predictions[] = [
+                'category_id' => $categoryId,
+                'category_name' => $categoryName,
+                'rule_id' => $ruleId,
+            ];
+        }
+
+        return $predictions;
     }
 
     /**
@@ -41,9 +101,12 @@ class TransactionImportService
         [$headers, $rows] = $this->parse($file, PHP_INT_MAX);
 
         $byName = Category::query()->get()->keyBy(fn ($c) => mb_strtolower($c->name));
+        $this->matcher->reset();
+        $this->matcher->preload();
 
         $imported = 0;
         $skipped = 0;
+        $autoCategorized = 0;
         $errors = [];
 
         foreach ($rows as $i => $row) {
@@ -75,6 +138,14 @@ class TransactionImportService
                     }
                 }
 
+                $matchedRule = null;
+                if ($categoryId === null) {
+                    $matchedRule = $this->matcher->match($description, $type);
+                    if ($matchedRule) {
+                        $categoryId = $matchedRule->category_id;
+                    }
+                }
+
                 Transaction::create([
                     'account_id' => $accountId,
                     'category_id' => $categoryId,
@@ -85,6 +156,11 @@ class TransactionImportService
                     'description' => $description,
                 ]);
 
+                if ($matchedRule) {
+                    $this->matcher->recordHit($matchedRule);
+                    $autoCategorized++;
+                }
+
                 $imported++;
             } catch (\Throwable $e) {
                 $skipped++;
@@ -92,7 +168,14 @@ class TransactionImportService
             }
         }
 
-        return ['imported' => $imported, 'skipped' => $skipped, 'errors' => $errors];
+        $this->matcher->flushHits();
+
+        return [
+            'imported' => $imported,
+            'skipped' => $skipped,
+            'auto_categorized' => $autoCategorized,
+            'errors' => $errors,
+        ];
     }
 
     /**
@@ -190,6 +273,26 @@ class TransactionImportService
         }
 
         return (float) $clean;
+    }
+
+    /**
+     * Versione tollerante per la preview: deduce type da colonna type o, se assente,
+     * dal segno dell'importo parsato. Fallback `expense` se nulla è disponibile.
+     *
+     * @param  array<string, mixed>  $mapping
+     * @param  array<string, string>  $row
+     */
+    private function safeResolveType(array $mapping, array $row): string
+    {
+        $amount = 0.0;
+        if (! empty($mapping['amount'])) {
+            $parsed = $this->parseAmount((string) ($row[$mapping['amount']] ?? ''));
+            if ($parsed !== null) {
+                $amount = $parsed;
+            }
+        }
+
+        return $this->resolveType($mapping, $row, $amount);
     }
 
     /**

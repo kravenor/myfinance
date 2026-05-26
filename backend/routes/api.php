@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\CategorizationRuleController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
@@ -31,6 +32,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('budgets', BudgetController::class);
     Route::apiResource('recurring-transactions', RecurringTransactionController::class)
         ->parameter('recurring-transactions', 'recurring_transaction');
+    Route::apiResource('categorization-rules', CategorizationRuleController::class)
+        ->parameter('categorization-rules', 'categorization_rule');
+    Route::post('transactions/import/preview-predictions', [TransactionImportExportController::class, 'importPreviewPredictions'])
+        ->name('transactions.import.preview-predictions');
 
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
         Route::get('summary', 'summary')->name('reports.summary');

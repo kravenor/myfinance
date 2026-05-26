@@ -61,4 +61,9 @@ class Category extends Model
     {
         return $this->hasMany(Budget::class);
     }
+
+    public function categorizationRules(): HasMany
+    {
+        return $this->hasMany(CategorizationRule::class);
+    }
 }

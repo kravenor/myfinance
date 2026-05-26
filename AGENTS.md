@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-05-25**
-Fase corrente: **Estensione — Statistiche avanzate (COMPLETATA)**
+Ultimo aggiornamento: **2026-05-26**
+Fase corrente: **Estensione — Auto-categorizzazione import (COMPLETATA)**
 
 ---
 
@@ -50,11 +50,11 @@ Finance/
 ├── .gitignore
 │
 ├── backend/               # progetto Laravel 11
-│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag
+│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -63,8 +63,9 @@ Finance/
 │   │   ├── Requests/Transaction/  # Store/UpdateTransactionRequest (transfer rules, owned-by-user)
 │   │   ├── Requests/Budget/    # Store/UpdateBudgetRequest (unique categoria/anno/mese)
 │   │   ├── Requests/RecurringTransaction/  # Store/UpdateRecurringTransactionRequest (transfer + cadence)
-│   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransactionResource
-│   ├── app/Services/           # RecurringTransactionRunner (materializza ricorrenti maturate)
+│   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
+│   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRuleResource
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher (auto-categorizzazione import)
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run [--date=]`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── database/migrations/
@@ -93,7 +94,7 @@ Finance/
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, Transactions, Budgets, Recurring
+│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, Recurring, Reports, Stats, ImportExport
 │
 ├── docker/
 │   ├── php/
@@ -229,6 +230,7 @@ make prod-down       # ferma stack produzione
 - [x] **Fase 8** — Import/Export (CSV export, import con preview + mapping colonne)
 - [x] **Fase 9** — Qualità, CI, deploy (Larastan livello 5, ESLint/Prettier, GitHub Actions, stack produzione Docker)
 - [x] **Estensione** — Statistiche avanzate (saving rate, confronto periodi, trend categorie, cash-flow forecast, top transazioni)
+- [x] **Estensione** — Auto-categorizzazione import (regole pattern→categoria applicate in fase di import CSV)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -459,6 +461,31 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
   2. **Trend top 5 categorie** — Line chart multi-serie con switch type expense/income.
   3. **Cash flow forecast** — Line con 2 assi: net mensile previsto (sx) e patrimonio proiettato (dx). Selector 1–24 mesi.
   4. **Top transazioni del mese** — tabella ordinata, filtro type.
+
+## 14. Auto-categorizzazione import (estensione)
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Risposta / Body |
+|--------|------|-----------------|
+| GET | `/api/categorization-rules` | Lista paginata. Filtri: `is_active`, `category_id`. Ordine `priority asc, id asc`. Eager-load `category` |
+| POST | `/api/categorization-rules` | `category_id`, `name`, `match_type` (contains/starts_with/equals/regex), `pattern`, `applies_to_type?` (any/income/expense), `priority?`, `is_active?` |
+| GET | `/api/categorization-rules/{id}` | — |
+| PATCH | `/api/categorization-rules/{id}` | Campi `sometimes`. Stessa validazione regex su update |
+| DELETE | `/api/categorization-rules/{id}` | 204 |
+| POST | `/api/transactions/import/preview-predictions` | multipart `file` + `mapping[*]`. Ritorna `[{category_id, category_name, rule_id}]` per le prime 50 righe — usato dalla UI per mostrare la colonna "Categoria suggerita" |
+
+### Schema `categorization_rules`
+- `user_id` (cascade), `category_id` (cascade), `name (120)`, `match_type` enum, `pattern (255)`, `applies_to_type` enum default `any`, `priority` smallint default 100, `is_active` boolean default true, `times_applied` unsigned int, `last_applied_at` timestamp nullable.
+- Indice `(user_id, is_active, priority)` per il path di matching.
+
+### Logica
+- [CategorizationRuleMatcher](backend/app/Services/CategorizationRuleMatcher.php): carica una volta le regole attive ordinate per `priority asc`, per ogni descrizione confronta in mb_strtolower con `str_contains`/`str_starts_with`/`equals`/regex (`/.../iu`). Filtra per `applies_to_type` quando `≠ any`. Espone `recordHit(rule)` + `flushHits()` per aggregare gli increment di `times_applied` (single `UPDATE` per regola a fine import).
+- [TransactionImportService::import()](backend/app/Services/TransactionImportService.php) usa il matcher come **fallback** quando il mapping CSV non risolve già la categoria. Ritorno arricchito con `auto_categorized`.
+- La validazione regex avviene a livello di FormRequest (`Store/UpdateCategorizationRuleRequest`): pattern malformato → `422` con errore su `pattern`.
+
+### Frontend
+- [CategorizationRulesView.vue](frontend/src/views/CategorizationRulesView.vue) (`/categorization-rules` in sidebar tra Tag e Budget) — CRUD inline, select categoria filtrata per `applies_to_type`, swatch colore, toggle attiva, contatore `times_applied`.
+- [ImportExportView.vue](frontend/src/views/ImportExportView.vue) — dopo la preview chiama `preview-predictions` e mostra una colonna "Categoria suggerita" nella tabella sample; il watcher ricalcola le predictions quando l'utente modifica il mapping. Riepilogo finale include `auto_categorized` + link a `/categorization-rules`.
 
 ## 9. Per gli agenti: regole operative
 

@@ -89,6 +89,24 @@ export interface Budget {
   updated_at: string
 }
 
+export type RuleMatchType = 'contains' | 'starts_with' | 'equals' | 'regex'
+export type RuleAppliesTo = 'any' | 'income' | 'expense'
+export interface CategorizationRule {
+  id: number
+  category_id: number
+  category?: { id: number; name: string; color: string | null; type: CategoryType }
+  name: string
+  match_type: RuleMatchType
+  pattern: string
+  applies_to_type: RuleAppliesTo
+  priority: number
+  is_active: boolean
+  times_applied: number
+  last_applied_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type Cadence = 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly' | 'yearly'
 export interface RecurringTransaction {
   id: number

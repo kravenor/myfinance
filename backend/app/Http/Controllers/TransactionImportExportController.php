@@ -38,6 +38,27 @@ class TransactionImportExportController extends Controller
         return response()->json(['data' => $this->importer->preview($request->file('file'))]);
     }
 
+    public function importPreviewPredictions(Request $request): JsonResponse
+    {
+        $this->authorize('create', Transaction::class);
+
+        $request->validate([
+            'file' => ['required', 'file', 'mimetypes:text/csv,text/plain,application/csv', 'max:5120'],
+            'mapping.date' => ['required', 'string'],
+            'mapping.amount' => ['required', 'string'],
+            'mapping.description' => ['nullable', 'string'],
+            'mapping.type' => ['nullable', 'string'],
+            'mapping.category' => ['nullable', 'string'],
+        ]);
+
+        $predictions = $this->importer->previewPredictions(
+            file: $request->file('file'),
+            mapping: $request->input('mapping', []),
+        );
+
+        return response()->json(['data' => $predictions]);
+    }
+
     public function importCommit(Request $request): JsonResponse
     {
         $this->authorize('create', Transaction::class);
