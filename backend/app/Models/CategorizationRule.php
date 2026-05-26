@@ -6,6 +6,7 @@ use App\Models\Concerns\BelongsToUser;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
@@ -18,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $priority
  * @property bool $is_active
  * @property int $times_applied
- * @property \Illuminate\Support\Carbon|null $last_applied_at
+ * @property Carbon|null $last_applied_at
  */
 class CategorizationRule extends Model
 {
