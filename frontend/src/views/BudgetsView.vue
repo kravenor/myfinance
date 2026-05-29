@@ -60,11 +60,26 @@ function categoryName(id: number): string {
   return categories.value.find((c) => c.id === id)?.name ?? `#${id}`
 }
 
-function progress(b: Budget): number {
+function rawPercent(b: Budget): number {
   if (!b.spent) return 0
   const amount = parseFloat(b.amount)
-  if (amount === 0) return 0
-  return Math.min(100, Math.round((parseFloat(b.spent) / amount) * 100))
+  if (amount === 0) return parseFloat(b.spent) > 0 ? 100 : 0
+  return Math.round((parseFloat(b.spent) / amount) * 100)
+}
+
+function progress(b: Budget): number {
+  return Math.min(100, rawPercent(b))
+}
+
+function status(b: Budget): 'ok' | 'warning' | 'exceeded' {
+  const p = rawPercent(b)
+  if (p >= 100) return 'exceeded'
+  if (p >= 80) return 'warning'
+  return 'ok'
+}
+
+function barClass(b: Budget): string {
+  return { ok: 'bg-indigo-500', warning: 'bg-amber-500', exceeded: 'bg-red-500' }[status(b)]
 }
 
 onMounted(async () => {
@@ -143,12 +158,17 @@ onMounted(async () => {
             <td data-label="Budget" class="md:text-right">{{ b.amount }}</td>
             <td data-label="Speso" class="md:text-right">{{ b.spent ?? '0.00' }}</td>
             <td data-label="Progresso">
-              <div class="w-full bg-slate-200 rounded h-2">
-                <div
-                  class="h-2 rounded"
-                  :class="progress(b) >= 100 ? 'bg-red-500' : 'bg-indigo-500'"
-                  :style="{ width: progress(b) + '%' }"
-                />
+              <div class="flex items-center gap-2">
+                <div class="flex-1 bg-slate-200 rounded h-2">
+                  <div class="h-2 rounded" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
+                </div>
+                <span
+                  v-if="status(b) !== 'ok'"
+                  class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
+                  :class="status(b) === 'exceeded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+                >
+                  {{ rawPercent(b) }}%
+                </span>
               </div>
             </td>
             <td class="md:text-right actions-cell">

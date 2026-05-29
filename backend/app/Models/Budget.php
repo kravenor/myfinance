@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $year
  * @property int $month
  * @property string $amount
+ * @property-read Category|null $category
  */
 class Budget extends Model
 {

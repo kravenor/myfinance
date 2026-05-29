@@ -29,6 +29,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('transactions/import', [TransactionImportExportController::class, 'importCommit'])
         ->name('transactions.import.commit');
     Route::apiResource('transactions', TransactionController::class);
+    Route::get('budgets/alerts', [BudgetController::class, 'alerts'])->name('budgets.alerts');
     Route::apiResource('budgets', BudgetController::class);
     Route::apiResource('recurring-transactions', RecurringTransactionController::class)
         ->parameter('recurring-transactions', 'recurring_transaction');

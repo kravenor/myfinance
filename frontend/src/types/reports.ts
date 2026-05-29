@@ -85,3 +85,16 @@ export interface NetWorthPoint {
   period: string
   net_worth: string
 }
+
+export interface BudgetAlert {
+  budget_id: number
+  category_id: number
+  category_name: string | null
+  category_color: string | null
+  year: number
+  month: number
+  amount: string
+  spent: string
+  percent: number
+  status: 'warning' | 'exceeded'
+}

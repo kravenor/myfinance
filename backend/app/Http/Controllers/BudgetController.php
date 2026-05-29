@@ -7,6 +7,7 @@ use App\Http\Requests\Budget\UpdateBudgetRequest;
 use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
 use App\Models\Transaction;
+use App\Services\BudgetAlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -38,6 +39,20 @@ class BudgetController extends Controller
         $this->attachSpent($paginator->getCollection()->all());
 
         return BudgetResource::collection($paginator);
+    }
+
+    /**
+     * Alert dei budget del periodo (warning >= 80%, exceeded >= 100%).
+     */
+    public function alerts(Request $request, BudgetAlertService $service): JsonResponse
+    {
+        $this->authorize('viewAny', Budget::class);
+
+        $now = Carbon::now();
+        $year = $request->filled('year') ? $request->integer('year') : $now->year;
+        $month = $request->filled('month') ? $request->integer('month') : $now->month;
+
+        return response()->json(['data' => $service->alerts($year, $month)]);
     }
 
     public function store(StoreBudgetRequest $request): JsonResponse

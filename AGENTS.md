@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-29**
-Fase corrente: **Estensione — Import OFX/QIF + applicazione retroattiva regole (COMPLETATA)**
+Fase corrente: **Estensione — Alert budget sforati (COMPLETATA)**
 
 ---
 
@@ -65,7 +65,7 @@ Finance/
 │   │   ├── Requests/RecurringTransaction/  # Store/UpdateRecurringTransactionRequest (transfer + cadence)
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRuleResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier (apply retroattivo regole)
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
@@ -233,6 +233,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Statistiche avanzate (saving rate, confronto periodi, trend categorie, cash-flow forecast, top transazioni)
 - [x] **Estensione** — Auto-categorizzazione import (regole pattern→categoria applicate in fase di import CSV)
 - [x] **Estensione** — Import OFX/QIF (parser dedicati con mapping bloccato) + applicazione retroattiva regole alle transazioni esistenti
+- [x] **Estensione** — Alert budget sforati (endpoint `/budgets/alerts`, banner Dashboard, badge colorati in BudgetsView)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -319,9 +320,12 @@ Validazione di appartenenza: tutti i `*_id` riferiti a risorse di dominio passan
 | Metodo | Path | Note |
 |--------|------|------|
 | GET | `/api/budgets` | filtri `year`, `month`, `category_id`. Ogni risorsa include `spent` = somma `expense` per (category, year, month) |
+| GET | `/api/budgets/alerts` | filtri `year`, `month` (default mese corrente). Ritorna `[{budget_id, category_id, category_name, category_color, year, month, amount, spent, percent, status}]` per i soli budget in `warning` (≥80%) o `exceeded` (≥100%), ordinati per `percent` desc. Rotta registrata **prima** dell'`apiResource` |
 | POST | `/api/budgets` | unique (`user_id`, `category_id`, `year`, `month`) verificato in validation + DB |
 | PATCH | `/api/budgets/{budget}` | stessa unicità in update |
 | DELETE | `/api/budgets/{budget}` | 204 |
+
+Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (`WARNING_THRESHOLD = 80`): unica query `SUM ... GROUP BY category_id` sulle `expense` del mese; `amount=0` con speso>0 → `exceeded`. Frontend: banner "Alert budget" in [DashboardView](frontend/src/views/DashboardView.vue) (mese corrente) + barra/badge colorati (ambra ≥80%, rosso ≥100%) in [BudgetsView](frontend/src/views/BudgetsView.vue).
 
 ### Recurring transactions — `apiResource('recurring-transactions')`
 | Metodo | Path | Note |

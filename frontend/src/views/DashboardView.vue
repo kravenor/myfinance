@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Bar, Doughnut } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -11,13 +12,14 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
-import type { CategoryTotal, ReportSummary, TimelinePoint } from '@/types/reports'
+import type { BudgetAlert, CategoryTotal, ReportSummary, TimelinePoint } from '@/types/reports'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Legend, Tooltip)
 
 const summary = ref<ReportSummary | null>(null)
 const categories = ref<CategoryTotal[]>([])
 const timeline = ref<TimelinePoint[]>([])
+const alerts = ref<BudgetAlert[]>([])
 const loading = ref(true)
 
 const palette = [
@@ -61,14 +63,16 @@ const chartOptions = {
 
 onMounted(async () => {
   try {
-    const [s, c, t] = await Promise.all([
+    const [s, c, t, a] = await Promise.all([
       api.get<{ data: ReportSummary }>('/reports/summary'),
       api.get<{ data: CategoryTotal[] }>('/reports/by-category', { params: { type: 'expense' } }),
       api.get<{ data: TimelinePoint[] }>('/reports/timeline'),
+      api.get<{ data: BudgetAlert[] }>('/budgets/alerts'),
     ])
     summary.value = s.data.data
     categories.value = c.data.data
     timeline.value = t.data.data
+    alerts.value = a.data.data
   } finally {
     loading.value = false
   }
@@ -81,6 +85,47 @@ onMounted(async () => {
     <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
 
     <template v-else-if="summary">
+      <section v-if="alerts.length" class="card border-l-4 border-amber-400 p-4">
+        <div class="flex items-center justify-between gap-3 mb-3">
+          <h2 class="text-sm font-medium text-slate-600 uppercase tracking-wide">
+            Alert budget ({{ alerts.length }})
+          </h2>
+          <RouterLink :to="{ name: 'budgets' }" class="text-sm text-indigo-600 underline">
+            Vai ai budget →
+          </RouterLink>
+        </div>
+        <ul class="space-y-2">
+          <li
+            v-for="al in alerts"
+            :key="al.budget_id"
+            class="flex flex-wrap items-center justify-between gap-2 text-sm"
+          >
+            <span class="flex items-center gap-2">
+              <span
+                v-if="al.category_color"
+                class="inline-block w-3 h-3 rounded-full"
+                :style="{ background: al.category_color }"
+              />
+              <span class="font-medium">{{ al.category_name ?? '—' }}</span>
+              <span
+                class="text-xs px-2 py-0.5 rounded"
+                :class="al.status === 'exceeded'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-amber-100 text-amber-700'"
+              >
+                {{ al.status === 'exceeded' ? 'sforato' : 'in allerta' }}
+              </span>
+            </span>
+            <span class="text-slate-500">
+              {{ al.spent }} / {{ al.amount }} ·
+              <span :class="al.status === 'exceeded' ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'">
+                {{ al.percent }}%
+              </span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
       <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Income mese</p>
