@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-29**
-Fase corrente: **Estensione — Dedup import via external_id (COMPLETATA)**
+Fase corrente: **Estensione — Recupero password (COMPLETATA)**
 
 ---
 
@@ -235,6 +235,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Import OFX/QIF (parser dedicati con mapping bloccato) + applicazione retroattiva regole alle transazioni esistenti
 - [x] **Estensione** — Alert budget sforati (endpoint `/budgets/alerts`, banner Dashboard, badge colorati in BudgetsView)
 - [x] **Estensione** — Dedup import via `external_id` (skip righe già importate o ripetute nel file, counter `duplicates`)
+- [x] **Estensione** — Recupero password (endpoint forgot/reset, link SPA, viste dedicate)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -274,8 +275,12 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | GET | `/sanctum/csrf-cookie` | — | Pre-flight CSRF (gestito da Sanctum) |
 | POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201) |
 | POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email, ritorna `UserResource` |
+| POST | `/api/auth/forgot-password` | — | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
+| POST | `/api/auth/reset-password` | — | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
 | POST | `/api/auth/logout` | `auth:sanctum` | Logout web + sanctum, invalida sessione, 204 |
 | GET | `/api/auth/me` | `auth:sanctum` | Ritorna utente corrente |
+
+**Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView.
 
 ## 8.2 Endpoint CRUD (Fase 4)
 

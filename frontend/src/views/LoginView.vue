@@ -10,6 +10,7 @@ const route = useRoute()
 const email = ref('demo@finance.local')
 const password = ref('password')
 const error = ref<string | null>(null)
+const resetDone = ref(route.query.reset === '1')
 
 async function onSubmit() {
   error.value = null
@@ -28,6 +29,9 @@ async function onSubmit() {
   <div class="min-h-screen flex items-center justify-center px-4">
     <form class="card w-full max-w-md p-6 space-y-4" @submit.prevent="onSubmit">
       <h1 class="text-xl font-semibold">Accedi</h1>
+      <p v-if="resetDone" class="text-sm text-green-600">
+        Password reimpostata con successo. Ora puoi accedere.
+      </p>
       <div>
         <label class="label" for="email">Email</label>
         <input id="email" v-model="email" type="email" required class="input" />
@@ -35,6 +39,11 @@ async function onSubmit() {
       <div>
         <label class="label" for="password">Password</label>
         <input id="password" v-model="password" type="password" required class="input" />
+      </div>
+      <div class="text-right -mt-2">
+        <RouterLink to="/forgot-password" class="text-sm text-indigo-600 hover:underline">
+          Password dimenticata?
+        </RouterLink>
       </div>
       <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
       <button type="submit" class="btn-primary w-full" :disabled="auth.loading">
