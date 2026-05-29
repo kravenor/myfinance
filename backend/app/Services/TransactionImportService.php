@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Category;
 use App\Models\Transaction;
+use App\Services\Import\ImportReaderFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 
@@ -11,33 +12,43 @@ class TransactionImportService
 {
     public function __construct(
         private readonly CategorizationRuleMatcher $matcher,
+        private readonly ImportReaderFactory $readers,
     ) {}
 
     /**
-     * Legge il CSV e ritorna headers + righe campione + mapping suggerito.
+     * Legge il file (CSV/OFX/QIF) e ritorna formato, headers, righe campione e mapping suggerito.
      *
-     * @return array{headers: array<int, string>, sample: array<int, array<string, string>>, suggested: array<string, ?string>}
+     * @return array{format: string, headers: array<int, string>, sample: array<int, array<string, string>>, mapping_locked: bool, suggested: array<string, ?string>}
      */
     public function preview(UploadedFile $file, int $sampleSize = 10): array
     {
-        [$headers, $rows] = $this->parse($file, $sampleSize);
+        $reader = $this->readers->for($file);
+        $data = $reader->read($file, $sampleSize);
 
         return [
-            'headers' => $headers,
-            'sample' => $rows,
-            'suggested' => $this->suggestMapping($headers),
+            'format' => $reader->format(),
+            'headers' => $data['headers'],
+            'sample' => $data['rows'],
+            'mapping_locked' => $data['mapping_locked'],
+            'suggested' => $reader->suggestedMapping($data['headers']),
         ];
     }
 
     /**
      * Per le righe campione, predice categoria via regole utente.
      *
-     * @param  array{date: string, amount: string, description?: ?string, type?: ?string, category?: ?string}  $mapping
+     * @param  array<string, ?string>  $mapping
      * @return array<int, array{category_id: ?int, category_name: ?string, rule_id: ?int}>
      */
     public function previewPredictions(UploadedFile $file, array $mapping, int $sampleSize = 50): array
     {
-        [, $rows] = $this->parse($file, $sampleSize);
+        $reader = $this->readers->for($file);
+        $data = $reader->read($file, $sampleSize);
+        $rows = $data['rows'];
+
+        if ($data['mapping_locked']) {
+            $mapping = $reader->suggestedMapping($data['headers']);
+        }
 
         $byName = Category::query()->get()->keyBy(fn ($c) => mb_strtolower($c->name));
         $this->matcher->reset();
@@ -46,7 +57,7 @@ class TransactionImportService
         $predictions = [];
         foreach ($rows as $row) {
             $type = $this->safeResolveType($mapping, $row);
-            $description = isset($mapping['description']) && $mapping['description']
+            $description = ! empty($mapping['description'])
                 ? trim((string) ($row[$mapping['description']] ?? '')) ?: null
                 : null;
 
@@ -86,10 +97,10 @@ class TransactionImportService
     }
 
     /**
-     * Esegue l'import con mapping confermato.
+     * Esegue l'import con mapping confermato (forzato per OFX/QIF).
      *
-     * @param  array{date: string, amount: string, description?: ?string, type?: ?string, category?: ?string}  $mapping
-     * @return array{imported: int, skipped: int, errors: array<int, array{row: int, message: string}>}
+     * @param  array<string, ?string>  $mapping
+     * @return array{imported: int, skipped: int, auto_categorized: int, errors: array<int, array{row: int, message: string}>}
      */
     public function import(
         UploadedFile $file,
@@ -98,7 +109,15 @@ class TransactionImportService
         string $dateFormat = 'Y-m-d',
         string $currency = 'EUR',
     ): array {
-        [$headers, $rows] = $this->parse($file, PHP_INT_MAX);
+        $reader = $this->readers->for($file);
+        $data = $reader->read($file, PHP_INT_MAX);
+        $rows = $data['rows'];
+
+        // I formati strutturati (OFX/QIF) hanno campi fissi e date già normalizzate ISO.
+        if ($data['mapping_locked']) {
+            $mapping = $reader->suggestedMapping($data['headers']);
+            $dateFormat = 'Y-m-d';
+        }
 
         $byName = Category::query()->get()->keyBy(fn ($c) => mb_strtolower($c->name));
         $this->matcher->reset();
@@ -126,8 +145,14 @@ class TransactionImportService
                 }
 
                 $type = $this->resolveType($mapping, $row, $amount);
-                $description = isset($mapping['description']) && $mapping['description']
+                $description = ! empty($mapping['description'])
                     ? trim((string) ($row[$mapping['description']] ?? '')) ?: null
+                    : null;
+                $notes = ! empty($mapping['notes'])
+                    ? trim((string) ($row[$mapping['notes']] ?? '')) ?: null
+                    : null;
+                $externalId = ! empty($mapping['external_id'])
+                    ? trim((string) ($row[$mapping['external_id']] ?? '')) ?: null
                     : null;
 
                 $categoryId = null;
@@ -154,6 +179,8 @@ class TransactionImportService
                     'currency' => $currency,
                     'occurred_at' => $date->toDateString(),
                     'description' => $description,
+                    'notes' => $notes,
+                    'external_id' => $externalId,
                 ]);
 
                 if ($matchedRule) {
@@ -175,81 +202,6 @@ class TransactionImportService
             'skipped' => $skipped,
             'auto_categorized' => $autoCategorized,
             'errors' => $errors,
-        ];
-    }
-
-    /**
-     * @return array{0: array<int, string>, 1: array<int, array<string, string>>}
-     */
-    private function parse(UploadedFile $file, int $limit): array
-    {
-        $handle = fopen($file->getRealPath(), 'r');
-        if ($handle === false) {
-            throw new \RuntimeException('Impossibile leggere il file caricato.');
-        }
-
-        $delimiter = $this->detectDelimiter($file);
-
-        $headers = fgetcsv($handle, 0, $delimiter) ?: [];
-        $headers = array_map(fn ($h) => trim((string) $h), $headers);
-
-        $rows = [];
-        $count = 0;
-        while (($data = fgetcsv($handle, 0, $delimiter)) !== false && $count < $limit) {
-            if (count(array_filter($data, fn ($v) => trim((string) $v) !== '')) === 0) {
-                continue;
-            }
-            $row = [];
-            foreach ($headers as $idx => $header) {
-                $row[$header] = isset($data[$idx]) ? trim((string) $data[$idx]) : '';
-            }
-            $rows[] = $row;
-            $count++;
-        }
-        fclose($handle);
-
-        return [$headers, $rows];
-    }
-
-    private function detectDelimiter(UploadedFile $file): string
-    {
-        $handle = fopen($file->getRealPath(), 'r');
-        if ($handle === false) {
-            return ',';
-        }
-        $sample = fgets($handle) ?: '';
-        fclose($handle);
-
-        $candidates = [',' => substr_count($sample, ','), ';' => substr_count($sample, ';'), "\t" => substr_count($sample, "\t")];
-
-        return array_search(max($candidates), $candidates, true) ?: ',';
-    }
-
-    /**
-     * @param  array<int, string>  $headers
-     * @return array<string, ?string>
-     */
-    private function suggestMapping(array $headers): array
-    {
-        $find = function (array $keywords) use ($headers): ?string {
-            foreach ($headers as $header) {
-                $h = mb_strtolower($header);
-                foreach ($keywords as $kw) {
-                    if (str_contains($h, $kw)) {
-                        return $header;
-                    }
-                }
-            }
-
-            return null;
-        };
-
-        return [
-            'date' => $find(['data', 'date', 'occurred']),
-            'amount' => $find(['importo', 'amount', 'value']),
-            'description' => $find(['descrizione', 'description', 'causale', 'memo']),
-            'type' => $find(['tipo', 'type']),
-            'category' => $find(['categoria', 'category']),
         ];
     }
 
@@ -279,7 +231,7 @@ class TransactionImportService
      * Versione tollerante per la preview: deduce type da colonna type o, se assente,
      * dal segno dell'importo parsato. Fallback `expense` se nulla è disponibile.
      *
-     * @param  array<string, mixed>  $mapping
+     * @param  array<string, ?string>  $mapping
      * @param  array<string, string>  $row
      */
     private function safeResolveType(array $mapping, array $row): string
@@ -296,7 +248,7 @@ class TransactionImportService
     }
 
     /**
-     * @param  array<string, mixed>  $mapping
+     * @param  array<string, ?string>  $mapping
      * @param  array<string, string>  $row
      */
     private function resolveType(array $mapping, array $row, float $amount): string

@@ -6,10 +6,14 @@ use App\Http\Requests\CategorizationRule\StoreCategorizationRuleRequest;
 use App\Http\Requests\CategorizationRule\UpdateCategorizationRuleRequest;
 use App\Http\Resources\CategorizationRuleResource;
 use App\Models\CategorizationRule;
+use App\Services\CategorizationRuleApplier;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\Rule;
 
 class CategorizationRuleController extends Controller
 {
@@ -74,5 +78,34 @@ class CategorizationRuleController extends Controller
         $categorizationRule->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * Applica retroattivamente le regole alle transazioni esistenti (dry-run o commit).
+     */
+    public function apply(Request $request, CategorizationRuleApplier $applier): JsonResponse
+    {
+        $this->authorize('viewAny', CategorizationRule::class);
+
+        $validated = $request->validate([
+            'dry_run' => ['required', 'boolean'],
+            'only_uncategorized' => ['nullable', 'boolean'],
+            'account_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('accounts', 'id')->where(fn (Builder $q) => $q->where('user_id', Auth::id())),
+            ],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
+
+        $result = $applier->run([
+            'only_uncategorized' => $request->boolean('only_uncategorized', true),
+            'account_id' => $validated['account_id'] ?? null,
+            'from' => $validated['from'] ?? null,
+            'to' => $validated['to'] ?? null,
+        ], $request->boolean('dry_run'));
+
+        return response()->json(['data' => $result]);
     }
 }

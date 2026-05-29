@@ -5,16 +5,14 @@ import { api, ensureCsrf } from '@/lib/api'
 import type { Account, Paginated } from '@/types/api'
 
 interface PreviewResult {
+  format: 'csv' | 'ofx' | 'qif'
+  mapping_locked: boolean
   headers: string[]
   sample: Record<string, string>[]
-  suggested: {
-    date: string | null
-    amount: string | null
-    description: string | null
-    type: string | null
-    category: string | null
-  }
+  suggested: Partial<Record<'date' | 'amount' | 'description' | 'type' | 'category', string | null>>
 }
+
+const FORMAT_LABELS: Record<string, string> = { csv: 'CSV', ofx: 'OFX', qif: 'QIF' }
 
 interface ImportResult {
   imported: number
@@ -227,8 +225,17 @@ onMounted(async () => {
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="md:col-span-2">
-          <label class="label">File CSV</label>
-          <input type="file" accept=".csv,text/csv" class="input" @change="onFileChange" />
+          <label class="label">File (CSV, OFX, QIF)</label>
+          <input
+            type="file"
+            accept=".csv,.ofx,.qfx,.qif,text/csv"
+            class="input"
+            @change="onFileChange"
+          />
+          <p v-if="preview" class="mt-1 text-xs text-slate-500">
+            Formato rilevato: <span class="font-medium">{{ FORMAT_LABELS[preview.format] }}</span>
+            <span v-if="preview.mapping_locked"> · campi mappati automaticamente</span>
+          </p>
         </div>
         <div>
           <label class="label">Conto destinazione</label>
@@ -245,19 +252,21 @@ onMounted(async () => {
       </div>
 
       <div v-if="preview" class="space-y-4">
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-          <div v-for="field in ['date','amount','description','type','category'] as const" :key="field">
-            <label class="label capitalize">{{ field }}{{ ['date','amount'].includes(field) ? ' *' : '' }}</label>
-            <select v-model="mapping[field]" class="input">
-              <option value="">— Nessuna —</option>
-              <option v-for="h in preview.headers" :key="h" :value="h">{{ h }}</option>
-            </select>
+        <template v-if="!preview.mapping_locked">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div v-for="field in ['date','amount','description','type','category'] as const" :key="field">
+              <label class="label capitalize">{{ field }}{{ ['date','amount'].includes(field) ? ' *' : '' }}</label>
+              <select v-model="mapping[field]" class="input">
+                <option value="">— Nessuna —</option>
+                <option v-for="h in preview.headers" :key="h" :value="h">{{ h }}</option>
+              </select>
+            </div>
           </div>
-        </div>
-        <div>
-          <label class="label">Formato data (PHP date format)</label>
-          <input v-model="dateFormat" class="input md:w-48" placeholder="Y-m-d" />
-        </div>
+          <div>
+            <label class="label">Formato data (PHP date format)</label>
+            <input v-model="dateFormat" class="input md:w-48" placeholder="Y-m-d" />
+          </div>
+        </template>
 
         <div class="flex items-center justify-between gap-3 text-sm">
           <div>

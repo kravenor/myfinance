@@ -15,6 +15,11 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TransactionImportExportController extends Controller
 {
+    /**
+     * MIME accettati per l'import: CSV, OFX (XML/SGML) e QIF (testo).
+     */
+    private const IMPORT_MIMETYPES = 'mimetypes:text/csv,text/plain,application/csv,application/xml,text/xml,application/x-ofx,application/x-qw,application/octet-stream';
+
     public function __construct(
         private readonly TransactionExportService $exporter,
         private readonly TransactionImportService $importer,
@@ -32,7 +37,7 @@ class TransactionImportExportController extends Controller
         $this->authorize('create', Transaction::class);
 
         $request->validate([
-            'file' => ['required', 'file', 'mimetypes:text/csv,text/plain,application/csv', 'max:5120'],
+            'file' => ['required', 'file', self::IMPORT_MIMETYPES, 'max:5120'],
         ]);
 
         return response()->json(['data' => $this->importer->preview($request->file('file'))]);
@@ -43,7 +48,7 @@ class TransactionImportExportController extends Controller
         $this->authorize('create', Transaction::class);
 
         $request->validate([
-            'file' => ['required', 'file', 'mimetypes:text/csv,text/plain,application/csv', 'max:5120'],
+            'file' => ['required', 'file', self::IMPORT_MIMETYPES, 'max:5120'],
             'mapping.date' => ['required', 'string'],
             'mapping.amount' => ['required', 'string'],
             'mapping.description' => ['nullable', 'string'],
@@ -64,7 +69,7 @@ class TransactionImportExportController extends Controller
         $this->authorize('create', Transaction::class);
 
         $request->validate([
-            'file' => ['required', 'file', 'mimetypes:text/csv,text/plain,application/csv', 'max:5120'],
+            'file' => ['required', 'file', self::IMPORT_MIMETYPES, 'max:5120'],
             'account_id' => [
                 'required',
                 'integer',

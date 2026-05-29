@@ -32,6 +32,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('budgets', BudgetController::class);
     Route::apiResource('recurring-transactions', RecurringTransactionController::class)
         ->parameter('recurring-transactions', 'recurring_transaction');
+    Route::post('categorization-rules/apply', [CategorizationRuleController::class, 'apply'])
+        ->name('categorization-rules.apply');
     Route::apiResource('categorization-rules', CategorizationRuleController::class)
         ->parameter('categorization-rules', 'categorization_rule');
     Route::post('transactions/import/preview-predictions', [TransactionImportExportController::class, 'importPreviewPredictions'])

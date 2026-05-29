@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-05-26**
-Fase corrente: **Estensione — Auto-categorizzazione import (COMPLETATA)**
+Ultimo aggiornamento: **2026-05-29**
+Fase corrente: **Estensione — Import OFX/QIF + applicazione retroattiva regole (COMPLETATA)**
 
 ---
 
@@ -65,8 +65,9 @@ Finance/
 │   │   ├── Requests/RecurringTransaction/  # Store/UpdateRecurringTransactionRequest (transfer + cadence)
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRuleResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher (auto-categorizzazione import)
-│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run [--date=]`)
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier (apply retroattivo regole)
+│   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
+│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── database/migrations/
 │   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransactionFactory
@@ -231,6 +232,7 @@ make prod-down       # ferma stack produzione
 - [x] **Fase 9** — Qualità, CI, deploy (Larastan livello 5, ESLint/Prettier, GitHub Actions, stack produzione Docker)
 - [x] **Estensione** — Statistiche avanzate (saving rate, confronto periodi, trend categorie, cash-flow forecast, top transazioni)
 - [x] **Estensione** — Auto-categorizzazione import (regole pattern→categoria applicate in fase di import CSV)
+- [x] **Estensione** — Import OFX/QIF (parser dedicati con mapping bloccato) + applicazione retroattiva regole alle transazioni esistenti
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -392,12 +394,20 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 | Metodo | Path | Risposta / Body |
 |--------|------|-----------------|
 | GET | `/api/transactions/export` | Stream `text/csv` con header `Content-Disposition: attachment`. Filtri: `account_id`, `type`, `from`, `to`. Colonne: `occurred_at,type,amount,currency,account,transfer_account,category,description,notes,external_id` |
-| POST | `/api/transactions/import/preview` | multipart `file` (CSV ≤ 5MB). Ritorna `{headers, sample (max 10 righe), suggested: {date, amount, description, type, category}}` |
+| POST | `/api/transactions/import/preview` | multipart `file` (CSV/OFX/QIF ≤ 5MB). Ritorna `{format, mapping_locked, headers, sample (max 10 righe), suggested: {...}}`. Per OFX/QIF `mapping_locked=true` e `suggested` mappa i campi fissi del formato |
 | POST | `/api/transactions/import` | multipart `file`, `account_id`, `mapping[date]`, `mapping[amount]`, `mapping[description]?`, `mapping[type]?`, `mapping[category]?`, `date_format?` (default `Y-m-d`), `currency?`. Ritorna `{imported, skipped, errors: [{row, message}]}` |
+
+### Formati supportati
+**CSV + OFX 2.x/SGML + QIF.** Il rilevamento del formato avviene per estensione (`.csv`/`.ofx`/`.qfx`/`.qif`) con fallback su content-sniff dei primi 512 byte ([ImportReaderFactory](backend/app/Services/Import/ImportReaderFactory.php)). Ogni formato ha un reader dedicato che estende [ImportReader](backend/app/Services/Import/ImportReader.php):
+- [CsvReader](backend/app/Services/Import/CsvReader.php): auto-detect delimitatore, mapping colonne scelto dall'utente (`mapping_locked=false`).
+- [OfxReader](backend/app/Services/Import/OfxReader.php): estrae i blocchi `<STMTTRN>` (regex robusta su XML e SGML), normalizza `DTPOSTED→date` (ISO), `TRNAMT→amount`, `NAME/MEMO→description`, `TRNTYPE→type` (fallback dal segno), `FITID→external_id`. `mapping_locked=true`.
+- [QifReader](backend/app/Services/Import/QifReader.php): parsing line-oriented (`D/T/P/M`, terminatore `^`), date in formati eterogenei (europeo prima dell'americano, ISO se vuoto→riga scartata), `notes` dal memo. `mapping_locked=true`.
+
+I file non UTF-8 (ISO-8859-1) vengono convertiti. Validazione MIME estesa nei 3 endpoint import.
 
 ### Logica
 - [TransactionExportService](backend/app/Services/TransactionExportService.php): stream via `php://output` con `fputcsv`, chunk 500, scoping per user via global scope.
-- [TransactionImportService](backend/app/Services/TransactionImportService.php): auto-detect delimitatore (`,`, `;`, `\t`), parse importo in stile italiano (`1.234,56`) e standard, inferenza `type` da segno (negativo→expense, positivo→income), match categoria per nome (case-insensitive) sull'utente corrente. Righe vuote ignorate, errori per riga raccolti senza interrompere il batch.
+- [TransactionImportService](backend/app/Services/TransactionImportService.php): delega la lettura al reader della factory; quando `mapping_locked` forza il mapping ai campi normalizzati e `date_format=Y-m-d`. Parse importo in stile italiano (`1.234,56`) e standard, inferenza `type` da segno, match categoria per nome (case-insensitive), popolamento `external_id`/`notes` quando disponibili. Righe vuote ignorate, errori per riga raccolti senza interrompere il batch.
 - `mapping` suggerito su euristica per chiavi `data/date/occurred`, `importo/amount/value`, `descrizione/description/causale/memo`, `tipo/type`, `categoria/category`.
 
 ### Frontend
@@ -473,6 +483,7 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
 | PATCH | `/api/categorization-rules/{id}` | Campi `sometimes`. Stessa validazione regex su update |
 | DELETE | `/api/categorization-rules/{id}` | 204 |
 | POST | `/api/transactions/import/preview-predictions` | multipart `file` + `mapping[*]`. Ritorna `[{category_id, category_name, rule_id}]` per le prime 50 righe — usato dalla UI per mostrare la colonna "Categoria suggerita" |
+| POST | `/api/categorization-rules/apply` | Applicazione retroattiva. Body: `{dry_run: bool, only_uncategorized?: bool, account_id?, from?, to?}`. Ritorna `{matched, updated, by_rule: [{rule_id, name, count}], sample (max 50)}`. Rotta registrata **prima** dell'`apiResource` per non collidere con `/{id}` |
 
 ### Schema `categorization_rules`
 - `user_id` (cascade), `category_id` (cascade), `name (120)`, `match_type` enum, `pattern (255)`, `applies_to_type` enum default `any`, `priority` smallint default 100, `is_active` boolean default true, `times_applied` unsigned int, `last_applied_at` timestamp nullable.
@@ -482,10 +493,12 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
 - [CategorizationRuleMatcher](backend/app/Services/CategorizationRuleMatcher.php): carica una volta le regole attive ordinate per `priority asc`, per ogni descrizione confronta in mb_strtolower con `str_contains`/`str_starts_with`/`equals`/regex (`/.../iu`). Filtra per `applies_to_type` quando `≠ any`. Espone `recordHit(rule)` + `flushHits()` per aggregare gli increment di `times_applied` (single `UPDATE` per regola a fine import).
 - [TransactionImportService::import()](backend/app/Services/TransactionImportService.php) usa il matcher come **fallback** quando il mapping CSV non risolve già la categoria. Ritorno arricchito con `auto_categorized`.
 - La validazione regex avviene a livello di FormRequest (`Store/UpdateCategorizationRuleRequest`): pattern malformato → `422` con errore su `pattern`.
+- [CategorizationRuleApplier](backend/app/Services/CategorizationRuleApplier.php): applica le regole alle transazioni esistenti (filtri `only_uncategorized` default true, `account_id`, `from`, `to`). `chunk(500)`, aggiornamento in batch raggruppato per `category_id`, `times_applied` incrementato solo in commit (non dry-run). Dry-run non scrive nulla e ritorna `matched` + `by_rule` + `sample`.
+- Comando artisan `php artisan rules:apply [--dry-run] [--only-uncategorized=true] [--user=] [--account=] [--from=] [--to=]`: itera sugli utenti con `Auth::loginUsingId` + `Auth::logout` tra iterazioni per non fare leak del global scope.
 
 ### Frontend
-- [CategorizationRulesView.vue](frontend/src/views/CategorizationRulesView.vue) (`/categorization-rules` in sidebar tra Tag e Budget) — CRUD inline, select categoria filtrata per `applies_to_type`, swatch colore, toggle attiva, contatore `times_applied`.
-- [ImportExportView.vue](frontend/src/views/ImportExportView.vue) — dopo la preview chiama `preview-predictions` e mostra una colonna "Categoria suggerita" nella tabella sample; il watcher ricalcola le predictions quando l'utente modifica il mapping. Riepilogo finale include `auto_categorized` + link a `/categorization-rules`.
+- [CategorizationRulesView.vue](frontend/src/views/CategorizationRulesView.vue) (`/categorization-rules` in sidebar tra Tag e Budget) — CRUD inline, select categoria filtrata per `applies_to_type`, swatch colore, toggle attiva, contatore `times_applied`. Bottone "Applica alle transazioni esistenti" → modale con filtri (only_uncategorized/conto/range) → dry-run (tabella `by_rule` + sample) → conferma commit con reload lista.
+- [ImportExportView.vue](frontend/src/views/ImportExportView.vue) — dopo la preview chiama `preview-predictions` e mostra una colonna "Categoria suggerita" nella tabella sample; il watcher ricalcola le predictions quando l'utente modifica il mapping. Riepilogo finale include `auto_categorized` + link a `/categorization-rules`. Per OFX/QIF (`mapping_locked`) nasconde il form di mapping e mostra il formato rilevato.
 
 ## 9. Per gli agenti: regole operative
 
