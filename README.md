@@ -1,44 +1,57 @@
 # Finance
 
-Web application personale per la gestione delle finanze.
-Stack: **Laravel 11 + Vue 3 + MySQL 8 + Docker**.
+Web application personale per la gestione delle finanze: conti, transazioni, categorie,
+budget mensili, transazioni ricorrenti, dashboard con report/grafici e import/export.
+Stack: **Laravel 11 + Vue 3 (TS) + MySQL 8 + Redis + Docker**.
 
 ## Prerequisiti
 
 - Docker Desktop (o Docker Engine + Compose v2)
 - `make`
 
-## Quickstart
+## Quickstart (post-clone)
 
 ```bash
-cp .env.example .env
-make up
+git clone <repo>
+cd Finance
+make bootstrap
 ```
 
-App disponibile su [http://localhost:8080](http://localhost:8080).
+`make bootstrap` esegue tutto il setup (copia `.env`, build immagini, `up`, `composer install`,
+`key:generate`, `migrate --seed`) e stampa URL e credenziali demo. A fine procedura
+l'app è su [http://localhost:8080](http://localhost:8080).
 
-### Bootstrap iniziale (una tantum)
+Credenziali demo: **`demo@finance.local`** / **`password`**.
 
-Quando `backend/` e `frontend/` sono vuoti (Fase 1 attuale):
-
-```bash
-make laravel-new   # crea progetto Laravel in backend/
-make vue-new       # crea progetto Vue in frontend/
-make composer-install
-make migrate
-```
+> macOS: dopo il primo bootstrap allinea UID/GID in `.env` (`UID=$(id -u) GID=$(id -g)`) e `make build`.
+> Dettagli ed eventuale troubleshooting in [`AGENTS.md`](AGENTS.md) §4.1.
 
 ## Comandi utili
 
+```bash
+make up / down / restart      # gestione stack
+make migrate / fresh / seed   # database
+make test                     # PHPUnit
+make check                    # pint + stan + test + lint + type-check
+```
+
 `make help` per la lista completa.
+
+## Funzionalità principali
+
+- CRUD conti, categorie, tag, transazioni (con transfer), budget e ricorrenti.
+- Dashboard e report (`/reports`, `/stats`): KPI, grafici, confronto periodi, trend, forecast cash-flow.
+- Import/Export: export CSV; **import CSV, OFX e QIF** con preview, mapping e categoria suggerita.
+- Auto-categorizzazione: regole pattern→categoria applicate in import e **retroattivamente** alle transazioni esistenti.
 
 ## Documentazione
 
-- **`AGENTS.md`** — mappa del progetto per agenti AI (e per umani che vogliono il quadro completo).
-- **`CLAUDE.md`** — istruzioni specifiche per Claude Code.
+- **[`AGENTS.md`](AGENTS.md)** — mappa del progetto (stack, struttura, endpoint, convenzioni).
+- **[`CLAUDE.md`](CLAUDE.md)** — istruzioni specifiche per Claude Code.
 - **`docs/`** — ADR e documenti di design.
 
 ## Stato
 
-Fase corrente: **Fase 1 — Setup infrastruttura ✓**
-Prossima: Fase 2 — Backend foundation (bootstrap Laravel, migrazioni base).
+Tutte le fasi della roadmap (1–9) e le estensioni (statistiche avanzate,
+auto-categorizzazione, import OFX/QIF, applicazione retroattiva regole) sono **completate**.
+Vedi [`AGENTS.md`](AGENTS.md) §7 per il dettaglio.
