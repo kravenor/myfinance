@@ -100,7 +100,7 @@ class TransactionImportService
      * Esegue l'import con mapping confermato (forzato per OFX/QIF).
      *
      * @param  array<string, ?string>  $mapping
-     * @return array{imported: int, skipped: int, auto_categorized: int, errors: array<int, array{row: int, message: string}>}
+     * @return array{imported: int, skipped: int, duplicates: int, auto_categorized: int, errors: array<int, array{row: int, message: string}>}
      */
     public function import(
         UploadedFile $file,
@@ -123,8 +123,16 @@ class TransactionImportService
         $this->matcher->reset();
         $this->matcher->preload();
 
+        // Dedup: external_id già presenti per l'utente (global scope) + visti nel batch.
+        $existingExternalIds = Transaction::query()
+            ->whereNotNull('external_id')
+            ->pluck('external_id')
+            ->flip();
+        $seenInBatch = [];
+
         $imported = 0;
         $skipped = 0;
+        $duplicates = 0;
         $autoCategorized = 0;
         $errors = [];
 
@@ -155,6 +163,13 @@ class TransactionImportService
                     ? trim((string) ($row[$mapping['external_id']] ?? '')) ?: null
                     : null;
 
+                if ($externalId !== null
+                    && (isset($existingExternalIds[$externalId]) || isset($seenInBatch[$externalId]))) {
+                    $duplicates++;
+
+                    continue;
+                }
+
                 $categoryId = null;
                 if (! empty($mapping['category'])) {
                     $name = trim((string) ($row[$mapping['category']] ?? ''));
@@ -183,6 +198,10 @@ class TransactionImportService
                     'external_id' => $externalId,
                 ]);
 
+                if ($externalId !== null) {
+                    $seenInBatch[$externalId] = true;
+                }
+
                 if ($matchedRule) {
                     $this->matcher->recordHit($matchedRule);
                     $autoCategorized++;
@@ -200,6 +219,7 @@ class TransactionImportService
         return [
             'imported' => $imported,
             'skipped' => $skipped,
+            'duplicates' => $duplicates,
             'auto_categorized' => $autoCategorized,
             'errors' => $errors,
         ];

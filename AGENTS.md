@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-05-29**
-Fase corrente: **Estensione — Alert budget sforati (COMPLETATA)**
+Fase corrente: **Estensione — Dedup import via external_id (COMPLETATA)**
 
 ---
 
@@ -234,6 +234,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Auto-categorizzazione import (regole pattern→categoria applicate in fase di import CSV)
 - [x] **Estensione** — Import OFX/QIF (parser dedicati con mapping bloccato) + applicazione retroattiva regole alle transazioni esistenti
 - [x] **Estensione** — Alert budget sforati (endpoint `/budgets/alerts`, banner Dashboard, badge colorati in BudgetsView)
+- [x] **Estensione** — Dedup import via `external_id` (skip righe già importate o ripetute nel file, counter `duplicates`)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -399,7 +400,7 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 |--------|------|-----------------|
 | GET | `/api/transactions/export` | Stream `text/csv` con header `Content-Disposition: attachment`. Filtri: `account_id`, `type`, `from`, `to`. Colonne: `occurred_at,type,amount,currency,account,transfer_account,category,description,notes,external_id` |
 | POST | `/api/transactions/import/preview` | multipart `file` (CSV/OFX/QIF ≤ 5MB). Ritorna `{format, mapping_locked, headers, sample (max 10 righe), suggested: {...}}`. Per OFX/QIF `mapping_locked=true` e `suggested` mappa i campi fissi del formato |
-| POST | `/api/transactions/import` | multipart `file`, `account_id`, `mapping[date]`, `mapping[amount]`, `mapping[description]?`, `mapping[type]?`, `mapping[category]?`, `date_format?` (default `Y-m-d`), `currency?`. Ritorna `{imported, skipped, errors: [{row, message}]}` |
+| POST | `/api/transactions/import` | multipart `file`, `account_id`, `mapping[date]`, `mapping[amount]`, `mapping[description]?`, `mapping[type]?`, `mapping[category]?`, `date_format?` (default `Y-m-d`), `currency?`. Ritorna `{imported, skipped, duplicates, auto_categorized, errors: [{row, message}]}` |
 
 ### Formati supportati
 **CSV + OFX 2.x/SGML + QIF.** Il rilevamento del formato avviene per estensione (`.csv`/`.ofx`/`.qfx`/`.qif`) con fallback su content-sniff dei primi 512 byte ([ImportReaderFactory](backend/app/Services/Import/ImportReaderFactory.php)). Ogni formato ha un reader dedicato che estende [ImportReader](backend/app/Services/Import/ImportReader.php):
@@ -408,6 +409,8 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 - [QifReader](backend/app/Services/Import/QifReader.php): parsing line-oriented (`D/T/P/M`, terminatore `^`), date in formati eterogenei (europeo prima dell'americano, ISO se vuoto→riga scartata), `notes` dal memo. `mapping_locked=true`.
 
 I file non UTF-8 (ISO-8859-1) vengono convertiti. Validazione MIME estesa nei 3 endpoint import.
+
+**Dedup**: in `import()` le righe con `external_id` non vuoto già presente per l'utente (preload via `pluck`+`flip`, global scope per-utente) o ripetuto nello stesso file vengono saltate e contate in `duplicates` (distinto da `skipped`, che resta per i soli errori). Le righe senza `external_id` (CSV non mappato, QIF) non sono deduplicate.
 
 ### Logica
 - [TransactionExportService](backend/app/Services/TransactionExportService.php): stream via `php://output` con `fputcsv`, chunk 500, scoping per user via global scope.

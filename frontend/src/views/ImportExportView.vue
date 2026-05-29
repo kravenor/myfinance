@@ -17,6 +17,7 @@ const FORMAT_LABELS: Record<string, string> = { csv: 'CSV', ofx: 'OFX', qif: 'QI
 interface ImportResult {
   imported: number
   skipped: number
+  duplicates: number
   auto_categorized: number
   errors: { row: number; message: string }[]
 }
@@ -315,6 +316,7 @@ onMounted(async () => {
         <p class="text-sm">
           <span class="font-medium text-green-700">{{ importResult.imported }}</span> importate ·
           <span class="font-medium text-sky-700">{{ importResult.auto_categorized }}</span> auto-categorizzate ·
+          <span class="font-medium text-slate-600">{{ importResult.duplicates }}</span> duplicate ignorate ·
           <span class="font-medium text-amber-700">{{ importResult.skipped }}</span> saltate.
         </p>
         <p class="text-xs text-slate-500">
