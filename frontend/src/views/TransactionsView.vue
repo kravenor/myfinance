@@ -33,9 +33,29 @@ function toggleTag(id: number) {
   else form.value.tag_ids.splice(i, 1)
 }
 
-const filteredCategories = computed(() =>
-  categories.value.filter((c) => (form.value.type === 'transfer' ? false : c.type === (form.value.type as 'income' | 'expense')))
-)
+// Categorie del tipo corrente, ordinate ad albero (parent → figli indentati).
+const categoryOptions = computed<{ id: number; label: string }[]>(() => {
+  if (form.value.type === 'transfer') return []
+  const type = form.value.type as 'income' | 'expense'
+  const list = categories.value.filter((c) => c.type === type)
+  const ids = new Set(list.map((c) => c.id))
+  const byParent = new Map<number | null, Category[]>()
+  for (const c of list) {
+    const key = c.parent_id
+    if (!byParent.has(key)) byParent.set(key, [])
+    byParent.get(key)!.push(c)
+  }
+  const sortFn = (a: Category, b: Category) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
+  const out: { id: number; label: string }[] = []
+  const walk = (cat: Category, depth: number) => {
+    out.push({ id: cat.id, label: '   '.repeat(depth) + (depth ? '↳ ' : '') + cat.name })
+    for (const ch of (byParent.get(cat.id) ?? []).slice().sort(sortFn)) walk(ch, depth + 1)
+  }
+  // root = senza parent, o con parent di tipo diverso (non presente nella lista filtrata)
+  const roots = list.filter((c) => c.parent_id == null || !ids.has(c.parent_id)).sort(sortFn)
+  for (const r of roots) walk(r, 0)
+  return out
+})
 
 function accountName(id: number | null | undefined): string {
   if (!id) return '—'
@@ -221,7 +241,7 @@ onMounted(async () => {
         <label class="label">Categoria</label>
         <select v-model.number="form.category_id" class="input">
           <option :value="null">— Nessuna —</option>
-          <option v-for="c in filteredCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
         </select>
       </div>
       <div>
