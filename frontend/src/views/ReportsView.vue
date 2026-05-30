@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { Bar, Doughnut, Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -30,6 +30,42 @@ function defaultRange() {
 
 const filters = ref(defaultRange())
 const categoryType = ref<'expense' | 'income'>('expense')
+
+const REPORTS = [
+  { key: 'category', label: 'Categorie' },
+  { key: 'tag', label: 'Tag' },
+  { key: 'timeline', label: 'Income vs Expense' },
+  { key: 'netWorth', label: 'Patrimonio netto' },
+] as const
+type ReportKey = (typeof REPORTS)[number]['key']
+
+const STORAGE_KEY = 'reports.visible'
+
+function loadVisible(): Record<ReportKey, boolean> {
+  const def: Record<ReportKey, boolean> = { category: true, tag: true, timeline: true, netWorth: true }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (raw) return { ...def, ...(JSON.parse(raw) as Partial<Record<ReportKey, boolean>>) }
+  } catch {
+    /* storage non disponibile: usa i default */
+  }
+  return def
+}
+
+const visible = ref<Record<ReportKey, boolean>>(loadVisible())
+const anyVisible = computed(() => REPORTS.some((r) => visible.value[r.key]))
+
+watch(
+  visible,
+  (v) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(v))
+    } catch {
+      /* storage non disponibile: skip persistenza */
+    }
+  },
+  { deep: true }
+)
 
 const categories = ref<CategoryTotal[]>([])
 const tags = ref<TagTotal[]>([])
@@ -147,11 +183,22 @@ onMounted(refresh)
       </div>
     </form>
 
+    <div class="card p-4">
+      <span class="label">Report visibili</span>
+      <div class="flex flex-wrap gap-x-6 gap-y-2 mt-1">
+        <label v-for="r in REPORTS" :key="r.key" class="inline-flex items-center gap-2 text-sm">
+          <input v-model="visible[r.key]" type="checkbox" class="rounded border-slate-300" />
+          {{ r.label }}
+        </label>
+      </div>
+    </div>
+
     <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
+    <p v-else-if="!anyVisible" class="text-sm text-slate-500">Nessun report selezionato.</p>
 
     <section v-else class="space-y-4">
-      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div class="card p-4">
+      <div v-if="visible.category || visible.tag || visible.timeline" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div v-if="visible.category" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Totali per categoria ({{ categoryType }})
           </h3>
@@ -160,7 +207,7 @@ onMounted(refresh)
             <p v-else class="text-sm text-slate-500">Nessun dato nel periodo.</p>
           </div>
         </div>
-        <div class="card p-4">
+        <div v-if="visible.tag" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Totali per tag ({{ categoryType }})
           </h3>
@@ -169,7 +216,7 @@ onMounted(refresh)
             <p v-else class="text-sm text-slate-500">Nessuna transazione con tag nel periodo.</p>
           </div>
         </div>
-        <div class="card p-4">
+        <div v-if="visible.timeline" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Income vs Expense (mensile)
           </h3>
@@ -179,7 +226,7 @@ onMounted(refresh)
         </div>
       </div>
 
-      <div class="card p-4">
+      <div v-if="visible.netWorth" class="card p-4">
         <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
           Patrimonio netto (cumulato)
         </h3>
@@ -188,7 +235,7 @@ onMounted(refresh)
         </div>
       </div>
 
-      <div class="card table-responsive md:overflow-x-auto">
+      <div v-if="visible.category" class="card table-responsive md:overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>
@@ -208,7 +255,7 @@ onMounted(refresh)
         </table>
       </div>
 
-      <div class="card table-responsive md:overflow-x-auto">
+      <div v-if="visible.tag" class="card table-responsive md:overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>

@@ -397,7 +397,7 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 ### Frontend
 - Libreria: `chart.js` + `vue-chartjs`.
 - [DashboardView](frontend/src/views/DashboardView.vue): 4 KPI cards (income/expense/net mese + patrimonio netto), saldi conti, donut categorie del mese, bar income vs expense 12 mesi.
-- [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, donut by-tag (usa il `color` del tag), bar timeline, line net-worth, tabella categorie + tabella tag. Il selettore type (`expense`/`income`) filtra sia by-category sia by-tag.
+- [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, donut by-tag (usa il `color` del tag), bar timeline, line net-worth, tabella categorie + tabella tag. Il selettore type (`expense`/`income`) filtra sia by-category sia by-tag. Toggle "Report visibili" (4 gruppi: Categorie/Tag/Income vs Expense/Patrimonio netto) per mostrare/nascondere ogni report; scelta persistita in `localStorage` (`reports.visible`). I dati vengono comunque caricati: i toggle agiscono solo sulla visualizzazione.
 
 ## 11. Import / Export CSV (Fase 8)
 
