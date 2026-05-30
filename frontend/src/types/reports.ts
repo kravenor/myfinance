@@ -74,6 +74,13 @@ export interface CategoryTotal {
   total: string
 }
 
+export interface TagTotal {
+  tag_id: number
+  tag_name: string
+  tag_color: string | null
+  total: string
+}
+
 export interface TimelinePoint {
   period: string
   income: string

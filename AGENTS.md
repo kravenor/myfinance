@@ -388,6 +388,7 @@ Tutti i range accettano `?from=YYYY-MM-DD&to=YYYY-MM-DD`; se omessi: default mes
 |--------|------|----------|
 | GET | `/api/reports/summary` | `{from, to, income, expense, net, net_worth, accounts: [{id, name, currency, balance}]}` |
 | GET | `/api/reports/by-category?type=expense\|income` | `[{category_id, category_name, total}]` ordinato per total desc |
+| GET | `/api/reports/by-tag?type=expense\|income` | `[{tag_id, tag_name, tag_color, total}]` ordinato per total desc. Join su `tag_transaction`, somma per tag delle transazioni del tipo nel range |
 | GET | `/api/reports/timeline` | `[{period: "YYYY-MM", income, expense, net}]` |
 | GET | `/api/reports/net-worth` | `[{period: "YYYY-MM", net_worth}]` cumulato (initial_balance + Σ income - Σ expense fino a fine mese) |
 
@@ -396,7 +397,7 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 ### Frontend
 - Libreria: `chart.js` + `vue-chartjs`.
 - [DashboardView](frontend/src/views/DashboardView.vue): 4 KPI cards (income/expense/net mese + patrimonio netto), saldi conti, donut categorie del mese, bar income vs expense 12 mesi.
-- [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, bar timeline, line net-worth, tabella categorie.
+- [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, donut by-tag (usa il `color` del tag), bar timeline, line net-worth, tabella categorie + tabella tag. Il selettore type (`expense`/`income`) filtra sia by-category sia by-tag.
 
 ## 11. Import / Export CSV (Fase 8)
 

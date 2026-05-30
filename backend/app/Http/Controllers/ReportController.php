@@ -31,6 +31,19 @@ class ReportController extends Controller
         ]);
     }
 
+    public function byTag(Request $request): JsonResponse
+    {
+        $request->validate([
+            'type' => ['nullable', 'in:income,expense'],
+        ]);
+        [$from, $to] = $this->range($request);
+        $type = $request->string('type', 'expense')->value();
+
+        return response()->json([
+            'data' => $this->reports->byTag($from, $to, $type),
+        ]);
+    }
+
     public function timeline(Request $request): JsonResponse
     {
         [$from, $to] = $this->range($request, defaultMonths: 12);

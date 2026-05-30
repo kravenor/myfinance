@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\RecurringTransaction;
+use App\Models\Tag;
 use App\Models\Transaction;
 use Illuminate\Support\Carbon;
 
@@ -294,6 +295,39 @@ class ReportService
             'category_name' => $row->category_id ? ($categories[$row->category_id] ?? '—') : 'Senza categoria',
             'total' => $this->fmt((float) $row->getAttribute('total')),
         ])->all();
+    }
+
+    /**
+     * Totale per tag nel range, per tipo (income/expense).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function byTag(Carbon $from, Carbon $to, string $type): array
+    {
+        $rows = Transaction::query()
+            ->where('transactions.type', $type)
+            ->whereBetween('transactions.occurred_at', [$from->toDateString(), $to->toDateString()])
+            ->join('tag_transaction', 'tag_transaction.transaction_id', '=', 'transactions.id')
+            ->selectRaw('tag_transaction.tag_id as tag_id, SUM(transactions.amount) as total')
+            ->groupBy('tag_transaction.tag_id')
+            ->orderByDesc('total')
+            ->get();
+
+        $tags = Tag::query()
+            ->whereIn('id', $rows->pluck('tag_id')->all())
+            ->get(['id', 'name', 'color'])
+            ->keyBy('id');
+
+        return $rows->map(function ($row) use ($tags) {
+            $tagId = (int) $row->getAttribute('tag_id');
+
+            return [
+                'tag_id' => $tagId,
+                'tag_name' => $tags[$tagId]->name ?? '—',
+                'tag_color' => $tags[$tagId]->color ?? null,
+                'total' => $this->fmt((float) $row->getAttribute('total')),
+            ];
+        })->all();
     }
 
     /**

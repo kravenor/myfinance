@@ -45,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
         Route::get('summary', 'summary')->name('reports.summary');
         Route::get('by-category', 'byCategory')->name('reports.by-category');
+        Route::get('by-tag', 'byTag')->name('reports.by-tag');
         Route::get('timeline', 'timeline')->name('reports.timeline');
         Route::get('net-worth', 'netWorth')->name('reports.net-worth');
         Route::get('period-comparison', 'periodComparison')->name('reports.period-comparison');

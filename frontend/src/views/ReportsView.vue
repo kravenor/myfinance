@@ -14,7 +14,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
-import type { CategoryTotal, NetWorthPoint, TimelinePoint } from '@/types/reports'
+import type { CategoryTotal, NetWorthPoint, TagTotal, TimelinePoint } from '@/types/reports'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
 
@@ -32,6 +32,7 @@ const filters = ref(defaultRange())
 const categoryType = ref<'expense' | 'income'>('expense')
 
 const categories = ref<CategoryTotal[]>([])
+const tags = ref<TagTotal[]>([])
 const timeline = ref<TimelinePoint[]>([])
 const netWorth = ref<NetWorthPoint[]>([])
 const loading = ref(false)
@@ -48,6 +49,17 @@ const donutData = () => ({
     {
       data: categories.value.map((c) => parseFloat(c.total)),
       backgroundColor: categories.value.map((_, i) => palette[i % palette.length]),
+      borderWidth: 0,
+    },
+  ],
+})
+
+const tagDonutData = () => ({
+  labels: tags.value.map((t) => t.tag_name),
+  datasets: [
+    {
+      data: tags.value.map((t) => parseFloat(t.total)),
+      backgroundColor: tags.value.map((t, i) => t.tag_color || palette[i % palette.length]),
       borderWidth: 0,
     },
   ],
@@ -84,8 +96,11 @@ const chartOptions = {
 async function refresh() {
   loading.value = true
   try {
-    const [c, t, nw] = await Promise.all([
+    const [c, tg, t, nw] = await Promise.all([
       api.get<{ data: CategoryTotal[] }>('/reports/by-category', {
+        params: { from: filters.value.from, to: filters.value.to, type: categoryType.value },
+      }),
+      api.get<{ data: TagTotal[] }>('/reports/by-tag', {
         params: { from: filters.value.from, to: filters.value.to, type: categoryType.value },
       }),
       api.get<{ data: TimelinePoint[] }>('/reports/timeline', {
@@ -96,6 +111,7 @@ async function refresh() {
       }),
     ])
     categories.value = c.data.data
+    tags.value = tg.data.data
     timeline.value = t.data.data
     netWorth.value = nw.data.data
   } finally {
@@ -146,6 +162,15 @@ onMounted(refresh)
         </div>
         <div class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
+            Totali per tag ({{ categoryType }})
+          </h3>
+          <div class="h-64 sm:h-80">
+            <Doughnut v-if="tags.length" :data="tagDonutData()" :options="chartOptions" />
+            <p v-else class="text-sm text-slate-500">Nessuna transazione con tag nel periodo.</p>
+          </div>
+        </div>
+        <div class="card p-4">
+          <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Income vs Expense (mensile)
           </h3>
           <div class="h-64 sm:h-80">
@@ -178,6 +203,34 @@ onMounted(refresh)
             </tr>
             <tr v-if="categories.length === 0">
               <td colspan="2" class="text-center text-slate-500 py-6">Nessuna categoria.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card table-responsive md:overflow-x-auto">
+        <table class="table">
+          <thead class="bg-slate-100">
+            <tr>
+              <th>Tag</th>
+              <th class="text-right">Totale</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr v-for="t in tags" :key="t.tag_id">
+              <td data-label="Tag" class="font-medium">
+                <span class="inline-flex items-center gap-2">
+                  <span
+                    class="inline-block w-3 h-3 rounded-full"
+                    :style="{ background: t.tag_color || '#475569' }"
+                  />
+                  {{ t.tag_name }}
+                </span>
+              </td>
+              <td data-label="Totale" class="md:text-right">{{ t.total }}</td>
+            </tr>
+            <tr v-if="tags.length === 0">
+              <td colspan="2" class="text-center text-slate-500 py-6">Nessun tag.</td>
             </tr>
           </tbody>
         </table>
