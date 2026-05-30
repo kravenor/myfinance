@@ -5,12 +5,13 @@ import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Account, Category, Paginated, Transaction, TransactionType } from '@/types/api'
 
-const { items, loading, list, create, update, destroy } = useCrud<Transaction>('transactions')
+const { items, loading, meta, list, create, update, destroy } = useCrud<Transaction>('transactions')
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
 
-const filters = ref({ account_id: '', type: '', from: '', to: '' })
+const filters = ref({ account_id: '', type: '', from: '', to: '', search: '' })
+const page = ref(1)
 
 const editing = ref<Transaction | null>(null)
 const showForm = ref(false)
@@ -78,6 +79,7 @@ async function onSubmit() {
     payload.transfer_account_id = form.value.transfer_account_id
     payload.category_id = null
   }
+  const wasEditing = editing.value !== null
   if (editing.value) {
     await update(editing.value.id, payload)
   } else {
@@ -85,20 +87,30 @@ async function onSubmit() {
   }
   reset()
   showForm.value = false
+  await applyFilters(!wasEditing)
 }
 
 async function onDelete(tx: Transaction) {
   if (!confirm('Eliminare la transazione?')) return
   await destroy(tx.id)
+  await applyFilters(false)
 }
 
-async function applyFilters() {
-  const params: Record<string, unknown> = {}
+async function applyFilters(resetPage = true) {
+  if (resetPage) page.value = 1
+  const params: Record<string, unknown> = { page: page.value }
   if (filters.value.account_id) params.account_id = filters.value.account_id
   if (filters.value.type) params.type = filters.value.type
   if (filters.value.from) params.from = filters.value.from
   if (filters.value.to) params.to = filters.value.to
+  if (filters.value.search.trim()) params.search = filters.value.search.trim()
   await list(params)
+}
+
+function goToPage(p: number) {
+  if (meta.value && (p < 1 || p > meta.value.last_page)) return
+  page.value = p
+  applyFilters(false)
 }
 
 onMounted(async () => {
@@ -109,7 +121,7 @@ onMounted(async () => {
   accounts.value = a.data.data
   categories.value = c.data.data
   form.value.account_id = accounts.value[0]?.id ?? 0
-  await list()
+  await applyFilters()
 })
 </script>
 
@@ -122,7 +134,11 @@ onMounted(async () => {
       </button>
     </div>
 
-    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters">
+    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters()">
+      <div class="sm:col-span-2 md:col-span-5">
+        <label class="label">Cerca nella descrizione</label>
+        <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave…" />
+      </div>
       <div>
         <label class="label">Conto</label>
         <select v-model="filters.account_id" class="input">
@@ -151,6 +167,11 @@ onMounted(async () => {
         <button type="submit" class="btn-secondary w-full">Filtra</button>
       </div>
     </form>
+
+    <p v-if="meta" class="text-sm text-slate-500">
+      {{ meta.total }} transazion{{ meta.total === 1 ? 'e' : 'i' }}
+      <span v-if="meta.total > 0"> · {{ meta.from }}–{{ meta.to }}</span>
+    </p>
 
     <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div>
@@ -235,6 +256,24 @@ onMounted(async () => {
           </tr>
         </tbody>
       </table>
+    </div>
+
+    <div v-if="meta && meta.last_page > 1" class="flex items-center justify-between gap-3">
+      <button
+        class="btn-secondary"
+        :disabled="meta.current_page <= 1"
+        @click="goToPage(meta.current_page - 1)"
+      >
+        ‹ Precedente
+      </button>
+      <span class="text-sm text-slate-500">Pagina {{ meta.current_page }} di {{ meta.last_page }}</span>
+      <button
+        class="btn-secondary"
+        :disabled="meta.current_page >= meta.last_page"
+        @click="goToPage(meta.current_page + 1)"
+      >
+        Successiva ›
+      </button>
     </div>
   </div>
 </template>

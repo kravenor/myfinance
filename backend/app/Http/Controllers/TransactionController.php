@@ -39,6 +39,21 @@ class TransactionController extends Controller
             $query->where('type', $request->string('type'));
         }
 
+        if ($request->filled('search')) {
+            $terms = preg_split('/\s+/', trim((string) $request->string('search')));
+
+            $query->where(function ($q) use ($terms) {
+                foreach ($terms as $term) {
+                    if ($term === '') {
+                        continue;
+                    }
+
+                    $like = '%'.addcslashes($term, '%_\\').'%';
+                    $q->where('description', 'like', $like);
+                }
+            });
+        }
+
         if ($request->filled('from')) {
             $query->whereDate('occurred_at', '>=', $request->date('from'));
         }

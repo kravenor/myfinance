@@ -2,10 +2,13 @@ import { ref, type Ref } from 'vue'
 import { api } from '@/lib/api'
 import type { Paginated } from '@/types/api'
 
+export type PaginationMeta = Paginated<unknown>['meta']
+
 export function useCrud<T extends { id: number }>(resource: string) {
   const items = ref<T[]>([]) as Ref<T[]>
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const meta = ref<PaginationMeta | null>(null)
 
   async function list(params: Record<string, unknown> = {}): Promise<void> {
     loading.value = true
@@ -13,6 +16,7 @@ export function useCrud<T extends { id: number }>(resource: string) {
     try {
       const { data } = await api.get<Paginated<T>>(`/${resource}`, { params })
       items.value = data.data
+      meta.value = data.meta
     } catch (e: unknown) {
       const err = e as { response?: { data?: { message?: string } } }
       error.value = err.response?.data?.message ?? 'Errore caricamento.'
@@ -39,5 +43,5 @@ export function useCrud<T extends { id: number }>(resource: string) {
     items.value = items.value.filter((i) => i.id !== id)
   }
 
-  return { items, loading, error, list, create, update, destroy }
+  return { items, loading, error, meta, list, create, update, destroy }
 }

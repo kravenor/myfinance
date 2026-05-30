@@ -313,7 +313,7 @@ Tutte le rotte sotto `auth:sanctum`. Index in paginazione (default 25, override 
 ### Transactions — `apiResource('transactions')`
 | Metodo | Path | Note |
 |--------|------|------|
-| GET | `/api/transactions` | filtri `account_id` (anche transfer_account_id), `category_id`, `type`, `from`, `to` (date), `tag_id`. Sort `occurred_at` DESC, eager-load `tags` |
+| GET | `/api/transactions` | filtri `account_id` (anche transfer_account_id), `category_id`, `type`, `from`, `to` (date), `tag_id`, `search` (parole chiave su `description`, AND tra i termini, `LIKE` con escape). Sort `occurred_at` DESC, eager-load `tags`. Paginato (`per_page` default 25, `page`) |
 | POST | `/api/transactions` | `account_id`, `type`, `amount` (>0), `occurred_at`, `category_id?`, `transfer_account_id?` (richiesto se `type=transfer`, diverso da `account_id`), `tag_ids?` |
 | PATCH | `/api/transactions/{transaction}` | sync `tags` se `tag_ids` presente nel body |
 | DELETE | `/api/transactions/{transaction}` | 204 |
@@ -371,7 +371,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | `/accounts` | AccountsView | CRUD inline |
 | `/categories` | CategoriesView | CRUD + parent select filtrato per type |
 | `/tags` | TagsView | CRUD + swatch colore |
-| `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date), supporto transfer |
+| `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date, ricerca descrizione), paginazione (prev/next), supporto transfer |
 | `/budgets` | BudgetsView | filtro anno/mese, progresso barra con `spent / amount` |
 | `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
 
