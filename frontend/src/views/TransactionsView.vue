@@ -3,14 +3,15 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
-import type { Account, Category, Paginated, Transaction, TransactionType } from '@/types/api'
+import type { Account, Category, Paginated, Tag, Transaction, TransactionType } from '@/types/api'
 
 const { items, loading, meta, list, create, update, destroy } = useCrud<Transaction>('transactions')
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
+const tags = ref<Tag[]>([])
 
-const filters = ref({ account_id: '', type: '', from: '', to: '', search: '' })
+const filters = ref({ account_id: '', type: '', from: '', to: '', search: '', tag_id: '' })
 const page = ref(1)
 
 const editing = ref<Transaction | null>(null)
@@ -23,7 +24,14 @@ const form = ref({
   amount: '',
   occurred_at: new Date().toISOString().slice(0, 10),
   description: '',
+  tag_ids: [] as number[],
 })
+
+function toggleTag(id: number) {
+  const i = form.value.tag_ids.indexOf(id)
+  if (i === -1) form.value.tag_ids.push(id)
+  else form.value.tag_ids.splice(i, 1)
+}
 
 const filteredCategories = computed(() =>
   categories.value.filter((c) => (form.value.type === 'transfer' ? false : c.type === (form.value.type as 'income' | 'expense')))
@@ -49,6 +57,7 @@ function reset() {
     amount: '',
     occurred_at: new Date().toISOString().slice(0, 10),
     description: '',
+    tag_ids: [],
   }
 }
 
@@ -62,6 +71,7 @@ function startEdit(tx: Transaction) {
     amount: tx.amount,
     occurred_at: tx.occurred_at,
     description: tx.description ?? '',
+    tag_ids: (tx.tags ?? []).map((t) => t.id),
   }
   showForm.value = true
 }
@@ -74,6 +84,7 @@ async function onSubmit() {
     amount: form.value.amount,
     occurred_at: form.value.occurred_at,
     description: form.value.description,
+    tag_ids: form.value.tag_ids,
   }
   if (form.value.type === 'transfer') {
     payload.transfer_account_id = form.value.transfer_account_id
@@ -104,6 +115,7 @@ async function applyFilters(resetPage = true) {
   if (filters.value.from) params.from = filters.value.from
   if (filters.value.to) params.to = filters.value.to
   if (filters.value.search.trim()) params.search = filters.value.search.trim()
+  if (filters.value.tag_id) params.tag_id = filters.value.tag_id
   await list(params)
 }
 
@@ -114,12 +126,14 @@ function goToPage(p: number) {
 }
 
 onMounted(async () => {
-  const [a, c] = await Promise.all([
+  const [a, c, t] = await Promise.all([
     api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } }),
     api.get<Paginated<Category>>('/categories', { params: { per_page: 200 } }),
+    api.get<Paginated<Tag>>('/tags', { params: { per_page: 200 } }),
   ])
   accounts.value = a.data.data
   categories.value = c.data.data
+  tags.value = t.data.data
   form.value.account_id = accounts.value[0]?.id ?? 0
   await applyFilters()
 })
@@ -162,6 +176,13 @@ onMounted(async () => {
       <div>
         <label class="label">A</label>
         <input v-model="filters.to" type="date" class="input" />
+      </div>
+      <div>
+        <label class="label">Tag</label>
+        <select v-model="filters.tag_id" class="input">
+          <option value="">Tutti</option>
+          <option v-for="t in tags" :key="t.id" :value="t.id">{{ t.name }}</option>
+        </select>
       </div>
       <div class="flex items-end sm:col-span-2 md:col-span-1">
         <button type="submit" class="btn-secondary w-full">Filtra</button>
@@ -215,6 +236,28 @@ onMounted(async () => {
         <label class="label">Descrizione</label>
         <input v-model="form.description" class="input" />
       </div>
+      <div class="sm:col-span-2 md:col-span-3">
+        <label class="label">Tag</label>
+        <div v-if="tags.length" class="flex flex-wrap gap-2">
+          <button
+            v-for="t in tags"
+            :key="t.id"
+            type="button"
+            class="px-3 py-1 rounded-full text-sm border transition"
+            :class="form.tag_ids.includes(t.id)
+              ? 'text-white border-transparent'
+              : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'"
+            :style="form.tag_ids.includes(t.id) ? { background: t.color || '#475569' } : {}"
+            @click="toggleTag(t.id)"
+          >
+            {{ t.name }}
+          </button>
+        </div>
+        <p v-else class="text-sm text-slate-400">
+          Nessun tag disponibile. Creane in
+          <RouterLink class="underline" to="/tags">Tag</RouterLink>.
+        </p>
+      </div>
       <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
@@ -230,6 +273,7 @@ onMounted(async () => {
             <th>Tipo</th>
             <th>Conto</th>
             <th>Descrizione</th>
+            <th>Tag</th>
             <th class="text-right">Importo</th>
             <th></th>
           </tr>
@@ -246,13 +290,24 @@ onMounted(async () => {
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
             <td data-label="Descrizione">{{ tx.description ?? '—' }}</td>
+            <td data-label="Tag">
+              <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1 md:justify-start justify-end">
+                <span
+                  v-for="t in tx.tags"
+                  :key="t.id"
+                  class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
+                  :style="{ background: t.color || '#475569' }"
+                >{{ t.name }}</span>
+              </span>
+              <span v-else class="text-slate-400">—</span>
+            </td>
             <td data-label="Importo" class="md:text-right font-medium">{{ tx.amount }} {{ tx.currency }}</td>
             <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="6" class="text-center text-slate-500 py-6">Nessuna transazione.</td>
+            <td colspan="7" class="text-center text-slate-500 py-6">Nessuna transazione.</td>
           </tr>
         </tbody>
       </table>

@@ -371,7 +371,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | `/accounts` | AccountsView | CRUD inline |
 | `/categories` | CategoriesView | CRUD + parent select filtrato per type |
 | `/tags` | TagsView | CRUD + swatch colore |
-| `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date, ricerca descrizione), paginazione (prev/next), supporto transfer |
+| `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date, ricerca descrizione, tag), paginazione (prev/next), supporto transfer. Tag associabili nel form (chip multi-selezione → `tag_ids`) e mostrati come badge colorati in tabella |
 | `/budgets` | BudgetsView | filtro anno/mese, progresso barra con `spent / amount` |
 | `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
 
