@@ -69,4 +69,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(CategorizationRule::class);
     }
+
+    public function savingsGoals(): HasMany
+    {
+        return $this->hasMany(SavingsGoal::class);
+    }
 }

@@ -127,3 +127,44 @@ export interface RecurringTransaction {
   created_at: string
   updated_at: string
 }
+
+export type SavingsGoalStatus = 'active' | 'completed' | 'archived'
+export type PaceStatus = 'on_track' | 'behind' | 'overdue' | 'completed'
+export interface SavingsGoalPace {
+  target_date: string
+  days_left: number
+  months_left: number
+  required_per_month: string
+  status: PaceStatus
+}
+export interface SavingsGoal {
+  id: number
+  name: string
+  target_amount: string
+  currency: string
+  target_date: string | null
+  color: string | null
+  icon: string | null
+  status: SavingsGoalStatus
+  notes: string | null
+  saved?: string
+  progress?: number
+  remaining?: string
+  pace?: SavingsGoalPace | null
+  movements_count?: number
+  created_at: string
+  updated_at: string
+}
+
+export type MovementDirection = 'in' | 'out'
+export interface SavingsGoalMovement {
+  id: number
+  savings_goal_id: number
+  account_id: number | null
+  direction: MovementDirection
+  amount: string
+  occurred_at: string
+  note: string | null
+  created_at: string
+  updated_at: string
+}

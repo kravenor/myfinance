@@ -7,6 +7,8 @@ use App\Http\Controllers\CategorizationRuleController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\SavingsGoalController;
+use App\Http\Controllers\SavingsGoalMovementController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TransactionImportExportController;
@@ -41,6 +43,13 @@ Route::middleware('auth:sanctum')->group(function () {
         ->parameter('categorization-rules', 'categorization_rule');
     Route::post('transactions/import/preview-predictions', [TransactionImportExportController::class, 'importPreviewPredictions'])
         ->name('transactions.import.preview-predictions');
+
+    Route::apiResource('savings-goals', SavingsGoalController::class)
+        ->parameter('savings-goals', 'savings_goal');
+    Route::apiResource('savings-goals.movements', SavingsGoalMovementController::class)
+        ->parameter('savings-goals', 'savings_goal')
+        ->parameter('movements', 'movement')
+        ->scoped();
 
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
         Route::get('summary', 'summary')->name('reports.summary');

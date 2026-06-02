@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-05-29**
-Fase corrente: **Estensione — Recupero password (COMPLETATA)**
+Ultimo aggiornamento: **2026-06-02**
+Fase corrente: **Estensione — Obiettivi di risparmio (COMPLETATA)**
 
 ---
 
@@ -50,11 +50,11 @@ Finance/
 ├── .gitignore
 │
 ├── backend/               # progetto Laravel 11
-│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule
+│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested)
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -64,13 +64,14 @@ Finance/
 │   │   ├── Requests/Budget/    # Store/UpdateBudgetRequest (unique categoria/anno/mese)
 │   │   ├── Requests/RecurringTransaction/  # Store/UpdateRecurringTransactionRequest (transfer + cadence)
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
-│   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRuleResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService
+│   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest + SavingsGoalMovementRequest
+│   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoal/SavingsGoalMovementResource
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── database/migrations/
-│   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransactionFactory
+│   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransaction/SavingsGoal/SavingsGoalMovementFactory
 │   ├── database/seeders/  # DatabaseSeeder, CategorySeeder (seedFor pubblico)
 │   ├── routes/api.php     # rotte API (Sanctum SPA)
 │   ├── bootstrap/app.php  # statefulApi() abilitato
@@ -95,7 +96,7 @@ Finance/
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, Recurring, Reports, Stats, ImportExport
+│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Recurring, Reports, Stats, ImportExport
 │
 ├── docker/
 │   ├── php/
@@ -236,6 +237,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Alert budget sforati (endpoint `/budgets/alerts`, banner Dashboard, badge colorati in BudgetsView)
 - [x] **Estensione** — Dedup import via `external_id` (skip righe già importate o ripetute nel file, counter `duplicates`)
 - [x] **Estensione** — Recupero password (endpoint forgot/reset, link SPA, viste dedicate)
+- [x] **Estensione** — Obiettivi di risparmio (savings goals con ledger movimenti entrata/uscita, progresso netto, indicatore di ritmo verso scadenza)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -252,6 +254,8 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `transactions` | `account_id`, `category_id`, `transfer_account_id`, `recurring_transaction_id`, `type`, `amount`, `currency`, `occurred_at`, `description`, `notes`, `external_id` |
 | `budgets` | `category_id`, `year`, `month`, `amount` — unique per `(user_id, category_id, year, month)` |
 | `tag_transaction` | pivot `transaction_id` + `tag_id` (convenzione Laravel alfabetica) |
+| `savings_goals` | `name`, `target_amount`, `currency` (default `EUR`), `target_date` (nullable), `color`, `icon`, `status` (active/completed/archived), `notes` |
+| `savings_goal_movements` | `savings_goal_id` (cascade), `account_id` (nullable, `nullOnDelete`), `direction` (in/out), `amount`, `occurred_at`, `note` |
 
 ### Eloquent models e relazioni
 
@@ -512,6 +516,31 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
 ### Frontend
 - [CategorizationRulesView.vue](frontend/src/views/CategorizationRulesView.vue) (`/categorization-rules` in sidebar tra Tag e Budget) — CRUD inline, select categoria filtrata per `applies_to_type`, swatch colore, toggle attiva, contatore `times_applied`. Bottone "Applica alle transazioni esistenti" → modale con filtri (only_uncategorized/conto/range) → dry-run (tabella `by_rule` + sample) → conferma commit con reload lista.
 - [ImportExportView.vue](frontend/src/views/ImportExportView.vue) — dopo la preview chiama `preview-predictions` e mostra una colonna "Categoria suggerita" nella tabella sample; il watcher ricalcola le predictions quando l'utente modifica il mapping. Riepilogo finale include `auto_categorized` + link a `/categorization-rules`. Per OFX/QIF (`mapping_locked`) nasconde il form di mapping e mostra il formato rilevato.
+
+## 15. Obiettivi di risparmio (estensione)
+
+Savings goals con **ledger di movimenti** firmati: il progresso è `Σ(entrate) − Σ(uscite)`. Ogni movimento può riferire un conto (tra più conti) ed è una entrata (`in`) o un'uscita (`out`). Indicatore di **ritmo** opzionale quando è impostata `target_date`.
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Note |
+|--------|------|------|
+| GET | `/api/savings-goals` | Lista paginata. Filtro `status` (active/completed/archived). Ordine: stato (active→completed→archived) poi `target_date`, `name`. Ogni risorsa include `saved`, `progress`, `remaining`, `pace`, `movements_count` |
+| POST | `/api/savings-goals` | `name`, `target_amount` (>0), `currency?`, `target_date?`, `color?`, `icon?`, `status?`, `notes?` |
+| GET | `/api/savings-goals/{savings_goal}` | — |
+| PATCH | `/api/savings-goals/{savings_goal}` | campi `sometimes` |
+| DELETE | `/api/savings-goals/{savings_goal}` | 204 (movimenti cancellati a cascata) |
+| GET | `/api/savings-goals/{savings_goal}/movements` | Movimenti del goal, ordine `occurred_at` desc. Nested + `scoped()` |
+| POST | `/api/savings-goals/{savings_goal}/movements` | `direction` (in/out), `amount` (>0), `occurred_at`, `account_id?` (owned-by-user), `note?` |
+| PATCH | `/api/savings-goals/{savings_goal}/movements/{movement}` | campi `sometimes` |
+| DELETE | `/api/savings-goals/{savings_goal}/movements/{movement}` | 204 |
+
+Le rotte movimenti sono `scoped()`: il `{movement}` deve appartenere al `{savings_goal}` in URL (cross-goal → 404). Autorizzazione movimenti delegata al goal padre (`view`/`update` su [SavingsGoalPolicy](backend/app/Policies/SavingsGoalPolicy.php)).
+
+### Logica
+[SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php)`::attachProgress(array $goals)`: un'unica query `SUM(CASE WHEN direction='in' THEN amount ELSE -amount END) GROUP BY savings_goal_id` calcola il `saved`; attacca `progress` (0..100 cap), `remaining` (≥0) e `pace`. Il `pace` (solo se `target_date` presente) espone `days_left`, `months_left`, `required_per_month` (= remaining / mesi rimanenti) e `status`: `completed` (saved ≥ target), `overdue` (scaduto e non raggiunto), altrimenti `on_track`/`behind` confrontando la frazione di tempo trascorsa (da `created_at` a `target_date`) con la frazione di importo accumulata.
+
+### Frontend
+[SavingsGoalsView.vue](frontend/src/views/SavingsGoalsView.vue) (`/savings-goals` in sidebar, voce "Obiettivi" tra Budget e Ricorrenti): griglia di card con barra di progresso (colore per `pace.status`), badge stato + ritmo, importo accumulato/obiettivo. Filtro per stato. Form inline create/edit. **Modale "Movimenti"** per ogni goal: aggiunta movimento (entrata/uscita, importo, data, conto opzionale, nota) + lista con eliminazione; ogni modifica ricarica lista goal e movimenti per aggiornare il progresso.
 
 ## 9. Per gli agenti: regole operative
 
