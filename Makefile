@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down
+.PHONY: help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down pi-bootstrap pi-up pi-down pi-restart pi-build pi-logs pi-ps pi-shell-php pi-shell-node pi-shell-mysql pi-key-generate pi-migrate pi-fresh pi-seed pi-stats
 
 help: ## Mostra i comandi disponibili
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -91,3 +91,71 @@ prod-up: ## Avvia stack produzione
 
 prod-down: ## Ferma stack produzione
 	$(COMPOSE) -f docker-compose.prod.yml --env-file .env.production down
+
+# ============================================================================
+# RASPBERRY PI TARGETS (usa docker-compose.pi.yml + .env.pi)
+# ============================================================================
+
+pi-bootstrap: ## Setup completo Raspberry Pi (env, build, install, key, migrate)
+	@if [ ! -f .env.pi ]; then cp .env.pi.example .env.pi; echo "✓ creato .env.pi (MODIFICA i valori PI_LOCAL_IP, DB_PASSWORD, path dati)"; fi
+	@if [ ! -f backend/.env ]; then cp backend/.env.example backend/.env; echo "✓ creato backend/.env"; fi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi build
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi up -d
+	@echo "⏳ Attendendo che MySQL sia pronto..."
+	@sleep 15
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php composer install
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan key:generate
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan migrate:fresh --seed
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec node npm ci
+	@echo ""
+	@echo "✓ Stack Raspberry Pi pronto!"
+	@echo "  Accedi da: http://$$(grep PI_LOCAL_IP .env.pi | cut -d= -f2):$$(grep APP_PORT .env.pi | cut -d= -f2 || echo 8080)"
+	@echo "  Login demo: demo@finance.local / password"
+
+pi-up: ## Avvia i container Raspberry Pi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi up -d
+	@echo "✓ Stack avviato"
+
+pi-down: ## Ferma i container Raspberry Pi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi down
+	@echo "✓ Stack fermato"
+
+pi-restart: ## Riavvia i container Raspberry Pi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi restart
+	@echo "✓ Stack riavviato"
+
+pi-build: ## Rebuild immagini Raspberry Pi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi build --no-cache
+
+pi-logs: ## Tail dei log Raspberry Pi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi logs -f --tail=100
+
+pi-ps: ## Stato dei container Raspberry Pi
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi ps
+
+pi-stats: ## Monitoraggio risorse Raspberry Pi (CPU/RAM real-time)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi stats
+
+pi-shell-php: ## Apri shell nel container php (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php sh
+
+pi-shell-node: ## Apri shell nel container node (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec node sh
+
+pi-shell-mysql: ## Apri client mysql (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec mysql mysql -u$$(grep 'DB_USERNAME' .env.pi | cut -d= -f2 || echo finance) -p$$(grep 'DB_PASSWORD' .env.pi | cut -d= -f2 || echo finance) $$(grep 'DB_DATABASE' .env.pi | cut -d= -f2 || echo finance)
+
+pi-key-generate: ## Genera APP_KEY Laravel (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan key:generate
+
+pi-migrate: ## Esegue migrazioni (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan migrate
+
+pi-fresh: ## Drop e ricrea db con seed (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan migrate:fresh --seed
+
+pi-seed: ## Esegue i seeder (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan db:seed
+
+pi-test: ## Esegue test PHPUnit (Pi)
+	$(COMPOSE) -f docker-compose.pi.yml --env-file .env.pi exec php php artisan test
