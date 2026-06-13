@@ -1,9 +1,18 @@
+export interface NotificationPreferences {
+  email: boolean
+  email_address: string | null
+  budget: boolean
+  savings_goals: boolean
+  budget_threshold: number
+}
+
 export interface User {
   id: number
   name: string
   email: string
   currency: string
   locale: string
+  notification_preferences?: NotificationPreferences
   created_at: string
 }
 

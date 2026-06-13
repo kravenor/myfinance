@@ -18,8 +18,10 @@ class BudgetAlertService
      *
      * @return array<int, array{budget_id: int, category_id: int, category_name: ?string, category_color: ?string, year: int, month: int, amount: string, spent: string, percent: float, status: string}>
      */
-    public function alerts(int $year, int $month): array
+    public function alerts(int $year, int $month, ?float $warningThreshold = null): array
     {
+        $warningThreshold ??= self::WARNING_THRESHOLD;
+
         $budgets = Budget::query()
             ->with('category')
             ->where('year', $year)
@@ -54,7 +56,7 @@ class BudgetAlertService
 
             $status = match (true) {
                 $percent >= 100 => 'exceeded',
-                $percent >= self::WARNING_THRESHOLD => 'warning',
+                $percent >= $warningThreshold => 'warning',
                 default => 'ok',
             };
 

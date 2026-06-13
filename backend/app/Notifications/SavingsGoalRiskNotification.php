@@ -3,6 +3,7 @@
 namespace App\Notifications;
 
 use App\Models\SavingsGoal;
+use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -11,7 +12,7 @@ use Illuminate\Support\Carbon;
 
 class SavingsGoalRiskNotification extends Notification implements Dedupable
 {
-    use Queueable;
+    use ChannelsFromPreferences, Queueable;
 
     public function __construct(
         private readonly SavingsGoal $goal,
@@ -24,19 +25,6 @@ class SavingsGoalRiskNotification extends Notification implements Dedupable
     public function dedupKey(): string
     {
         return "goal:{$this->status}:{$this->goal->id}:".Carbon::now()->format('Y-m');
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function via(object $notifiable): array
-    {
-        $channels = ['database'];
-        if (config('finance.notifications.mail', true)) {
-            $channels[] = 'mail';
-        }
-
-        return $channels;
     }
 
     /**

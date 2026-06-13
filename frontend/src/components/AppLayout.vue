@@ -24,6 +24,7 @@ const nav = [
   { name: 'reports', label: 'Report' },
   { name: 'stats', label: 'Statistiche' },
   { name: 'import-export', label: 'Import / Export' },
+  { name: 'settings', label: 'Impostazioni' },
 ]
 
 const mobileOpen = ref(false)
