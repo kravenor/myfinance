@@ -157,6 +157,45 @@ export interface SavingsGoal {
   updated_at: string
 }
 
+export type AssetType = 'stock' | 'etf' | 'fund' | 'bond' | 'crypto' | 'commodity' | 'cash' | 'other'
+export interface InvestmentHolding {
+  id: number
+  account_id: number
+  name: string
+  symbol: string | null
+  asset_type: AssetType
+  currency: string
+  quantity: string
+  avg_cost: string
+  last_price: string | null
+  last_price_at: string | null
+  notes: string | null
+  cost_basis: string
+  market_value: string
+  unrealized_pl: string
+  unrealized_pl_pct: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface InvestmentOverview {
+  base_currency: string
+  holdings_count: number
+  total_market_value: string
+  total_cost_basis: string
+  total_unrealized_pl: string
+  total_unrealized_pl_pct: string | null
+  by_asset_type: { asset_type: AssetType; market_value: string; pct: string }[]
+  accounts: {
+    account_id: number
+    name: string | null
+    currency: string | null
+    market_value: string
+    cost_basis: string
+    unrealized_pl: string
+  }[]
+}
+
 export type MovementDirection = 'in' | 'out'
 export interface SavingsGoalMovement {
   id: number
