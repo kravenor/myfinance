@@ -363,7 +363,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 ## 9. Frontend (Fase 6)
 
 ### Stack runtime
-- Vue 3 + `<script setup>` + TypeScript, Vite 5, Pinia, Vue Router 4, Axios, TailwindCSS 3.
+- Vue 3 + `<script setup>` + TypeScript, Vite 8, Pinia, Vue Router 4, Axios, TailwindCSS 3.
 - Container `node` espone `:5173`, nginx proxa la root a Vite e `/api/*`,`/sanctum/*` a Laravel.
 
 ### Auth (Sanctum SPA cookie)
