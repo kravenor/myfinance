@@ -6,6 +6,8 @@ use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CategorizationRuleController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ExchangeRateController;
+use App\Http\Controllers\InvestmentController;
+use App\Http\Controllers\InvestmentHoldingController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SavingsGoalController;
@@ -26,6 +28,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
     Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');
+
+    Route::get('investments/overview', [InvestmentController::class, 'overview'])->name('investments.overview');
+    Route::apiResource('investment-holdings', InvestmentHoldingController::class)
+        ->parameter('investment-holdings', 'investment_holding');
 
     Route::apiResource('accounts', AccountController::class);
     Route::apiResource('categories', CategoryController::class);

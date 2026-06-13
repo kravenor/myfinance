@@ -16,6 +16,7 @@ const nav = [
   { name: 'categorization-rules', label: 'Regole categoria' },
   { name: 'budgets', label: 'Budget' },
   { name: 'savings-goals', label: 'Obiettivi' },
+  { name: 'investments', label: 'Investimenti' },
   { name: 'recurring', label: 'Ricorrenti' },
   { name: 'reports', label: 'Report' },
   { name: 'stats', label: 'Statistiche' },

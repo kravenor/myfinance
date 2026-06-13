@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Account;
 use App\Models\Category;
+use App\Models\InvestmentHolding;
 use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
@@ -420,7 +421,8 @@ class ReportService
     /**
      * Saldo grezzo per conto (nella valuta del conto) al $upTo.
      * I transfer in ingresso usano `transfer_amount` (valuta destinazione)
-     * con fallback su `amount`.
+     * con fallback su `amount`. Per i conti `investment` il saldo è invece il
+     * valore di mercato delle holding (convertito nella valuta del conto).
      *
      * @return Collection<int, array{id: int, name: string, currency: string, balance: float}>
      */
@@ -432,6 +434,7 @@ class ReportService
         }
 
         $date = $upTo->toDateString();
+        $marketValues = $this->investmentMarketValues($accounts, $upTo);
 
         $debits = Transaction::query()
             ->where('occurred_at', '<=', $date)
@@ -459,11 +462,39 @@ class ReportService
             'id' => $a->id,
             'name' => $a->name,
             'currency' => $a->currency,
-            'balance' => (float) $a->initial_balance
-                + (float) ($credits[$a->id] ?? 0)
-                - (float) ($debits[$a->id] ?? 0)
-                + (float) ($transfersIn[$a->id] ?? 0),
+            'balance' => $a->type === 'investment'
+                ? ($marketValues[$a->id] ?? 0.0)
+                : (float) $a->initial_balance
+                    + (float) ($credits[$a->id] ?? 0)
+                    - (float) ($debits[$a->id] ?? 0)
+                    + (float) ($transfersIn[$a->id] ?? 0),
         ]);
+    }
+
+    /**
+     * Valore di mercato delle holding per ogni conto investment, nella valuta
+     * del conto, al tasso del $upTo.
+     *
+     * @param  Collection<int, Account>  $accounts
+     * @return array<int, float>
+     */
+    private function investmentMarketValues(Collection $accounts, Carbon $upTo): array
+    {
+        $investmentIds = $accounts->where('type', 'investment')->pluck('id');
+        if ($investmentIds->isEmpty()) {
+            return [];
+        }
+
+        $currencies = $accounts->pluck('currency', 'id');
+        $values = [];
+
+        foreach (InvestmentHolding::query()->whereIn('account_id', $investmentIds)->get() as $h) {
+            $accountCurrency = $currencies[$h->account_id] ?? $h->currency;
+            $values[$h->account_id] = ($values[$h->account_id] ?? 0.0)
+                + $this->converter->convert($h->marketValue(), $h->currency, $accountCurrency, $upTo);
+        }
+
+        return $values;
     }
 
     /**

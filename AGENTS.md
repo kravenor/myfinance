@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-06-13**
-Fase corrente: **Estensione — Multivaluta con tassi di cambio (COMPLETATA)**
+Fase corrente: **Estensione — Gestione investimenti (COMPLETATA)**
 
 ---
 
@@ -50,11 +50,11 @@ Finance/
 ├── .gitignore
 │
 ├── backend/               # progetto Laravel 11
-│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement, ExchangeRate
+│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement, ExchangeRate, InvestmentHolding
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview)
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -66,7 +66,7 @@ Finance/
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest + SavingsGoalMovementRequest
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoal/SavingsGoalMovementResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, InvestmentService
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
@@ -97,7 +97,7 @@ Finance/
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Recurring, Reports, Stats, ImportExport
+│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, ImportExport
 │
 ├── docker/
 │   ├── php/
@@ -240,6 +240,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Recupero password (endpoint forgot/reset, link SPA, viste dedicate)
 - [x] **Estensione** — Obiettivi di risparmio (savings goals con ledger movimenti entrata/uscita, progresso netto, indicatore di ritmo verso scadenza)
 - [x] **Estensione** — Multivaluta con tassi di cambio (tabella `exchange_rates` popolata da Frankfurter/BCE, conversione "tasso alla data" verso la valuta base utente in tutti i report, transfer cross-valuta con `transfer_amount`)
+- [x] **Estensione** — Gestione investimenti (holding per-asset con quantità/costo/prezzo manuale, P/L latente, allocation; valore di mercato che sostituisce il saldo dei conti `investment` nel patrimonio netto)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -260,6 +261,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `savings_goal_movements` | `savings_goal_id` (cascade), `account_id` (nullable, `nullOnDelete`), `direction` (in/out), `amount`, `occurred_at`, `note` |
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
+| `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
 
 ### Eloquent models e relazioni
 
@@ -584,6 +586,30 @@ Conversione **reale** verso la **valuta base dell'utente** (`users.currency`). O
 - [DashboardView](frontend/src/views/DashboardView.vue)/[StatsView](frontend/src/views/StatsView.vue): KPI e saldi in valuta base, con controvalore per i conti in valuta estera.
 
 > **Nota dati pregressi**: le transazioni create prima di questa estensione possono avere `currency` = `EUR` di default anche su conti non-EUR. Una conversione retroattiva (allineamento `currency` al conto) non è inclusa.
+
+## 17. Gestione investimenti (estensione)
+
+Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo corrente **inserito manualmente** (architettura pronta a un futuro auto-fetch via `symbol`). Il **valore di mercato sostituisce il saldo** dei conti investment nel patrimonio netto.
+
+### Modello dati
+- **`investment_holdings`** ([model](backend/app/Models/InvestmentHolding.php), `BelongsToUser`): posizione su un asset (`name`, `symbol`, `asset_type`, `currency`, `quantity`, `avg_cost`, `last_price`). Helper `marketValue()` = `quantity × (last_price ?? avg_cost)`, `costBasis()` = `quantity × avg_cost`, in valuta dell'holding.
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Note |
+|--------|------|------|
+| GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name` |
+| POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `currency?`, `last_price?`, `last_price_at?`, `notes?` |
+| GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard |
+| GET | `/api/investments/overview` | Riepilogo portafoglio convertito in valuta base: `total_market_value`, `total_cost_basis`, `total_unrealized_pl(_pct)`, `by_asset_type[]` (allocation %), `accounts[]` |
+
+[InvestmentHoldingResource](backend/app/Http/Resources/InvestmentHoldingResource.php) espone i calcolati `cost_basis`, `market_value`, `unrealized_pl`, `unrealized_pl_pct` (nella valuta dell'holding). La validazione del tipo conto (`investment`) è in [Store/UpdateInvestmentHoldingRequest](backend/app/Http/Requests/InvestmentHolding/StoreInvestmentHoldingRequest.php) via `Rule::exists` con `where('type','investment')`.
+
+### Net worth & patrimonio
+[ReportService::rawAccountBalances()](backend/app/Services/ReportService.php): per i conti `investment` il saldo (nella valuta del conto) è il **valore di mercato delle holding** (`investmentMarketValues()`, ogni holding convertita dalla sua valuta a quella del conto), **ignorando** il saldo transazionale. La conversione a valuta base segue il flusso esistente. Ricade quindi su `summary`, `cumulativeBalance`, `netWorth` e sul forecast.
+> Limitazioni note: non c'è storico prezzi → nel net worth storico i conti investment usano il prezzo corrente (valore costante nel tempo); eventuale cash non investito sul conto investment non concorre al patrimonio (il valore = solo holding). [InvestmentService::overview()](backend/app/Services/InvestmentService.php) calcola i totali al tasso/prezzo correnti.
+
+### Frontend
+[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
 
 ## 9. Per gli agenti: regole operative
 
