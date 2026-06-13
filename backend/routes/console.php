@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\FetchExchangeRates;
 use App\Console\Commands\RunRecurringTransactions;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -10,3 +11,4 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command(RunRecurringTransactions::class)->dailyAt('02:00');
+Schedule::command(FetchExchangeRates::class)->dailyAt('06:00');

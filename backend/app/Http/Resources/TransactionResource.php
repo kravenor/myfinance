@@ -24,6 +24,7 @@ class TransactionResource extends JsonResource
             'recurring_transaction_id' => $this->recurring_transaction_id,
             'type' => $this->type,
             'amount' => $this->amount,
+            'transfer_amount' => $this->transfer_amount,
             'currency' => $this->currency,
             'occurred_at' => $this->occurred_at->toDateString(),
             'description' => $this->description,

@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-06-02**
-Fase corrente: **Estensione — Obiettivi di risparmio (COMPLETATA)**
+Ultimo aggiornamento: **2026-06-13**
+Fase corrente: **Estensione — Multivaluta con tassi di cambio (COMPLETATA)**
 
 ---
 
@@ -50,11 +50,11 @@ Finance/
 ├── .gitignore
 │
 ├── backend/               # progetto Laravel 11
-│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement
+│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement, ExchangeRate
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested)
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -66,9 +66,9 @@ Finance/
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest + SavingsGoalMovementRequest
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoal/SavingsGoalMovementResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
-│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`)
+│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── database/migrations/
 │   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransaction/SavingsGoal/SavingsGoalMovementFactory
@@ -91,6 +91,7 @@ Finance/
 │       ├── App.vue            # root + onMounted fetchMe
 │       ├── style.css          # Tailwind directives + componenti (btn, input, card, table)
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
+│       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
 │       ├── stores/auth.ts     # Pinia: user, login, register, logout, fetchMe
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
@@ -238,6 +239,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Dedup import via `external_id` (skip righe già importate o ripetute nel file, counter `duplicates`)
 - [x] **Estensione** — Recupero password (endpoint forgot/reset, link SPA, viste dedicate)
 - [x] **Estensione** — Obiettivi di risparmio (savings goals con ledger movimenti entrata/uscita, progresso netto, indicatore di ritmo verso scadenza)
+- [x] **Estensione** — Multivaluta con tassi di cambio (tabella `exchange_rates` popolata da Frankfurter/BCE, conversione "tasso alla data" verso la valuta base utente in tutti i report, transfer cross-valuta con `transfer_amount`)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -256,6 +258,8 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `tag_transaction` | pivot `transaction_id` + `tag_id` (convenzione Laravel alfabetica) |
 | `savings_goals` | `name`, `target_amount`, `currency` (default `EUR`), `target_date` (nullable), `color`, `icon`, `status` (active/completed/archived), `notes` |
 | `savings_goal_movements` | `savings_goal_id` (cascade), `account_id` (nullable, `nullOnDelete`), `direction` (in/out), `amount`, `occurred_at`, `note` |
+| `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
+| `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
 
 ### Eloquent models e relazioni
 
@@ -541,6 +545,45 @@ Le rotte movimenti sono `scoped()`: il `{movement}` deve appartenere al `{saving
 
 ### Frontend
 [SavingsGoalsView.vue](frontend/src/views/SavingsGoalsView.vue) (`/savings-goals` in sidebar, voce "Obiettivi" tra Budget e Ricorrenti): griglia di card con barra di progresso (colore per `pace.status`), badge stato + ritmo, importo accumulato/obiettivo. Filtro per stato. Form inline create/edit. **Modale "Movimenti"** per ogni goal: aggiunta movimento (entrata/uscita, importo, data, conto opzionale, nota) + lista con eliminazione; ogni modifica ricarica lista goal e movimenti per aggiornare il progresso.
+
+## 16. Multivaluta con tassi di cambio (estensione)
+
+Conversione **reale** verso la **valuta base dell'utente** (`users.currency`). Ogni importo è convertito col tasso vigente alla `occurred_at` della transazione ("tasso alla data"). I transfer tra conti con valute diverse sono ammessi e registrano l'importo accreditato sul conto destinazione.
+
+### Modello dati & tassi
+- Tabella **`exchange_rates`** (globale): `(date, currency, rate)` unique `(date, currency)`. `rate` = unità di `currency` per 1 unità **pivot** (config `finance.pivot_currency`, default `EUR`). Il pivot ha sempre `rate = 1`.
+- Config [config/finance.php](backend/config/finance.php): `pivot_currency`, `rates.provider_url` (default `https://api.frankfurter.app`), `rates.history_start`, `currencies` (lista ISO supportata, allineata a [money.ts](frontend/src/lib/money.ts)).
+- `transactions.transfer_amount` (`decimal(15,2)` nullable): importo accreditato sul conto destinazione, nella sua valuta.
+
+### Servizi
+- [ExchangeRateProvider](backend/app/Services/ExchangeRateProvider.php): scarica i tassi BCE via **Frankfurter** (no API key). `fetchLatest()`, `fetchForDate()`, `fetchRange()` (time-series per backfill). Upsert su `(date, currency)`; aggiunge sempre la riga pivot `rate=1`.
+- [CurrencyConverter](backend/app/Services/CurrencyConverter.php): `convert(amount, from, to, date)` passa dal pivot (`amount / rate(from) * rate(to)`). `rateFor()` usa l'ultimo tasso `<= date` (fallback al più antico; **parità 1.0** se la valuta non ha tassi). Cache per-istanza (risolverlo dal container e riusarlo nell'arco di una richiesta).
+
+### Comando & schedule
+- `php artisan exchange-rates:fetch` (latest) · `--backfill`/`--from=`/`--to=` (storico). Schedulato giornalmente alle **06:00** in [routes/console.php](backend/routes/console.php).
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Risposta |
+|--------|------|----------|
+| GET | `/api/exchange-rates` | `{pivot, date, currencies: [...], rates: {CUR: rate}}` (tassi della data più recente) |
+| GET | `/api/exchange-rates/convert?amount=&from=&to=&date=` | `{amount, from, to, date, converted, rate}` |
+
+### Report (conversione in valuta base)
+[ReportService](backend/app/Services/ReportService.php) inietta `CurrencyConverter` e risolve la base da `Auth::user()->currency`. **Tutte** le aggregazioni (summary, totalsFor/periodComparison, byCategory, byTag, timeline, categoryTrend, topTransactions, cashFlowForecast) convertono ogni riga col tasso alla `occurred_at`. `summary`/`periodComparison` espongono `base_currency`; `topTransactions` espone `amount_base` (e ordina per importo convertito).
+
+**Net worth ricalcolato per-conto**: i transfer cross-valuta non si compensano più, quindi `cumulativeBalance`/`netWorth` partono dai saldi per conto (nella valuta del conto) e li convertono al tasso del periodo. I transfer in ingresso usano `SUM(COALESCE(transfer_amount, amount))`. `summary.accounts[]` espone `balance` (valuta conto) + `balance_base` (controvalore).
+
+### Transfer cross-valuta
+- [TransactionController](backend/app/Http/Controllers/TransactionController.php)`::resolveCurrency()`: forza `currency` = valuta del conto sorgente e calcola `transfer_amount` (conversione alla data, salvo override manuale nel body). Idem in update.
+- [RecurringTransactionController](backend/app/Http/Controllers/RecurringTransactionController.php) allinea `currency` al conto; [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php) calcola `transfer_amount` per ogni occorrenza materializzata.
+
+### Frontend
+- [money.ts](frontend/src/lib/money.ts): `formatCurrency(value, currency)` (Intl `it-IT`) + `CURRENCIES`. Usato da Dashboard, Transactions, Recurring, Stats, Accounts, SavingsGoals.
+- Select valuta (non più input testo) in [AccountsView](frontend/src/views/AccountsView.vue) e [SavingsGoalsView](frontend/src/views/SavingsGoalsView.vue).
+- [TransactionsView](frontend/src/views/TransactionsView.vue): per transfer cross-valuta mostra il campo "Importo ricevuto" (override opzionale) e in tabella l'importo accreditato.
+- [DashboardView](frontend/src/views/DashboardView.vue)/[StatsView](frontend/src/views/StatsView.vue): KPI e saldi in valuta base, con controvalore per i conti in valuta estera.
+
+> **Nota dati pregressi**: le transazioni create prima di questa estensione possono avere `currency` = `EUR` di default anche su conti non-EUR. Una conversione retroattiva (allineamento `currency` al conto) non è inclusa.
 
 ## 9. Per gli agenti: regole operative
 

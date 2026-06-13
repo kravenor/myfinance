@@ -12,6 +12,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import { formatCurrency } from '@/lib/money'
 import type { BudgetAlert, CategoryTotal, ReportSummary, TimelinePoint } from '@/types/reports'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Legend, Tooltip)
@@ -117,7 +118,7 @@ onMounted(async () => {
               </span>
             </span>
             <span class="text-slate-500">
-              {{ al.spent }} / {{ al.amount }} ·
+              {{ formatCurrency(al.spent, summary.base_currency) }} / {{ formatCurrency(al.amount, summary.base_currency) }} ·
               <span :class="al.status === 'exceeded' ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'">
                 {{ al.percent }}%
               </span>
@@ -129,11 +130,11 @@ onMounted(async () => {
       <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Income mese</p>
-          <p class="text-2xl font-semibold text-green-600 mt-1">{{ summary.income }}</p>
+          <p class="text-2xl font-semibold text-green-600 mt-1">{{ formatCurrency(summary.income, summary.base_currency) }}</p>
         </div>
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Expense mese</p>
-          <p class="text-2xl font-semibold text-red-600 mt-1">{{ summary.expense }}</p>
+          <p class="text-2xl font-semibold text-red-600 mt-1">{{ formatCurrency(summary.expense, summary.base_currency) }}</p>
         </div>
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Net mese</p>
@@ -141,21 +142,27 @@ onMounted(async () => {
             class="text-2xl font-semibold mt-1"
             :class="parseFloat(summary.net) >= 0 ? 'text-green-600' : 'text-red-600'"
           >
-            {{ summary.net }}
+            {{ formatCurrency(summary.net, summary.base_currency) }}
           </p>
         </div>
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Patrimonio netto</p>
-          <p class="text-2xl font-semibold mt-1">{{ summary.net_worth }}</p>
+          <p class="text-2xl font-semibold mt-1">{{ formatCurrency(summary.net_worth, summary.base_currency) }}</p>
         </div>
       </section>
 
       <section>
-        <h2 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-2">Saldi conti</h2>
+        <h2 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-2">
+          Saldi conti
+          <span class="font-normal lowercase text-slate-400">· controvalore in {{ summary.base_currency }}</span>
+        </h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div v-for="acc in summary.accounts" :key="acc.id" class="card p-4">
             <p class="text-sm text-slate-600">{{ acc.name }}</p>
-            <p class="text-xl font-semibold mt-1">{{ acc.balance }} {{ acc.currency }}</p>
+            <p class="text-xl font-semibold mt-1">{{ formatCurrency(acc.balance, acc.currency) }}</p>
+            <p v-if="acc.currency !== summary.base_currency" class="text-xs text-slate-400 mt-0.5">
+              ≈ {{ formatCurrency(acc.balance_base, summary.base_currency) }}
+            </p>
           </div>
           <div v-if="summary.accounts.length === 0" class="text-sm text-slate-500">
             Nessun conto.

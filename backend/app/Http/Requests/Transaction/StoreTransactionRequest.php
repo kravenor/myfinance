@@ -35,6 +35,9 @@ class StoreTransactionRequest extends FormRequest
             ],
             'type' => ['required', 'in:income,expense,transfer'],
             'amount' => ['required', 'numeric', 'gt:0', 'between:0,999999999999.99'],
+            // Importo ricevuto sul conto destinazione (override manuale del
+            // tasso per i transfer cross-valuta). Se omesso viene calcolato.
+            'transfer_amount' => ['nullable', 'numeric', 'gt:0', 'between:0,999999999999.99'],
             'currency' => ['nullable', 'string', 'size:3'],
             'occurred_at' => ['required', 'date'],
             'description' => ['nullable', 'string', 'max:255'],

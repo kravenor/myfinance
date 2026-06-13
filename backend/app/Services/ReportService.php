@@ -8,9 +8,20 @@ use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Auth;
 
+/**
+ * Tutti gli importi sono convertiti nella valuta base dell'utente
+ * (`user.currency`) tramite {@see CurrencyConverter}, applicando il tasso
+ * vigente alla `occurred_at` di ciascuna transazione ("tasso alla data").
+ */
 class ReportService
 {
+    private ?string $baseCurrency = null;
+
+    public function __construct(private readonly CurrencyConverter $converter) {}
+
     /**
      * Income, expense, net nel range + saldo per conto.
      *
@@ -18,19 +29,15 @@ class ReportService
      */
     public function summary(Carbon $from, Carbon $to): array
     {
-        $rows = Transaction::query()
-            ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('type, SUM(amount) as total')
-            ->groupBy('type')
-            ->pluck('total', 'type');
-
-        $income = (float) ($rows['income'] ?? 0);
-        $expense = (float) ($rows['expense'] ?? 0);
+        $totals = $this->totalsFor($from, $to);
+        $income = $totals['income'];
+        $expense = $totals['expense'];
         $savingRate = $income > 0 ? ($income - $expense) / $income : 0.0;
 
         return [
             'from' => $from->toDateString(),
             'to' => $to->toDateString(),
+            'base_currency' => $this->baseCurrency(),
             'income' => $this->fmt($income),
             'expense' => $this->fmt($expense),
             'net' => $this->fmt($income - $expense),
@@ -68,6 +75,7 @@ class ReportService
 
         return [
             'unit' => $unit,
+            'base_currency' => $this->baseCurrency(),
             'current' => [
                 'label' => $unit === 'month' ? $currentFrom->format('Y-m') : (string) $currentFrom->year,
                 'from' => $currentFrom->toDateString(),
@@ -101,52 +109,40 @@ class ReportService
      */
     public function categoryTrend(Carbon $from, Carbon $to, string $type, int $top = 5): array
     {
-        $buckets = $this->monthBuckets($from, $to);
-        $monthsKeys = array_keys($buckets);
-
-        $totals = Transaction::query()
-            ->where('type', $type)
-            ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->whereNotNull('category_id')
-            ->selectRaw('category_id, SUM(amount) as total')
-            ->groupBy('category_id')
-            ->orderByDesc('total')
-            ->limit($top)
-            ->get();
-
-        $categoryIds = $totals->pluck('category_id')->all();
-        $names = Category::query()->whereIn('id', $categoryIds)->pluck('name', 'id');
+        $monthsKeys = array_keys($this->monthBuckets($from, $to));
 
         $rows = Transaction::query()
             ->where('type', $type)
-            ->whereIn('category_id', $categoryIds)
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->get(['category_id', 'amount', 'occurred_at']);
+            ->whereNotNull('category_id')
+            ->get(['category_id', 'amount', 'currency', 'occurred_at']);
 
+        $totalPerCat = [];
         $series = [];
-        foreach ($categoryIds as $cid) {
-            $series[$cid] = array_fill_keys($monthsKeys, 0.0);
-        }
         foreach ($rows as $t) {
+            $base = $this->toBase($t);
+            $cid = (int) $t->category_id;
+            $totalPerCat[$cid] = ($totalPerCat[$cid] ?? 0.0) + $base;
             $key = $t->occurred_at->format('Y-m');
-            if (! isset($series[$t->category_id][$key])) {
-                continue;
-            }
-            $series[$t->category_id][$key] += (float) $t->amount;
+            $series[$cid][$key] = ($series[$cid][$key] ?? 0.0) + $base;
         }
+
+        arsort($totalPerCat);
+        $categoryIds = array_slice(array_keys($totalPerCat), 0, $top);
+        $names = Category::query()->whereIn('id', $categoryIds)->pluck('name', 'id');
 
         return [
             'periods' => $monthsKeys,
-            'categories' => collect($categoryIds)->map(fn ($id) => [
-                'category_id' => $id,
-                'category_name' => $names[$id] ?? "#{$id}",
-                'values' => array_map(fn ($v) => $this->fmt($v), array_values($series[$id])),
+            'categories' => collect($categoryIds)->map(fn ($cid) => [
+                'category_id' => $cid,
+                'category_name' => $names[$cid] ?? "#{$cid}",
+                'values' => array_map(fn ($key) => $this->fmt($series[$cid][$key] ?? 0.0), $monthsKeys),
             ])->all(),
         ];
     }
 
     /**
-     * Top N transazioni per importo nel range.
+     * Top N transazioni per importo (convertito in valuta base) nel range.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -159,7 +155,7 @@ class ReportService
             $query->where('type', $type);
         }
 
-        $rows = $query->orderByDesc('amount')->limit($limit)->get();
+        $rows = $query->get();
 
         $categories = Category::query()
             ->whereIn('id', $rows->pluck('category_id')->filter()->all())
@@ -174,10 +170,15 @@ class ReportService
             'type' => $t->type,
             'amount' => $t->amount,
             'currency' => $t->currency,
+            'amount_base' => $this->fmt($this->toBase($t)),
             'account_name' => $accounts[$t->account_id] ?? null,
             'category_name' => $t->category_id ? ($categories[$t->category_id] ?? null) : null,
             'description' => $t->description,
-        ])->all();
+        ])
+            ->sortByDesc('amount_base')
+            ->take($limit)
+            ->values()
+            ->all();
     }
 
     /**
@@ -190,6 +191,7 @@ class ReportService
         $months = max(1, min(24, $months));
         $start = Carbon::now()->startOfMonth();
         $end = $start->copy()->addMonthsNoOverflow($months - 1)->endOfMonth();
+        $base = $this->baseCurrency();
 
         $buckets = $this->monthBuckets($start, $end);
         $deltas = array_fill_keys(array_keys($buckets), ['income' => 0.0, 'expense' => 0.0]);
@@ -208,7 +210,7 @@ class ReportService
                 if ($cursor->gte($start)) {
                     $key = $cursor->format('Y-m');
                     if (isset($deltas[$key])) {
-                        $deltas[$key][$r->type] += (float) $r->amount;
+                        $deltas[$key][$r->type] += $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
                     }
                 }
                 $cursor = $this->advance($cursor, $r->cadence, max(1, (int) $r->interval));
@@ -237,15 +239,22 @@ class ReportService
     private function totalsFor(Carbon $from, Carbon $to): array
     {
         $rows = Transaction::query()
+            ->whereIn('type', ['income', 'expense'])
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('type, SUM(amount) as total')
-            ->groupBy('type')
-            ->pluck('total', 'type');
+            ->get(['type', 'amount', 'currency', 'occurred_at']);
 
-        return [
-            'income' => (float) ($rows['income'] ?? 0),
-            'expense' => (float) ($rows['expense'] ?? 0),
-        ];
+        $income = 0.0;
+        $expense = 0.0;
+        foreach ($rows as $t) {
+            $base = $this->toBase($t);
+            if ($t->type === 'income') {
+                $income += $base;
+            } else {
+                $expense += $base;
+            }
+        }
+
+        return ['income' => $income, 'expense' => $expense];
     }
 
     private function pct(float $previous, float $current): ?string
@@ -271,7 +280,7 @@ class ReportService
     }
 
     /**
-     * Totale transazioni per categoria nel range.
+     * Totale transazioni per categoria nel range (convertito in valuta base).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -280,25 +289,30 @@ class ReportService
         $rows = Transaction::query()
             ->where('type', $type)
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->selectRaw('category_id, SUM(amount) as total')
-            ->groupBy('category_id')
-            ->orderByDesc('total')
-            ->get();
+            ->get(['category_id', 'amount', 'currency', 'occurred_at']);
 
-        $categoryIds = $rows->pluck('category_id')->filter()->all();
-        $categories = Category::query()
-            ->whereIn('id', $categoryIds)
-            ->pluck('name', 'id');
+        $totals = [];
+        foreach ($rows as $t) {
+            $key = $t->category_id === null ? 'null' : (string) $t->category_id;
+            $totals[$key] = ($totals[$key] ?? 0.0) + $this->toBase($t);
+        }
+        arsort($totals);
 
-        return $rows->map(fn ($row) => [
-            'category_id' => $row->category_id,
-            'category_name' => $row->category_id ? ($categories[$row->category_id] ?? '—') : 'Senza categoria',
-            'total' => $this->fmt((float) $row->getAttribute('total')),
-        ])->all();
+        $ids = collect(array_keys($totals))
+            ->reject(fn ($k) => $k === 'null')
+            ->map(fn ($k) => (int) $k)
+            ->all();
+        $categories = Category::query()->whereIn('id', $ids)->pluck('name', 'id');
+
+        return collect($totals)->map(fn ($total, $key) => [
+            'category_id' => $key === 'null' ? null : (int) $key,
+            'category_name' => $key === 'null' ? 'Senza categoria' : ($categories[(int) $key] ?? '—'),
+            'total' => $this->fmt($total),
+        ])->values()->all();
     }
 
     /**
-     * Totale per tag nel range, per tipo (income/expense).
+     * Totale per tag nel range, per tipo (income/expense), convertito in valuta base.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -308,30 +322,35 @@ class ReportService
             ->where('transactions.type', $type)
             ->whereBetween('transactions.occurred_at', [$from->toDateString(), $to->toDateString()])
             ->join('tag_transaction', 'tag_transaction.transaction_id', '=', 'transactions.id')
-            ->selectRaw('tag_transaction.tag_id as tag_id, SUM(transactions.amount) as total')
-            ->groupBy('tag_transaction.tag_id')
-            ->orderByDesc('total')
-            ->get();
+            ->get([
+                'tag_transaction.tag_id as tag_id',
+                'transactions.amount as amount',
+                'transactions.currency as currency',
+                'transactions.occurred_at as occurred_at',
+            ]);
+
+        $totals = [];
+        foreach ($rows as $r) {
+            $tagId = (int) $r->getAttribute('tag_id');
+            $totals[$tagId] = ($totals[$tagId] ?? 0.0) + $this->toBase($r);
+        }
+        arsort($totals);
 
         $tags = Tag::query()
-            ->whereIn('id', $rows->pluck('tag_id')->all())
+            ->whereIn('id', array_keys($totals))
             ->get(['id', 'name', 'color'])
             ->keyBy('id');
 
-        return $rows->map(function ($row) use ($tags) {
-            $tagId = (int) $row->getAttribute('tag_id');
-
-            return [
-                'tag_id' => $tagId,
-                'tag_name' => $tags[$tagId]->name ?? '—',
-                'tag_color' => $tags[$tagId]->color ?? null,
-                'total' => $this->fmt((float) $row->getAttribute('total')),
-            ];
-        })->all();
+        return collect($totals)->map(fn ($total, $tagId) => [
+            'tag_id' => (int) $tagId,
+            'tag_name' => $tags[$tagId]->name ?? '—',
+            'tag_color' => $tags[$tagId]->color ?? null,
+            'total' => $this->fmt($total),
+        ])->values()->all();
     }
 
     /**
-     * Serie mensile income/expense nel range.
+     * Serie mensile income/expense nel range (convertita in valuta base).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -340,7 +359,7 @@ class ReportService
         $transactions = Transaction::query()
             ->whereIn('type', ['income', 'expense'])
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
-            ->get(['type', 'amount', 'occurred_at']);
+            ->get(['type', 'amount', 'currency', 'occurred_at']);
 
         $buckets = $this->monthBuckets($from, $to);
 
@@ -349,7 +368,7 @@ class ReportService
             if (! isset($buckets[$key])) {
                 continue;
             }
-            $buckets[$key][$t->type] += (float) $t->amount;
+            $buckets[$key][$t->type] += $this->toBase($t);
         }
 
         return collect($buckets)->map(fn ($v, $k) => [
@@ -361,45 +380,18 @@ class ReportService
     }
 
     /**
-     * Net worth cumulato a fine di ogni mese nel range.
+     * Net worth cumulato (in valuta base) a fine di ogni mese nel range.
      *
      * @return array<int, array<string, mixed>>
      */
     public function netWorth(Carbon $from, Carbon $to): array
     {
-        $initial = (float) Account::query()->sum('initial_balance');
-
-        $monthly = Transaction::query()
-            ->whereIn('type', ['income', 'expense'])
-            ->where('occurred_at', '<=', $to->toDateString())
-            ->get(['type', 'amount', 'occurred_at']);
-
-        $byMonth = collect($this->monthBuckets($from, $to));
-        $earlierTotal = 0.0;
-
-        foreach ($monthly as $t) {
-            $key = $t->occurred_at->format('Y-m');
-            $delta = $t->type === 'income' ? (float) $t->amount : -(float) $t->amount;
-            if ($t->occurred_at->lt($from)) {
-                $earlierTotal += $delta;
-
-                continue;
-            }
-            if (! $byMonth->has($key)) {
-                continue;
-            }
-            $bucket = $byMonth->get($key);
-            $bucket['delta'] = ($bucket['delta'] ?? 0) + $delta;
-            $byMonth->put($key, $bucket);
-        }
-
-        $cumulative = $initial + $earlierTotal;
         $out = [];
-        foreach ($byMonth as $key => $bucket) {
-            $cumulative += $bucket['delta'] ?? 0;
+        foreach (array_keys($this->monthBuckets($from, $to)) as $key) {
+            $monthEnd = Carbon::parse($key.'-01')->endOfMonth();
             $out[] = [
                 'period' => $key,
-                'net_worth' => $this->fmt($cumulative),
+                'net_worth' => $this->fmt($this->cumulativeBalance($monthEnd)),
             ];
         }
 
@@ -407,34 +399,59 @@ class ReportService
     }
 
     /**
+     * Saldo per conto al $upTo: importo nella valuta propria del conto +
+     * controvalore nella valuta base (al tasso corrente del $upTo).
+     *
      * @return array<int, array<string, mixed>>
      */
     private function accountBalances(Carbon $upTo): array
     {
+        $base = $this->baseCurrency();
+
+        return $this->rawAccountBalances($upTo)->map(fn (array $a) => [
+            'id' => $a['id'],
+            'name' => $a['name'],
+            'currency' => $a['currency'],
+            'balance' => $this->fmt($a['balance']),
+            'balance_base' => $this->fmt($this->converter->convert($a['balance'], $a['currency'], $base, $upTo)),
+        ])->all();
+    }
+
+    /**
+     * Saldo grezzo per conto (nella valuta del conto) al $upTo.
+     * I transfer in ingresso usano `transfer_amount` (valuta destinazione)
+     * con fallback su `amount`.
+     *
+     * @return Collection<int, array{id: int, name: string, currency: string, balance: float}>
+     */
+    private function rawAccountBalances(Carbon $upTo): Collection
+    {
         $accounts = Account::query()->orderBy('name')->get();
         if ($accounts->isEmpty()) {
-            return [];
+            return collect();
         }
 
+        $date = $upTo->toDateString();
+
         $debits = Transaction::query()
-            ->where('occurred_at', '<=', $upTo->toDateString())
+            ->where('occurred_at', '<=', $date)
             ->whereIn('type', ['expense', 'transfer'])
             ->selectRaw('account_id, SUM(amount) as total')
             ->groupBy('account_id')
             ->pluck('total', 'account_id');
 
         $credits = Transaction::query()
-            ->where('occurred_at', '<=', $upTo->toDateString())
+            ->where('occurred_at', '<=', $date)
             ->where('type', 'income')
             ->selectRaw('account_id, SUM(amount) as total')
             ->groupBy('account_id')
             ->pluck('total', 'account_id');
 
         $transfersIn = Transaction::query()
-            ->where('occurred_at', '<=', $upTo->toDateString())
+            ->where('occurred_at', '<=', $date)
             ->where('type', 'transfer')
             ->whereNotNull('transfer_account_id')
-            ->selectRaw('transfer_account_id, SUM(amount) as total')
+            ->selectRaw('transfer_account_id, SUM(COALESCE(transfer_amount, amount)) as total')
             ->groupBy('transfer_account_id')
             ->pluck('total', 'transfer_account_id');
 
@@ -442,26 +459,24 @@ class ReportService
             'id' => $a->id,
             'name' => $a->name,
             'currency' => $a->currency,
-            'balance' => $this->fmt(
-                (float) $a->initial_balance
+            'balance' => (float) $a->initial_balance
                 + (float) ($credits[$a->id] ?? 0)
                 - (float) ($debits[$a->id] ?? 0)
-                + (float) ($transfersIn[$a->id] ?? 0)
-            ),
-        ])->all();
+                + (float) ($transfersIn[$a->id] ?? 0),
+        ]);
     }
 
+    /**
+     * Patrimonio netto (in valuta base) al $upTo = somma dei saldi conto
+     * convertiti al tasso del $upTo.
+     */
     private function cumulativeBalance(Carbon $upTo): float
     {
-        $initial = (float) Account::query()->sum('initial_balance');
+        $base = $this->baseCurrency();
 
-        $delta = Transaction::query()
-            ->whereIn('type', ['income', 'expense'])
-            ->where('occurred_at', '<=', $upTo->toDateString())
-            ->selectRaw("SUM(CASE WHEN type='income' THEN amount ELSE -amount END) as total")
-            ->value('total');
-
-        return $initial + (float) ($delta ?? 0);
+        return $this->rawAccountBalances($upTo)->sum(
+            fn (array $a) => $this->converter->convert($a['balance'], $a['currency'], $base, $upTo)
+        );
     }
 
     /**
@@ -478,6 +493,24 @@ class ReportService
         }
 
         return $buckets;
+    }
+
+    /**
+     * Converte una transazione nella valuta base al tasso della sua data.
+     *
+     * @param  Transaction|object  $t  oggetto con attributi amount, currency, occurred_at
+     */
+    private function toBase($t): float
+    {
+        $date = $t->occurred_at instanceof Carbon ? $t->occurred_at : Carbon::parse($t->occurred_at);
+
+        return $this->converter->convert((float) $t->amount, $t->currency, $this->baseCurrency(), $date);
+    }
+
+    private function baseCurrency(): string
+    {
+        // Sotto auth:sanctum l'utente è sempre presente; currency ha default 'EUR'.
+        return $this->baseCurrency ??= strtoupper(Auth::user()->currency);
     }
 
     private function fmt(float $value): string

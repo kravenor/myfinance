@@ -36,6 +36,7 @@ class UpdateTransactionRequest extends FormRequest
             ],
             'type' => ['sometimes', 'required', 'in:income,expense,transfer'],
             'amount' => ['sometimes', 'required', 'numeric', 'gt:0', 'between:0,999999999999.99'],
+            'transfer_amount' => ['sometimes', 'nullable', 'numeric', 'gt:0', 'between:0,999999999999.99'],
             'currency' => ['sometimes', 'nullable', 'string', 'size:3'],
             'occurred_at' => ['sometimes', 'required', 'date'],
             'description' => ['sometimes', 'nullable', 'string', 'max:255'],

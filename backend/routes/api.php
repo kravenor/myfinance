@@ -5,6 +5,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CategorizationRuleController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SavingsGoalController;
@@ -22,6 +23,9 @@ Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->n
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+
+    Route::get('exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
+    Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');
 
     Route::apiResource('accounts', AccountController::class);
     Route::apiResource('categories', CategoryController::class);
