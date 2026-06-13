@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $recurring_transaction_id
  * @property string $type
  * @property string $amount
+ * @property string|null $transfer_amount
  * @property string $currency
  * @property Carbon $occurred_at
  * @property string|null $description
@@ -35,6 +36,7 @@ class Transaction extends Model
         'transfer_account_id',
         'type',
         'amount',
+        'transfer_amount',
         'currency',
         'occurred_at',
         'description',
@@ -47,6 +49,7 @@ class Transaction extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'transfer_amount' => 'decimal:2',
             'occurred_at' => 'date:Y-m-d',
         ];
     }

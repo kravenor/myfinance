@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\RecurringTransaction\StoreRecurringTransactionRequest;
 use App\Http\Requests\RecurringTransaction\UpdateRecurringTransactionRequest;
 use App\Http\Resources\RecurringTransactionResource;
+use App\Models\Account;
 use App\Models\RecurringTransaction;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -43,6 +44,7 @@ class RecurringTransactionController extends Controller
         $data = $request->validated();
         $data['interval'] = $data['interval'] ?? 1;
         $data['next_run_at'] = $data['next_run_at'] ?? $data['starts_on'];
+        $data['currency'] = Account::findOrFail($data['account_id'])->currency;
 
         $recurring = RecurringTransaction::create($data)->refresh();
 
@@ -62,7 +64,11 @@ class RecurringTransactionController extends Controller
     {
         $this->authorize('update', $recurringTransaction);
 
-        $recurringTransaction->update($request->validated());
+        $data = $request->validated();
+        $accountId = $data['account_id'] ?? $recurringTransaction->account_id;
+        $data['currency'] = Account::findOrFail($accountId)->currency;
+
+        $recurringTransaction->update($data);
 
         return new RecurringTransactionResource($recurringTransaction);
     }

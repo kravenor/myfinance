@@ -3,11 +3,13 @@ export interface AccountBalance {
   name: string
   currency: string
   balance: string
+  balance_base: string
 }
 
 export interface ReportSummary {
   from: string
   to: string
+  base_currency: string
   income: string
   expense: string
   net: string
@@ -27,6 +29,7 @@ export interface PeriodTotals {
 
 export interface PeriodComparison {
   unit: 'month' | 'year'
+  base_currency: string
   current: PeriodTotals
   previous: PeriodTotals
   delta: {
@@ -55,6 +58,7 @@ export interface TopTransaction {
   type: 'income' | 'expense' | 'transfer'
   amount: string
   currency: string
+  amount_base: string
   account_name: string | null
   category_name: string | null
   description: string | null

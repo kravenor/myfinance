@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
+import { formatCurrency } from '@/lib/money'
 import type { Account, Cadence, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<RecurringTransaction>('recurring-transactions')
@@ -204,7 +205,7 @@ onMounted(async () => {
             </td>
             <td data-label="Cadenza">every {{ r.interval }} {{ r.cadence }}</td>
             <td data-label="Prossima">{{ r.next_run_at }}</td>
-            <td data-label="Importo" class="md:text-right font-medium">{{ r.amount }} {{ r.currency }}</td>
+            <td data-label="Importo" class="md:text-right font-medium">{{ formatCurrency(r.amount, r.currency) }}</td>
             <td data-label="Attiva">
               <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'">●</span>
             </td>

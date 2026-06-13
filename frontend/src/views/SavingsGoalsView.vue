@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import { useAuthStore } from '@/stores/auth'
+import { CURRENCIES, formatCurrency as money } from '@/lib/money'
 import RowActions from '@/components/ui/RowActions.vue'
 import type {
   Account,
@@ -165,16 +166,6 @@ function syncOpenGoal() {
 }
 
 // --- Helpers ---------------------------------------------------------------
-function money(value: string | number | null | undefined, currency = 'EUR'): string {
-  const n = typeof value === 'string' ? parseFloat(value) : (value ?? 0)
-  if (Number.isNaN(n)) return '—'
-  try {
-    return new Intl.NumberFormat('it-IT', { style: 'currency', currency }).format(n)
-  } catch {
-    return `${n.toFixed(2)} ${currency}`
-  }
-}
-
 function accountName(id: number | null): string {
   if (id === null) return '—'
   return accounts.value.find((a) => a.id === id)?.name ?? `#${id}`
@@ -261,7 +252,9 @@ onMounted(async () => {
       </div>
       <div>
         <label class="label">Valuta</label>
-        <input v-model="form.currency" type="text" maxlength="3" class="input uppercase" />
+        <select v-model="form.currency" class="input">
+          <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+        </select>
       </div>
       <div>
         <label class="label">Scadenza</label>

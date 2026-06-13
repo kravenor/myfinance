@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Account;
 use App\Models\RecurringTransaction;
 use App\Models\Transaction;
 use Illuminate\Support\Carbon;
@@ -9,6 +10,8 @@ use Illuminate\Support\Facades\DB;
 
 class RecurringTransactionRunner
 {
+    public function __construct(private readonly CurrencyConverter $converter) {}
+
     /**
      * Materializza tutte le ricorrenti maturate fino a $until (default: oggi).
      *
@@ -49,6 +52,7 @@ class RecurringTransactionRunner
                     'recurring_transaction_id' => $recurring->id,
                     'type' => $recurring->type,
                     'amount' => $recurring->amount,
+                    'transfer_amount' => $this->transferAmount($recurring, $occurredAt),
                     'currency' => $recurring->currency,
                     'occurred_at' => $occurredAt->toDateString(),
                     'description' => $recurring->description,
@@ -68,6 +72,34 @@ class RecurringTransactionRunner
         });
 
         return $count;
+    }
+
+    /**
+     * Importo accreditato sul conto destinazione per i transfer (convertito
+     * al tasso della data se le valute differiscono).
+     */
+    private function transferAmount(RecurringTransaction $recurring, Carbon $occurredAt): ?string
+    {
+        if ($recurring->type !== 'transfer' || ! $recurring->transfer_account_id) {
+            return null;
+        }
+
+        // transfer_account_id ha FK valida (nullOnDelete), quindi il conto esiste.
+        $dest = Account::withoutGlobalScopes()->findOrFail($recurring->transfer_account_id);
+        $destCurrency = $dest->currency;
+
+        if ($destCurrency === $recurring->currency) {
+            return $recurring->amount;
+        }
+
+        $converted = $this->converter->convert(
+            (float) $recurring->amount,
+            $recurring->currency,
+            $destCurrency,
+            $occurredAt,
+        );
+
+        return number_format($converted, 2, '.', '');
     }
 
     private function advance(Carbon $from, string $cadence, int $interval): Carbon

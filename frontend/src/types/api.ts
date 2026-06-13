@@ -68,6 +68,7 @@ export interface Transaction {
   recurring_transaction_id: number | null
   type: TransactionType
   amount: string
+  transfer_amount: string | null
   currency: string
   occurred_at: string
   description: string | null

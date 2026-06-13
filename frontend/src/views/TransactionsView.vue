@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
+import { formatCurrency } from '@/lib/money'
 import type { Account, Category, Paginated, Tag, Transaction, TransactionType } from '@/types/api'
 
 const { items, loading, meta, list, create, update, destroy } = useCrud<Transaction>('transactions')
@@ -22,10 +23,25 @@ const form = ref({
   transfer_account_id: null as number | null,
   type: 'expense' as TransactionType,
   amount: '',
+  transfer_amount: '',
   occurred_at: new Date().toISOString().slice(0, 10),
   description: '',
   tag_ids: [] as number[],
 })
+
+function accountCurrency(id: number | null | undefined): string {
+  if (!id) return ''
+  return accounts.value.find((a) => a.id === id)?.currency ?? ''
+}
+
+// Per i transfer tra conti con valute diverse mostriamo il campo
+// "importo ricevuto" nella valuta del conto destinazione.
+const isCrossCurrencyTransfer = computed(
+  () =>
+    form.value.type === 'transfer' &&
+    !!form.value.transfer_account_id &&
+    accountCurrency(form.value.account_id) !== accountCurrency(form.value.transfer_account_id),
+)
 
 function toggleTag(id: number) {
   const i = form.value.tag_ids.indexOf(id)
@@ -75,6 +91,7 @@ function reset() {
     transfer_account_id: null,
     type: 'expense',
     amount: '',
+    transfer_amount: '',
     occurred_at: new Date().toISOString().slice(0, 10),
     description: '',
     tag_ids: [],
@@ -89,6 +106,7 @@ function startEdit(tx: Transaction) {
     transfer_account_id: tx.transfer_account_id,
     type: tx.type,
     amount: tx.amount,
+    transfer_amount: tx.transfer_amount ?? '',
     occurred_at: tx.occurred_at,
     description: tx.description ?? '',
     tag_ids: (tx.tags ?? []).map((t) => t.id),
@@ -109,6 +127,10 @@ async function onSubmit() {
   if (form.value.type === 'transfer') {
     payload.transfer_account_id = form.value.transfer_account_id
     payload.category_id = null
+    // Override manuale del tasso solo se l'utente ha specificato l'importo ricevuto.
+    if (isCrossCurrencyTransfer.value && form.value.transfer_amount !== '') {
+      payload.transfer_amount = form.value.transfer_amount
+    }
   }
   const wasEditing = editing.value !== null
   if (editing.value) {
@@ -245,8 +267,19 @@ onMounted(async () => {
         </select>
       </div>
       <div>
-        <label class="label">Importo</label>
+        <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
         <input v-model="form.amount" type="number" step="0.01" min="0.01" class="input" required />
+      </div>
+      <div v-if="isCrossCurrencyTransfer">
+        <label class="label">Importo ricevuto ({{ accountCurrency(form.transfer_account_id) }})</label>
+        <input
+          v-model="form.transfer_amount"
+          type="number"
+          step="0.01"
+          min="0.01"
+          class="input"
+          :placeholder="`Auto (tasso del ${form.occurred_at})`"
+        />
       </div>
       <div>
         <label class="label">Data</label>
@@ -321,7 +354,13 @@ onMounted(async () => {
               </span>
               <span v-else class="text-slate-400">—</span>
             </td>
-            <td data-label="Importo" class="md:text-right font-medium">{{ tx.amount }} {{ tx.currency }}</td>
+            <td data-label="Importo" class="md:text-right font-medium">
+              {{ formatCurrency(tx.amount, tx.currency) }}
+              <span
+                v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
+                class="block text-xs font-normal text-slate-400"
+              >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</span>
+            </td>
             <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </td>

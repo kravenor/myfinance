@@ -12,6 +12,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import { formatCurrency } from '@/lib/money'
 import type {
   CashFlowPoint,
   CategoryTrend,
@@ -111,11 +112,20 @@ const forecastOptions = {
   },
 }
 
+const baseCurrency = computed(() => comparison.value?.base_currency ?? 'EUR')
+
 function formatDelta(value: string | null | undefined, suffix = '') {
   if (value === null || value === undefined) return '—'
   const n = parseFloat(value)
   const sign = n > 0 ? '+' : ''
   return `${sign}${value}${suffix}`
+}
+
+function formatMoneyDelta(value: string | null | undefined) {
+  if (value === null || value === undefined) return '—'
+  const n = parseFloat(value)
+  const sign = n > 0 ? '+' : n < 0 ? '−' : ''
+  return `${sign}${formatCurrency(Math.abs(n), baseCurrency.value)}`
 }
 
 function deltaClass(value: string | null | undefined, lowerIsBetter = false) {
@@ -151,12 +161,12 @@ onMounted(refresh)
       <div v-if="comparison" class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Income {{ comparison.current.label }}</p>
-          <p class="text-2xl font-semibold mt-1">{{ comparison.current.income }}</p>
+          <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.income, baseCurrency) }}</p>
           <p class="text-xs text-slate-500 mt-2">
-            vs {{ comparison.previous.label }}: {{ comparison.previous.income }}
+            vs {{ comparison.previous.label }}: {{ formatCurrency(comparison.previous.income, baseCurrency) }}
           </p>
           <p class="text-sm mt-1" :class="deltaClass(comparison.delta.income_pct)">
-            Δ {{ formatDelta(comparison.delta.income) }}
+            Δ {{ formatMoneyDelta(comparison.delta.income) }}
             <span v-if="comparison.delta.income_pct">
               ({{ formatDelta(comparison.delta.income_pct, '%') }})
             </span>
@@ -164,12 +174,12 @@ onMounted(refresh)
         </div>
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Expense {{ comparison.current.label }}</p>
-          <p class="text-2xl font-semibold mt-1">{{ comparison.current.expense }}</p>
+          <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.expense, baseCurrency) }}</p>
           <p class="text-xs text-slate-500 mt-2">
-            vs {{ comparison.previous.label }}: {{ comparison.previous.expense }}
+            vs {{ comparison.previous.label }}: {{ formatCurrency(comparison.previous.expense, baseCurrency) }}
           </p>
           <p class="text-sm mt-1" :class="deltaClass(comparison.delta.expense_pct, true)">
-            Δ {{ formatDelta(comparison.delta.expense) }}
+            Δ {{ formatMoneyDelta(comparison.delta.expense) }}
             <span v-if="comparison.delta.expense_pct">
               ({{ formatDelta(comparison.delta.expense_pct, '%') }})
             </span>
@@ -181,13 +191,13 @@ onMounted(refresh)
             class="text-2xl font-semibold mt-1"
             :class="parseFloat(comparison.current.net) >= 0 ? 'text-green-600' : 'text-red-600'"
           >
-            {{ comparison.current.net }}
+            {{ formatCurrency(comparison.current.net, baseCurrency) }}
           </p>
           <p class="text-xs text-slate-500 mt-2">
-            vs {{ comparison.previous.label }}: {{ comparison.previous.net }}
+            vs {{ comparison.previous.label }}: {{ formatCurrency(comparison.previous.net, baseCurrency) }}
           </p>
           <p class="text-sm mt-1" :class="deltaClass(comparison.delta.net)">
-            Δ {{ formatDelta(comparison.delta.net) }}
+            Δ {{ formatMoneyDelta(comparison.delta.net) }}
           </p>
         </div>
       </div>
@@ -259,7 +269,12 @@ onMounted(refresh)
               <td data-label="Conto">{{ t.account_name ?? '—' }}</td>
               <td data-label="Categoria">{{ t.category_name ?? '—' }}</td>
               <td data-label="Descrizione">{{ t.description ?? '—' }}</td>
-              <td data-label="Importo" class="md:text-right font-medium">{{ t.amount }} {{ t.currency }}</td>
+              <td data-label="Importo" class="md:text-right font-medium">
+                {{ formatCurrency(t.amount, t.currency) }}
+                <span v-if="t.currency !== baseCurrency" class="block text-xs font-normal text-slate-400">
+                  ≈ {{ formatCurrency(t.amount_base, baseCurrency) }}
+                </span>
+              </td>
             </tr>
             <tr v-if="top.length === 0">
               <td colspan="6" class="text-center text-slate-500 py-6">Nessuna transazione nel periodo.</td>

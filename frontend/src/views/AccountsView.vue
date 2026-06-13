@@ -2,6 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
+import { CURRENCIES, formatCurrency } from '@/lib/money'
 import type { Account, AccountType } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<Account>('accounts')
@@ -92,7 +93,9 @@ onMounted(() => list())
       </div>
       <div>
         <label class="label">Valuta</label>
-        <input v-model="form.currency" class="input" maxlength="3" required />
+        <select v-model="form.currency" class="input" required>
+          <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+        </select>
       </div>
       <div class="flex items-center gap-2">
         <input id="is_primary" type="checkbox" v-model="form.is_primary" class="w-4 h-4" />
@@ -147,7 +150,7 @@ onMounted(() => list())
             </td>
             <td data-label="Tipo" class="capitalize">{{ acc.type }}</td>
             <td data-label="Valuta">{{ acc.currency }}</td>
-            <td data-label="Saldo iniziale" class="md:text-right">{{ acc.initial_balance }}</td>
+            <td data-label="Saldo iniziale" class="md:text-right">{{ formatCurrency(acc.initial_balance, acc.currency) }}</td>
             <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(acc)" @delete="onDelete(acc)" />
             </td>
