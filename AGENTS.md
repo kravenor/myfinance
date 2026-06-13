@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-06-13**
-Fase corrente: **Estensione — Notifiche (COMPLETATA)**
+Fase corrente: **Estensione — Preferenze notifiche da interfaccia (COMPLETATA)**
 
 ---
 
@@ -54,7 +54,7 @@ Finance/
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview), Notification
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview), Notification, NotificationPreference
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -243,6 +243,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Multivaluta con tassi di cambio (tabella `exchange_rates` popolata da Frankfurter/BCE, conversione "tasso alla data" verso la valuta base utente in tutti i report, transfer cross-valuta con `transfer_amount`)
 - [x] **Estensione** — Gestione investimenti (holding per-asset con quantità/costo/prezzo manuale, P/L latente, allocation; valore di mercato che sostituisce il saldo dei conti `investment` nel patrimonio netto)
 - [x] **Estensione** — Notifiche (in-app via canale database + email; scanner schedulato per budget sforati/in allerta e obiettivi a rischio overdue/behind, con dedup per chiave/periodo)
+- [x] **Estensione** — Preferenze notifiche da interfaccia (pagina Impostazioni: email on/off + destinazione, toggle per tipo, soglia budget configurabile; `users.notification_preferences`)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -250,7 +251,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 
 | Tabella | Campi principali |
 |---------|------------------|
-| `users` | `name`, `email` (unique), `password`, `currency` (default `EUR`), `locale` (default `it`) |
+| `users` | `name`, `email` (unique), `password`, `currency` (default `EUR`), `locale` (default `it`), `notification_preferences` (JSON nullable: preferenze notifiche per-utente) |
 | `personal_access_tokens` | Sanctum |
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
@@ -619,7 +620,8 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (canale `mail`, gate-ato da config). Generate da uno **scanner schedulato** per budget sforati/in allerta e obiettivi di risparmio a rischio, con **dedup** per chiave/periodo (niente spam giornaliero).
 
 ### Canali & config
-- `database` sempre attivo (lista in-app). `mail` attivo se `finance.notifications.mail` (env `FINANCE_NOTIFY_MAIL`, default true). In dev `MAIL_MAILER=log` → email nel log; in prod configurare SMTP.
+- `database` sempre attivo (lista in-app). `mail` attivo se il kill-switch globale `finance.notifications.mail` (env `FINANCE_NOTIFY_MAIL`, default true) **e** la preferenza utente `email` sono entrambi on. In dev `MAIL_MAILER=log` → email nel log; in prod configurare SMTP.
+- La selezione canali è centralizzata nel trait [ChannelsFromPreferences](backend/app/Notifications/Concerns/ChannelsFromPreferences.php) (`via()` condiviso dalle notification).
 - Niente web-push (VAPID/service worker) in questa fase: possibile estensione futura.
 
 ### Notification classes
@@ -638,8 +640,22 @@ Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{go
 | POST | `/api/notifications/{id}/read` | Segna come letta, ritorna `unread_count` aggiornato |
 | DELETE | `/api/notifications/{id}` | 204 |
 
+### Preferenze (per-utente)
+Colonna JSON `users.notification_preferences` (cast `array`); default in `User::NOTIFICATION_DEFAULTS`, esposti via `User::notificationPreferences()` / `notificationPreference($key)`:
+
+| Chiave | Default | Effetto |
+|--------|---------|---------|
+| `email` | `true` | Abilita il canale mail (oltre al kill-switch globale) |
+| `email_address` | `null` | Destinazione email custom (`User::routeNotificationForMail`); null = email account |
+| `budget` | `true` | Abilita gli avvisi budget nello scanner |
+| `savings_goals` | `true` | Abilita gli avvisi obiettivi nello scanner |
+| `budget_threshold` | `80` | Soglia % "warning" (passata a `BudgetAlertService::alerts()`, usata anche da `/budgets/alerts`) |
+
+API: `GET /api/notification-preferences`, `PUT /api/notification-preferences` ([NotificationPreferenceController](backend/app/Http/Controllers/NotificationPreferenceController.php), merge sui default). Le preferenze sono incluse anche in `/api/auth/me` (UserResource). Lo scanner rispetta i toggle e la soglia; `BudgetAlertService::alerts(int $year, int $month, ?float $threshold = null)` ha la soglia parametrica (default `WARNING_THRESHOLD = 80`).
+
 ### Frontend
 Store Pinia [notifications.ts](frontend/src/stores/notifications.ts) (lista + `unreadCount` + fetch/markRead/markAllRead/remove). [NotificationsView.vue](frontend/src/views/NotificationsView.vue) (`/notifications`): lista con stato letto/non letto, badge `level` colorato, click → segna letta + naviga all'`url`, "segna tutte come lette", elimina. [AppLayout](frontend/src/components/AppLayout.vue) carica le notifiche al mount e mostra un **badge col conteggio non lette** sulla voce "Notifiche" in sidebar.
+[SettingsView.vue](frontend/src/views/SettingsView.vue) (`/settings`, voce "Impostazioni" in sidebar): form preferenze notifiche (toggle email + email destinazione, toggle budget/obiettivi, soglia budget); salva via `PUT /notification-preferences` e ricarica `auth.fetchMe()`.
 
 ## 9. Per gli agenti: regole operative
 

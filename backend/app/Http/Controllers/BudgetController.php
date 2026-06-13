@@ -7,6 +7,7 @@ use App\Http\Requests\Budget\UpdateBudgetRequest;
 use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
 use App\Models\Transaction;
+use App\Models\User;
 use App\Services\BudgetAlertService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,7 +53,11 @@ class BudgetController extends Controller
         $year = $request->filled('year') ? $request->integer('year') : $now->year;
         $month = $request->filled('month') ? $request->integer('month') : $now->month;
 
-        return response()->json(['data' => $service->alerts($year, $month)]);
+        /** @var User $user */
+        $user = $request->user();
+        $threshold = (float) $user->notificationPreference('budget_threshold');
+
+        return response()->json(['data' => $service->alerts($year, $month, $threshold)]);
     }
 
     public function store(StoreBudgetRequest $request): JsonResponse

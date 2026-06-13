@@ -25,23 +25,29 @@ class NotificationScanner
     {
         $sent = 0;
         $now = Carbon::now();
+        $prefs = $user->notificationPreferences();
 
-        foreach ($this->budgetAlerts->alerts($now->year, $now->month) as $alert) {
-            $sent += $this->dispatch($user, new BudgetThresholdNotification($alert));
+        if ($prefs['budget']) {
+            $threshold = (float) $prefs['budget_threshold'];
+            foreach ($this->budgetAlerts->alerts($now->year, $now->month, $threshold) as $alert) {
+                $sent += $this->dispatch($user, new BudgetThresholdNotification($alert));
+            }
         }
 
-        $goals = SavingsGoal::query()
-            ->where('status', 'active')
-            ->whereNotNull('target_date')
-            ->get();
-        $this->progress->attachProgress($goals->all(), $now);
+        if ($prefs['savings_goals']) {
+            $goals = SavingsGoal::query()
+                ->where('status', 'active')
+                ->whereNotNull('target_date')
+                ->get();
+            $this->progress->attachProgress($goals->all(), $now);
 
-        foreach ($goals as $goal) {
-            $status = $goal->getAttribute('pace')['status'] ?? null;
-            if (! in_array($status, ['behind', 'overdue'], true)) {
-                continue;
+            foreach ($goals as $goal) {
+                $status = $goal->getAttribute('pace')['status'] ?? null;
+                if (! in_array($status, ['behind', 'overdue'], true)) {
+                    continue;
+                }
+                $sent += $this->dispatch($user, new SavingsGoalRiskNotification($goal, $status));
             }
-            $sent += $this->dispatch($user, new SavingsGoalRiskNotification($goal, $status));
         }
 
         return $sent;

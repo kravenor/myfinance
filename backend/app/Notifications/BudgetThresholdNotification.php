@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,7 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class BudgetThresholdNotification extends Notification implements Dedupable
 {
-    use Queueable;
+    use ChannelsFromPreferences, Queueable;
 
     /**
      * @param  array{budget_id: int, category_id: int, category_name: ?string, category_color: ?string, year: int, month: int, amount: string, spent: string, percent: float, status: string}  $alert
@@ -22,19 +23,6 @@ class BudgetThresholdNotification extends Notification implements Dedupable
     public function dedupKey(): string
     {
         return "budget:{$this->alert['status']}:{$this->alert['budget_id']}:{$this->alert['year']}-{$this->alert['month']}";
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public function via(object $notifiable): array
-    {
-        $channels = ['database'];
-        if (config('finance.notifications.mail', true)) {
-            $channels[] = 'mail';
-        }
-
-        return $channels;
     }
 
     /**
