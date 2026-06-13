@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notifications'
 
 const auth = useAuthStore()
+const notifications = useNotificationStore()
 const router = useRouter()
 const route = useRoute()
 
@@ -18,6 +20,7 @@ const nav = [
   { name: 'savings-goals', label: 'Obiettivi' },
   { name: 'investments', label: 'Investimenti' },
   { name: 'recurring', label: 'Ricorrenti' },
+  { name: 'notifications', label: 'Notifiche' },
   { name: 'reports', label: 'Report' },
   { name: 'stats', label: 'Statistiche' },
   { name: 'import-export', label: 'Import / Export' },
@@ -36,6 +39,10 @@ async function onLogout() {
   await auth.logout()
   router.push({ name: 'login' })
 }
+
+onMounted(() => {
+  notifications.fetch().catch(() => {})
+})
 
 function currentLabel(): string {
   return nav.find((n) => n.name === route.name)?.label ?? 'Finance'
@@ -111,10 +118,16 @@ function currentLabel(): string {
           v-for="item in nav"
           :key="item.name"
           :to="{ name: item.name }"
-          class="block px-4 py-2 rounded text-sm font-medium hover:bg-slate-800"
+          class="flex items-center justify-between px-4 py-2 rounded text-sm font-medium hover:bg-slate-800"
           exact-active-class="bg-slate-800 text-white"
         >
-          {{ item.label }}
+          <span>{{ item.label }}</span>
+          <span
+            v-if="item.name === 'notifications' && notifications.unreadCount > 0"
+            class="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-indigo-500 text-white text-xs"
+          >
+            {{ notifications.unreadCount }}
+          </span>
         </RouterLink>
       </nav>
       <button type="button" class="m-3 btn btn-secondary" @click="onLogout">

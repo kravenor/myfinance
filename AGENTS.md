@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-06-13**
-Fase corrente: **Estensione — Gestione investimenti (COMPLETATA)**
+Fase corrente: **Estensione — Notifiche (COMPLETATA)**
 
 ---
 
@@ -54,7 +54,7 @@ Finance/
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview)
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview), Notification
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -66,9 +66,10 @@ Finance/
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest + SavingsGoalMovementRequest
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoal/SavingsGoalMovementResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, InvestmentService
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, InvestmentService, NotificationScanner
+│   ├── app/Notifications/       # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
-│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`)
+│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── database/migrations/
 │   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransaction/SavingsGoal/SavingsGoalMovementFactory
@@ -241,6 +242,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Obiettivi di risparmio (savings goals con ledger movimenti entrata/uscita, progresso netto, indicatore di ritmo verso scadenza)
 - [x] **Estensione** — Multivaluta con tassi di cambio (tabella `exchange_rates` popolata da Frankfurter/BCE, conversione "tasso alla data" verso la valuta base utente in tutti i report, transfer cross-valuta con `transfer_amount`)
 - [x] **Estensione** — Gestione investimenti (holding per-asset con quantità/costo/prezzo manuale, P/L latente, allocation; valore di mercato che sostituisce il saldo dei conti `investment` nel patrimonio netto)
+- [x] **Estensione** — Notifiche (in-app via canale database + email; scanner schedulato per budget sforati/in allerta e obiettivi a rischio overdue/behind, con dedup per chiave/periodo)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -262,6 +264,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
 | `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
+| `notifications` | Tabella standard Laravel (`uuid` id, `type`, `notifiable` morph, `data` json, `read_at`). In-app notifications via canale database |
 
 ### Eloquent models e relazioni
 
@@ -610,6 +613,33 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 
 ### Frontend
 [InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
+
+## 18. Notifiche (estensione)
+
+Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (canale `mail`, gate-ato da config). Generate da uno **scanner schedulato** per budget sforati/in allerta e obiettivi di risparmio a rischio, con **dedup** per chiave/periodo (niente spam giornaliero).
+
+### Canali & config
+- `database` sempre attivo (lista in-app). `mail` attivo se `finance.notifications.mail` (env `FINANCE_NOTIFY_MAIL`, default true). In dev `MAIL_MAILER=log` → email nel log; in prod configurare SMTP.
+- Niente web-push (VAPID/service worker) in questa fase: possibile estensione futura.
+
+### Notification classes
+[BudgetThresholdNotification](backend/app/Notifications/BudgetThresholdNotification.php) e [SavingsGoalRiskNotification](backend/app/Notifications/SavingsGoalRiskNotification.php) implementano [Dedupable](backend/app/Notifications/Contracts/Dedupable.php) (`dedupKey()`). `toArray` espone `{key, type (budget|savings_goal), level, title, message, url}`; `toMail` produce una MailMessage con action verso la SPA.
+
+### Scanner & schedule
+[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`logout` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
+
+Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{goalId}:{yyyy-mm}` → una notifica per stato/periodo (warning→exceeded o behind→overdue generano una nuova notifica).
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Note |
+|--------|------|------|
+| GET | `/api/notifications` | Ultime 50 + `unread_count` |
+| POST | `/api/notifications/read-all` | Segna tutte come lette, ritorna `unread_count: 0` |
+| POST | `/api/notifications/{id}/read` | Segna come letta, ritorna `unread_count` aggiornato |
+| DELETE | `/api/notifications/{id}` | 204 |
+
+### Frontend
+Store Pinia [notifications.ts](frontend/src/stores/notifications.ts) (lista + `unreadCount` + fetch/markRead/markAllRead/remove). [NotificationsView.vue](frontend/src/views/NotificationsView.vue) (`/notifications`): lista con stato letto/non letto, badge `level` colorato, click → segna letta + naviga all'`url`, "segna tutte come lette", elimina. [AppLayout](frontend/src/components/AppLayout.vue) carica le notifiche al mount e mostra un **badge col conteggio non lette** sulla voce "Notifiche" in sidebar.
 
 ## 9. Per gli agenti: regole operative
 

@@ -36,4 +36,16 @@ return [
         'SGD', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'RON', 'BGN', 'ISK',
         'TRY', 'ILS', 'INR', 'KRW', 'THB', 'IDR', 'MYR', 'PHP', 'ZAR', 'MXN', 'BRL',
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Notifiche
+    |--------------------------------------------------------------------------
+    | Le notifiche in-app (canale database) sono sempre attive. Il canale mail
+    | è gate-ato qui: in dev MAIL_MAILER=log scrive su storage/logs, in prod
+    | va configurato lo SMTP.
+    */
+    'notifications' => [
+        'mail' => (bool) env('FINANCE_NOTIFY_MAIL', true),
+    ],
 ];
