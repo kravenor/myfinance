@@ -216,6 +216,35 @@ export interface AppNotification {
   created_at: string | null
 }
 
+export type ScenarioCadence = 'one_time' | 'monthly' | 'quarterly' | 'yearly'
+export interface ScenarioItem {
+  id: number
+  scenario_id: number
+  account_id: number | null
+  category_id: number | null
+  description: string | null
+  amount: string
+  currency: string
+  cadence: ScenarioCadence
+  interval: number
+  starts_on: string
+  ends_on: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface Scenario {
+  id: number
+  name: string
+  description: string | null
+  color: string | null
+  is_active: boolean
+  items_count?: number
+  items?: ScenarioItem[]
+  created_at: string
+  updated_at: string
+}
+
 export type MovementDirection = 'in' | 'out'
 export interface SavingsGoalMovement {
   id: number

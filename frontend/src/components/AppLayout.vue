@@ -23,6 +23,7 @@ const nav = [
   { name: 'notifications', label: 'Notifiche' },
   { name: 'reports', label: 'Report' },
   { name: 'stats', label: 'Statistiche' },
+  { name: 'forecast', label: 'Previsioni' },
   { name: 'import-export', label: 'Import / Export' },
   { name: 'settings', label: 'Impostazioni' },
 ]

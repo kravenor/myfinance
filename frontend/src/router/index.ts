@@ -54,6 +54,7 @@ export const router = createRouter({
         { path: 'notifications', name: 'notifications', component: () => import('@/views/NotificationsView.vue') },
         { path: 'reports', name: 'reports', component: () => import('@/views/ReportsView.vue') },
         { path: 'stats', name: 'stats', component: () => import('@/views/StatsView.vue') },
+        { path: 'forecast', name: 'forecast', component: () => import('@/views/ForecastView.vue') },
         { path: 'import-export', name: 'import-export', component: () => import('@/views/ImportExportView.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
       ],

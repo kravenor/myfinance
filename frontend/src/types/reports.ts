@@ -97,6 +97,67 @@ export interface NetWorthPoint {
   net_worth: string
 }
 
+export interface ExpenseForecastCell {
+  period: string
+  recurring: string
+  budget: string | null
+  scenario: string
+  forecast_base: string
+  total: string
+  budget_breach: boolean
+}
+
+export interface ExpenseForecastCategory {
+  category_id: number | null
+  category_name: string
+  color: string | null
+  total: string
+  monthly: ExpenseForecastCell[]
+}
+
+export interface ExpenseForecastMonthTotal {
+  period: string
+  income: string
+  recurring: string
+  budget: string
+  scenario: string
+  forecast_base: string
+  expense_total: string
+  net: string
+}
+
+export interface ExpenseForecastSummary {
+  total_income: string
+  total_expense: string
+  total_net: string
+  min_monthly_net: string
+  min_monthly_net_period: string | null
+  months_count: number
+}
+
+export interface ExpenseForecastScenarioMeta {
+  id: number
+  name: string
+  color: string | null
+  is_active: boolean
+}
+
+export interface ExpenseForecast {
+  base_currency: string
+  months: string[]
+  categories: ExpenseForecastCategory[]
+  totals_by_month: ExpenseForecastMonthTotal[]
+  summary: ExpenseForecastSummary
+  scenario: ExpenseForecastScenarioMeta | null
+}
+
+export interface ExpenseForecastCompare {
+  base_currency: string
+  months: string[]
+  baseline: ExpenseForecast
+  scenarios: ExpenseForecast[]
+}
+
 export interface BudgetAlert {
   budget_id: number
   category_id: number
