@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\ExpenseForecastService;
 use App\Services\ReportService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -9,7 +10,10 @@ use Illuminate\Support\Carbon;
 
 class ReportController extends Controller
 {
-    public function __construct(private readonly ReportService $reports) {}
+    public function __construct(
+        private readonly ReportService $reports,
+        private readonly ExpenseForecastService $expenseForecast,
+    ) {}
 
     public function summary(Request $request): JsonResponse
     {
@@ -121,6 +125,38 @@ class ReportController extends Controller
 
         return response()->json([
             'data' => $this->reports->cashFlowForecast($months),
+        ]);
+    }
+
+    public function expenseForecast(Request $request): JsonResponse
+    {
+        $request->validate([
+            'months' => ['nullable', 'integer', 'min:1', 'max:24'],
+            'scenario_id' => ['nullable', 'integer'],
+        ]);
+
+        $months = $request->integer('months') ?: 6;
+        $scenarioId = $request->filled('scenario_id') ? $request->integer('scenario_id') : null;
+
+        return response()->json([
+            'data' => $this->expenseForecast->forecast($months, $scenarioId),
+        ]);
+    }
+
+    public function expenseForecastCompare(Request $request): JsonResponse
+    {
+        $request->validate([
+            'months' => ['nullable', 'integer', 'min:1', 'max:24'],
+            'scenario_ids' => ['nullable', 'array'],
+            'scenario_ids.*' => ['integer'],
+        ]);
+
+        $months = $request->integer('months') ?: 6;
+        /** @var array<int>|null $ids */
+        $ids = $request->has('scenario_ids') ? array_map('intval', (array) $request->input('scenario_ids')) : null;
+
+        return response()->json([
+            'data' => $this->expenseForecast->compare($months, $ids),
         ]);
     }
 

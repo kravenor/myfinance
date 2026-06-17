@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-06-13**
-Fase corrente: **Estensione — Preferenze notifiche da interfaccia (COMPLETATA)**
+Ultimo aggiornamento: **2026-06-16**
+Fase corrente: **Estensione — Previsione spese e simulazione (COMPLETATA)**
 
 ---
 
@@ -50,11 +50,11 @@ Finance/
 ├── .gitignore
 │
 ├── backend/               # progetto Laravel 11
-│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement, ExchangeRate, InvestmentHolding
+│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, SavingsGoalMovement, ExchangeRate, InvestmentHolding, Scenario, ScenarioItem
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview), Notification, NotificationPreference
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, SavingsGoalMovement (nested), ExchangeRate, InvestmentHolding, Investment (overview), Notification, NotificationPreference, Scenario, ScenarioItem (nested)
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
 │   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -66,7 +66,7 @@ Finance/
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest + SavingsGoalMovementRequest
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoal/SavingsGoalMovementResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, InvestmentService, NotificationScanner
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, NotificationScanner
 │   ├── app/Notifications/       # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), ScanNotifications (`notifications:scan`)
@@ -98,7 +98,7 @@ Finance/
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, ImportExport
+│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
 │
 ├── docker/
 │   ├── php/
@@ -244,6 +244,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Gestione investimenti (holding per-asset con quantità/costo/prezzo manuale, P/L latente, allocation; valore di mercato che sostituisce il saldo dei conti `investment` nel patrimonio netto)
 - [x] **Estensione** — Notifiche (in-app via canale database + email; scanner schedulato per budget sforati/in allerta e obiettivi a rischio overdue/behind, con dedup per chiave/periodo)
 - [x] **Estensione** — Preferenze notifiche da interfaccia (pagina Impostazioni: email on/off + destinazione, toggle per tipo, soglia budget configurabile; `users.notification_preferences`)
+- [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -252,6 +253,8 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | Tabella | Campi principali |
 |---------|------------------|
 | `users` | `name`, `email` (unique), `password`, `currency` (default `EUR`), `locale` (default `it`), `notification_preferences` (JSON nullable: preferenze notifiche per-utente) |
+| `scenarios` | `name`, `description` (nullable), `color` (nullable), `is_active` (default true) |
+| `scenario_items` | `scenario_id` (cascade), `account_id` (nullable, `nullOnDelete`), `category_id` (nullable, `nullOnDelete`), `description` (nullable), `amount`, `currency` (default `EUR`), `cadence` enum (one_time/monthly/quarterly/yearly), `interval` (default 1), `starts_on`, `ends_on` (nullable) |
 | `personal_access_tokens` | Sanctum |
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
@@ -656,6 +659,54 @@ API: `GET /api/notification-preferences`, `PUT /api/notification-preferences` ([
 ### Frontend
 Store Pinia [notifications.ts](frontend/src/stores/notifications.ts) (lista + `unreadCount` + fetch/markRead/markAllRead/remove). [NotificationsView.vue](frontend/src/views/NotificationsView.vue) (`/notifications`): lista con stato letto/non letto, badge `level` colorato, click → segna letta + naviga all'`url`, "segna tutte come lette", elimina. [AppLayout](frontend/src/components/AppLayout.vue) carica le notifiche al mount e mostra un **badge col conteggio non lette** sulla voce "Notifiche" in sidebar.
 [SettingsView.vue](frontend/src/views/SettingsView.vue) (`/settings`, voce "Impostazioni" in sidebar): form preferenze notifiche (toggle email + email destinazione, toggle budget/obiettivi, soglia budget); salva via `PUT /notification-preferences` e ricarica `auth.fetchMe()`.
+
+## 19. Previsioni e simulazione (estensione)
+
+Risponde alla domanda "**quanto mi resta a fine mese per vivere**" su un orizzonte di 3/6/12/24 mesi, in **baseline** e per ogni **scenario** salvato. Il dato di testa è il `net = entrate − uscite`, calcolato per ogni mese.
+
+### Composizione del forecast
+**Entrate previste** per mese = Σ delle `recurring_transactions` di tipo `income` attive che cadono nel mese (espanse via `advance()`).
+
+**Uscite previste** per `(categoria, mese)`:
+- se esiste un `budget` per quel mese → `forecast_base = budget.amount` (logica: il budget = quanto pensi di spendere);
+- altrimenti → `forecast_base = Σ` ricorrenti `expense` con `category_id` valorizzato che cadono nel mese.
+Lo scenario eventualmente selezionato aggiunge `scenario_extra`; il totale uscite di cella è `forecast_base + scenario_extra`. La cella è in **budget breach** quando `forecast_base + scenario_extra > budget`.
+
+**Net residuo** del mese = `entrate − uscite_totali`. Summary aggrega su tutti i mesi: `total_income`, `total_expense`, `total_net`, `min_monthly_net` (+ `min_monthly_net_period`).
+
+### Schema scenari
+- **`scenarios`** ([model](backend/app/Models/Scenario.php), `BelongsToUser`): `name`, `description?`, `color?`, `is_active`.
+- **`scenario_items`** ([model](backend/app/Models/ScenarioItem.php), `BelongsToUser`): `scenario_id` (cascade), `account_id?` (`nullOnDelete`, owned-by-user), `category_id?` (`nullOnDelete`, owned-by-user), `description?`, `amount`, `currency` (default `EUR`, allineato automaticamente al conto in UI), `cadence` (`one_time`/`monthly`/`quarterly`/`yearly`), `interval` (default 1), `starts_on`, `ends_on?`.
+
+Gli item con `category_id = null` confluiscono nella riga "Senza categoria" del breakdown.
+
+### Endpoint `auth:sanctum`
+| Metodo | Path | Note |
+|--------|------|------|
+| GET | `/api/scenarios` | Lista paginata. Filtro `is_active`. Include `items_count` |
+| POST | `/api/scenarios` | `name`, `description?`, `color?`, `is_active?` |
+| GET | `/api/scenarios/{scenario}` | Include `items` |
+| PATCH/DELETE | `/api/scenarios/{scenario}` | CRUD standard (cascade su items) |
+| GET | `/api/scenarios/{scenario}/items` | Nested + `scoped()` |
+| POST | `/api/scenarios/{scenario}/items` | `amount`, `cadence`, `starts_on` obbligatori; `account_id?`, `category_id?`, `description?`, `currency?`, `interval?`, `ends_on?` |
+| PATCH/DELETE | `/api/scenarios/{scenario}/items/{item}` | CRUD standard, scoped |
+| GET | `/api/reports/expense-forecast?months=&scenario_id=` | `months` 1–24 (default 6); con `scenario_id` la risposta include lo scenario meta + l'extra simulato per ogni cella |
+| GET | `/api/reports/expense-forecast/compare?months=&scenario_ids[]=` | Restituisce `{baseline, scenarios: [...]}`; senza `scenario_ids` include automaticamente **tutti gli scenari attivi** |
+
+### Logica
+[ExpenseForecastService](backend/app/Services/ExpenseForecastService.php):
+- `forecast(months, scenarioId?)` — un singolo forecast (baseline o con scenario applicato).
+- `compare(months, scenarioIds?)` — un payload con il baseline e un forecast per ogni scenario richiesto.
+- Calcola `incomePerMonth` dalle ricorrenti income, aggrega ricorrenti expense per (cat, mese), recupera budget con una sola query, espande gli item dello scenario via `scenarioOccurrences` (cap su `ends_on`).
+- Conversione importi nella valuta base utente al tasso della data ([CurrencyConverter](backend/app/Services/CurrencyConverter.php)).
+
+### Frontend
+[ForecastView.vue](frontend/src/views/ForecastView.vue) (`/forecast`, voce **"Previsioni"** in sidebar tra Statistiche e Import/Export). La gerarchia visiva mette il **net residuo** in testa:
+1. **KPI** scenario applicato: entrate totali, uscite totali, **resta totale** (somma N mesi), mese peggiore.
+2. **Tabella mese per mese**: Entrate / Uscite / di cui scenario / **Resta a fine mese** (colorato verde-rosso) / Δ vs baseline.
+3. **Confronto scenari**: tabella scenari × mesi con il `net` per ognuno + Totale + Δ baseline (richiama `/expense-forecast/compare`). La riga corrispondente allo scenario selezionato è evidenziata.
+4. **Lista scenari** con CRUD inline (nome, colore, descrizione, attivo); bottone "Spese" apre la modale di gestione degli item (descrizione, conto, categoria, valuta, cadenza, date) — la valuta del form si auto-allinea al conto scelto.
+5. **Dettaglio uscite per categoria** (collassabile): la vecchia heatmap categoria×mese resta disponibile per chi vuole la composizione delle uscite.
 
 ## 9. Per gli agenti: regole operative
 

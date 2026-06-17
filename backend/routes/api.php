@@ -14,6 +14,8 @@ use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SavingsGoalController;
 use App\Http\Controllers\SavingsGoalMovementController;
+use App\Http\Controllers\ScenarioController;
+use App\Http\Controllers\ScenarioItemController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TransactionImportExportController;
@@ -71,6 +73,11 @@ Route::middleware('auth:sanctum')->group(function () {
         ->parameter('movements', 'movement')
         ->scoped();
 
+    Route::apiResource('scenarios', ScenarioController::class);
+    Route::apiResource('scenarios.items', ScenarioItemController::class)
+        ->parameter('items', 'item')
+        ->scoped();
+
     Route::prefix('reports')->controller(ReportController::class)->group(function () {
         Route::get('summary', 'summary')->name('reports.summary');
         Route::get('by-category', 'byCategory')->name('reports.by-category');
@@ -81,5 +88,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('category-trend', 'categoryTrend')->name('reports.category-trend');
         Route::get('top-transactions', 'topTransactions')->name('reports.top-transactions');
         Route::get('cash-flow-forecast', 'cashFlowForecast')->name('reports.cash-flow-forecast');
+        Route::get('expense-forecast/compare', 'expenseForecastCompare')->name('reports.expense-forecast.compare');
+        Route::get('expense-forecast', 'expenseForecast')->name('reports.expense-forecast');
     });
 });
