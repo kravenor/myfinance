@@ -2,9 +2,16 @@
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import type { NotificationPreferences } from '@/types/api'
 
 const auth = useAuthStore()
+const menu = useMenuStore()
+
+const menuItems = NAV_ITEMS.map((item) => ({
+  ...item,
+  locked: ALWAYS_VISIBLE.includes(item.name),
+}))
 
 const form = ref<NotificationPreferences>({
   email: true,
@@ -139,5 +146,33 @@ onMounted(async () => {
         </div>
       </template>
     </form>
+
+    <section class="card p-4 sm:p-6 space-y-5">
+      <div>
+        <h2 class="font-medium">Sezioni del menu</h2>
+        <p class="text-sm text-slate-500 mt-1">
+          Disattiva le voci che non usi per snellire il menu laterale. La scelta è salvata su questo
+          dispositivo; Dashboard e Impostazioni restano sempre visibili.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+        <label
+          v-for="item in menuItems"
+          :key="item.name"
+          class="flex items-center gap-3 py-1.5"
+          :class="{ 'opacity-50': item.locked }"
+        >
+          <input
+            type="checkbox"
+            class="w-4 h-4"
+            :checked="menu.isVisible(item.name)"
+            :disabled="item.locked"
+            @change="menu.setVisible(item.name, ($event.target as HTMLInputElement).checked)"
+          />
+          <span class="text-sm">{{ item.label }}</span>
+        </label>
+      </div>
+    </section>
   </div>
 </template>

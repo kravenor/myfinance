@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-06-16**
+Ultimo aggiornamento: **2026-06-20**
 Fase corrente: **Estensione — Previsione spese e simulazione (COMPLETATA)**
 
 ---
@@ -95,6 +95,7 @@ Finance/
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
 │       ├── stores/auth.ts     # Pinia: user, login, register, logout, fetchMe
+│       ├── stores/menu.ts     # Pinia: NAV_ITEMS + visibilità sezioni menu (localStorage `menu.hidden`)
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
@@ -244,6 +245,7 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Gestione investimenti (holding per-asset con quantità/costo/prezzo manuale, P/L latente, allocation; valore di mercato che sostituisce il saldo dei conti `investment` nel patrimonio netto)
 - [x] **Estensione** — Notifiche (in-app via canale database + email; scanner schedulato per budget sforati/in allerta e obiettivi a rischio overdue/behind, con dedup per chiave/periodo)
 - [x] **Estensione** — Preferenze notifiche da interfaccia (pagina Impostazioni: email on/off + destinazione, toggle per tipo, soglia budget configurabile; `users.notification_preferences`)
+- [x] **Estensione** — Visibilità sezioni menu da Impostazioni (toggle per voce, preferenza solo-client in `localStorage` `menu.hidden`; Dashboard/Impostazioni sempre visibili)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -391,6 +393,11 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date, ricerca descrizione, tag), paginazione (prev/next), supporto transfer. Tag associabili nel form (chip multi-selezione → `tag_ids`) e mostrati come badge colorati in tabella |
 | `/budgets` | BudgetsView | filtro anno/mese, progresso barra con `spent / amount` |
 | `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
+
+### Menu / sidebar (AppLayout)
+- Le voci del menu hanno fonte unica in [stores/menu.ts](frontend/src/stores/menu.ts) (`NAV_ITEMS`): non più hardcoded in [AppLayout](frontend/src/components/AppLayout.vue).
+- Visibilità configurabile dall'utente in **Impostazioni** (card "Sezioni del menu"): ogni voce può essere disattivata, lo store `menu` filtra `NAV_ITEMS` in modo reattivo (sidebar + drawer mobile). `dashboard` e `settings` sono in `ALWAYS_VISIBLE` (non disattivabili, per non bloccare l'accesso alle Impostazioni).
+- **Preferenza solo-client per dispositivo**, persistita in `localStorage` (`menu.hidden`, array di route name) — stesso approccio di `reports.visible`. Nessuna rotta protetta: le view restano raggiungibili via URL, si nasconde solo la voce di menu.
 
 ### Fix backend collegati
 - `routes/web.php` espone una rotta nominata `login` che ritorna JSON 401 (evita `RouteNotFoundException` quando `auth:sanctum` cerca di redirigere richieste non-JSON).

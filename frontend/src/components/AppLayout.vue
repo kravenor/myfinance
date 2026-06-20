@@ -1,32 +1,17 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
+import { NAV_ITEMS, useMenuStore } from '@/stores/menu'
 
 const auth = useAuthStore()
 const notifications = useNotificationStore()
+const menu = useMenuStore()
 const router = useRouter()
 const route = useRoute()
 
-const nav = [
-  { name: 'dashboard', label: 'Dashboard' },
-  { name: 'accounts', label: 'Conti' },
-  { name: 'transactions', label: 'Transazioni' },
-  { name: 'categories', label: 'Categorie' },
-  { name: 'tags', label: 'Tag' },
-  { name: 'categorization-rules', label: 'Regole categoria' },
-  { name: 'budgets', label: 'Budget' },
-  { name: 'savings-goals', label: 'Obiettivi' },
-  { name: 'investments', label: 'Investimenti' },
-  { name: 'recurring', label: 'Ricorrenti' },
-  { name: 'notifications', label: 'Notifiche' },
-  { name: 'reports', label: 'Report' },
-  { name: 'stats', label: 'Statistiche' },
-  { name: 'forecast', label: 'Previsioni' },
-  { name: 'import-export', label: 'Import / Export' },
-  { name: 'settings', label: 'Impostazioni' },
-]
+const nav = computed(() => NAV_ITEMS.filter((item) => menu.isVisible(item.name)))
 
 const mobileOpen = ref(false)
 
@@ -47,7 +32,7 @@ onMounted(() => {
 })
 
 function currentLabel(): string {
-  return nav.find((n) => n.name === route.name)?.label ?? 'Finance'
+  return NAV_ITEMS.find((n) => n.name === route.name)?.label ?? 'Finance'
 }
 </script>
 
