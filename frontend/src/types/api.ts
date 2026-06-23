@@ -139,6 +139,7 @@ export interface RecurringTransaction {
 }
 
 export type SavingsGoalStatus = 'active' | 'completed' | 'archived'
+export type SavingsGoalRecurrence = 'none' | 'weekly' | 'monthly' | 'yearly'
 export type PaceStatus = 'on_track' | 'behind' | 'overdue' | 'completed'
 export interface SavingsGoalPace {
   target_date: string
@@ -152,7 +153,10 @@ export interface SavingsGoal {
   name: string
   target_amount: string
   currency: string
+  account_id: number | null
   target_date: string | null
+  recurrence: SavingsGoalRecurrence
+  start_date: string | null
   color: string | null
   icon: string | null
   status: SavingsGoalStatus
@@ -160,8 +164,9 @@ export interface SavingsGoal {
   saved?: string
   progress?: number
   remaining?: string
+  period_start?: string | null
+  period_end?: string | null
   pace?: SavingsGoalPace | null
-  movements_count?: number
   created_at: string
   updated_at: string
 }
@@ -245,15 +250,3 @@ export interface Scenario {
   updated_at: string
 }
 
-export type MovementDirection = 'in' | 'out'
-export interface SavingsGoalMovement {
-  id: number
-  savings_goal_id: number
-  account_id: number | null
-  direction: MovementDirection
-  amount: string
-  occurred_at: string
-  note: string | null
-  created_at: string
-  updated_at: string
-}

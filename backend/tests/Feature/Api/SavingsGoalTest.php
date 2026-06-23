@@ -2,9 +2,12 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Account;
 use App\Models\SavingsGoal;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class SavingsGoalTest extends TestCase
@@ -77,6 +80,73 @@ class SavingsGoalTest extends TestCase
             ->assertNoContent();
 
         $this->assertDatabaseMissing('savings_goals', ['id' => $goal->id]);
+    }
+
+    public function test_saved_is_net_flow_of_linked_account_in_period(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $other = Account::factory()->for($user)->create();
+
+        // Nel periodo: +1000 entrata, +500 transfer in entrata, -200 uscita = 1300.
+        Transaction::factory()->for($user)->create([
+            'account_id' => $account->id, 'type' => 'income', 'amount' => 1000, 'occurred_at' => '2026-06-10',
+        ]);
+        Transaction::factory()->for($user)->create([
+            'account_id' => $other->id, 'transfer_account_id' => $account->id,
+            'type' => 'transfer', 'amount' => 500, 'occurred_at' => '2026-06-12',
+        ]);
+        Transaction::factory()->for($user)->create([
+            'account_id' => $account->id, 'type' => 'expense', 'amount' => 200, 'occurred_at' => '2026-06-15',
+        ]);
+        // Fuori periodo: ignorata.
+        Transaction::factory()->for($user)->create([
+            'account_id' => $account->id, 'type' => 'income', 'amount' => 9999, 'occurred_at' => '2026-05-01',
+        ]);
+
+        $goal = SavingsGoal::factory()->for($user)->create([
+            'target_amount' => 2000,
+            'account_id' => $account->id,
+            'recurrence' => 'none',
+            'start_date' => '2026-06-01',
+            'target_date' => '2026-06-30',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson("/api/savings-goals/{$goal->id}")
+            ->assertOk()
+            ->assertJsonPath('data.saved', '1300.00')
+            ->assertJsonPath('data.progress', 65)
+            ->assertJsonPath('data.remaining', '700.00');
+    }
+
+    public function test_recurring_monthly_goal_uses_current_month(): void
+    {
+        Carbon::setTestNow('2026-06-23');
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+
+        Transaction::factory()->for($user)->create([
+            'account_id' => $account->id, 'type' => 'income', 'amount' => 300, 'occurred_at' => '2026-06-05',
+        ]);
+        Transaction::factory()->for($user)->create([
+            'account_id' => $account->id, 'type' => 'income', 'amount' => 999, 'occurred_at' => '2026-05-31',
+        ]);
+
+        $goal = SavingsGoal::factory()->for($user)->create([
+            'target_amount' => 500,
+            'account_id' => $account->id,
+            'recurrence' => 'monthly',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson("/api/savings-goals/{$goal->id}")
+            ->assertOk()
+            ->assertJsonPath('data.saved', '300.00')
+            ->assertJsonPath('data.period_start', '2026-06-01')
+            ->assertJsonPath('data.period_end', '2026-06-30');
+
+        Carbon::setTestNow();
     }
 
     public function test_cannot_access_other_users_goal(): void
