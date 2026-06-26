@@ -13,7 +13,6 @@ use App\Http\Controllers\NotificationPreferenceController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SavingsGoalController;
-use App\Http\Controllers\SavingsGoalMovementController;
 use App\Http\Controllers\ScenarioController;
 use App\Http\Controllers\ScenarioItemController;
 use App\Http\Controllers\TagController;
@@ -68,10 +67,6 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('savings-goals', SavingsGoalController::class)
         ->parameter('savings-goals', 'savings_goal');
-    Route::apiResource('savings-goals.movements', SavingsGoalMovementController::class)
-        ->parameter('savings-goals', 'savings_goal')
-        ->parameter('movements', 'movement')
-        ->scoped();
 
     Route::apiResource('scenarios', ScenarioController::class);
     Route::apiResource('scenarios.items', ScenarioItemController::class)

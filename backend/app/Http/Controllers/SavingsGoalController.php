@@ -21,7 +21,6 @@ class SavingsGoalController extends Controller
         $this->authorize('viewAny', SavingsGoal::class);
 
         $query = SavingsGoal::query()
-            ->withCount('movements')
             ->orderByRaw("CASE status WHEN 'active' THEN 0 WHEN 'completed' THEN 1 ELSE 2 END")
             ->orderBy('target_date')
             ->orderBy('name');
@@ -53,7 +52,6 @@ class SavingsGoalController extends Controller
     {
         $this->authorize('view', $savingsGoal);
 
-        $savingsGoal->loadCount('movements');
         $this->progress->attachProgress([$savingsGoal]);
 
         return new SavingsGoalResource($savingsGoal);
@@ -64,7 +62,6 @@ class SavingsGoalController extends Controller
         $this->authorize('update', $savingsGoal);
 
         $savingsGoal->update($request->validated());
-        $savingsGoal->loadCount('movements');
         $this->progress->attachProgress([$savingsGoal]);
 
         return new SavingsGoalResource($savingsGoal);
