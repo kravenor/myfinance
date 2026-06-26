@@ -22,7 +22,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 
 | Componente | Tecnologia | Versione |
 |------------|------------|----------|
-| Backend API | Laravel | 11.x |
+| Backend API | Laravel | 12.x |
 | Auth | Laravel Sanctum (SPA cookie) | — |
 | Frontend | Vue 3 + TypeScript | — |
 | Build frontend | Vite | — |
