@@ -21,7 +21,10 @@ class ReportService
 {
     private ?string $baseCurrency = null;
 
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly InvestmentPriceResolver $priceResolver,
+    ) {}
 
     /**
      * Income, expense, net nel range + saldo per conto.
@@ -488,7 +491,10 @@ class ReportService
         $currencies = $accounts->pluck('currency', 'id');
         $values = [];
 
-        foreach (InvestmentHolding::query()->whereIn('account_id', $investmentIds)->get() as $h) {
+        $holdings = InvestmentHolding::query()->whereIn('account_id', $investmentIds)->get();
+        $this->priceResolver->hydrate($holdings, $upTo);
+
+        foreach ($holdings as $h) {
             $accountCurrency = $currencies[$h->account_id] ?? $h->currency;
             $values[$h->account_id] = ($values[$h->account_id] ?? 0.0)
                 + $this->converter->convert($h->marketValue(), $h->currency, $accountCurrency, $upTo);

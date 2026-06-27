@@ -26,6 +26,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Provider quotazioni strumenti (auto-fetch prezzi)
+    |--------------------------------------------------------------------------
+    | Mappa asset_type → provider. Yahoo Finance (endpoint chart pubblico, no
+    | API key) copre stock/etf/fund incluse le borse EU (symbol Yahoo, es.
+    | CSSPX.MI, SXR8.DE) e restituisce la valuta; CoinGecko le crypto (symbol =
+    | id CoinGecko, es. "bitcoin"). Sono API non ufficiali/free, per uso
+    | personale/non commerciale: rivedere in scenario multi-tenant (ADR 0001).
+    */
+    'prices' => [
+        'providers' => [
+            'stock' => 'yahoo',
+            'etf' => 'yahoo',
+            'fund' => 'yahoo',
+            'crypto' => 'coingecko',
+        ],
+        'yahoo' => [
+            'url' => env('FINANCE_YAHOO_URL', 'https://query1.finance.yahoo.com'),
+            'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
+        ],
+        'coingecko' => [
+            'url' => env('FINANCE_COINGECKO_URL', 'https://api.coingecko.com/api/v3'),
+            'api_key' => env('FINANCE_COINGECKO_API_KEY'), // opzionale (demo/pro)
+            'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
+            'vs_currency' => env('FINANCE_COINGECKO_VS', 'EUR'),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Valute supportate
     |--------------------------------------------------------------------------
     | Sottoinsieme ISO 4217 coperto dai tassi BCE/Frankfurter. Usata per

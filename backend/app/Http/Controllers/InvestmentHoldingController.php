@@ -6,6 +6,7 @@ use App\Http\Requests\InvestmentHolding\StoreInvestmentHoldingRequest;
 use App\Http\Requests\InvestmentHolding\UpdateInvestmentHoldingRequest;
 use App\Http\Resources\InvestmentHoldingResource;
 use App\Models\InvestmentHolding;
+use App\Services\InvestmentPriceResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -13,7 +14,7 @@ use Illuminate\Http\Response;
 
 class InvestmentHoldingController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, InvestmentPriceResolver $priceResolver): AnonymousResourceCollection
     {
         $this->authorize('viewAny', InvestmentHolding::class);
 
@@ -27,9 +28,10 @@ class InvestmentHoldingController extends Controller
             $query->where('asset_type', $request->string('asset_type'));
         }
 
-        return InvestmentHoldingResource::collection(
-            $query->paginate($request->integer('per_page', 100))
-        );
+        $holdings = $query->paginate($request->integer('per_page', 100));
+        $priceResolver->hydrate(collect($holdings->items()));
+
+        return InvestmentHoldingResource::collection($holdings);
     }
 
     public function store(StoreInvestmentHoldingRequest $request): JsonResponse
@@ -43,9 +45,11 @@ class InvestmentHoldingController extends Controller
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
-    public function show(InvestmentHolding $investmentHolding): InvestmentHoldingResource
+    public function show(InvestmentHolding $investmentHolding, InvestmentPriceResolver $priceResolver): InvestmentHoldingResource
     {
         $this->authorize('view', $investmentHolding);
+
+        $priceResolver->hydrate(collect([$investmentHolding]));
 
         return new InvestmentHoldingResource($investmentHolding);
     }

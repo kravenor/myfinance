@@ -71,7 +71,7 @@ Raccomando **B**. È la scelta corretta *e* coerente con `exchange_rates`; il pi
 ### 3.3 Provider pluggable
 - `App\Services\Pricing\PriceProvider` (interfaccia): `supports(string $assetType): bool`, `fetch(array $symbols): array` (→ `[symbol => ['price','currency','as_of']]`).
 - `PriceProviderFactory` per `asset_type` (come [ImportReaderFactory](../../backend/app/Services/Import/ImportReaderFactory.php)).
-- Fonti scelte (D2, vedi §3.8): **`EodhdProvider`** per `stock/etf/fund`, **`CoinGeckoProvider`** per `crypto`. `bond/commodity`: opzionali, ripiegano sul manuale.
+- Fonti scelte (D2, vedi §3.8 + errata): **`YahooFinanceProvider`** per `stock/etf/fund`, **`CoinGeckoProvider`** per `crypto`. `bond/commodity`: opzionali, ripiegano sul manuale. *(In implementazione il routing è un `match` nel fetcher, non una factory dedicata.)*
 
 ### 3.4 Fetcher + comando + schedule
 - `InvestmentPriceFetcher`: `InvestmentHolding::withoutGlobalScopes()->whereNotNull('symbol')->distinct()->pluck('symbol', ... )` raggruppati per `asset_type` → chiama il provider giusto → upsert in `instrument_prices`. Errore su un symbol/provider **non** blocca gli altri (a differenza dell'attuale `RuntimeException` che ferma tutto — vedi §4 reg. 4).
@@ -96,11 +96,13 @@ Nuova sezione `prices`: `providers` per asset_type, `api_key` (da `.env`, fuori 
 - Mostrare fonte/data quota (badge "auto · aggiornato il {as_of}") leggendo i calcolati dal resource.
 - Il campo `last_price` resta come **override manuale** opzionale (la precedenza fallback è definita in §3.5).
 
-### 3.8 Scelta provider (D2 — CHIUSA)
+### 3.8 Scelta provider (D2)
+
+> **⚠️ ERRATA (2026-06-27) — D2 ribaltata in fase di implementazione.** La comparazione sotto concludeva per **EODHD**, ma al primo test reale con una API key valida il free tier EODHD si è rivelato **US-only**: `CSSPX.XETRA`/`.MI`/`.LSE` rispondono **404** sia su real-time sia su EOD; solo `CSSPX.US` (strumento USA omonimo, in USD) restituisce un prezzo. L'assunzione "EODHD free copre gli UCITS EU via `.XETRA`" era **errata**. Provider effettivo adottato: **Yahoo Finance** (endpoint chart pubblico, no API key) — verificato live: `CSSPX.MI`=696,41 EUR, `SXR8.DE`=696,42 EUR, con **valuta inclusa nella risposta** (elimina la necessità di mappare la valuta dal suffisso). Crypto invariato (CoinGecko). Il resto del §3.8 è mantenuto come traccia storica della ricerca.
 
 Ricerca comparata verificata contro i doc ufficiali (giugno 2026). Caso d'uso: portafoglio personale con **ETF UCITS europei** (es. VWCE), pochi simboli, solo **EOD una volta al giorno**, prezzi **salvati in DB**, preferenza free tier.
 
-**Vincolo dirimente — copertura ETF UCITS europei nel free tier**: quasi tutti i provider gratuiti sono **US-only**. Un solo free tier copre davvero gli UCITS europei: **EODHD** (verificato live: `VWCE.XETRA` quotato).
+**Vincolo dirimente — copertura ETF UCITS europei nel free tier**: quasi tutti i provider gratuiti sono **US-only**. La ricerca documentale indicava EODHD come unico free tier a coprire gli UCITS EU via `.XETRA` — **smentito al test live** (vedi errata sopra): la via gratuita realmente funzionante è **Yahoo Finance** (`.MI`/`.DE`).
 
 | Provider | Free tier | ETF UCITS EU (free) | Storage in DB | Verdetto |
 |----------|-----------|---------------------|---------------|----------|
@@ -114,11 +116,12 @@ Ricerca comparata verificata contro i doc ufficiali (giugno 2026). Caso d'uso: p
 | **CoinGecko** (crypto) | 10k/mese, 100/min | — solo crypto | ⚠️ refresh cache ≤24h + attribuzione "Powered by CoinGecko" | **scelto (crypto)** |
 | CoinPaprika (crypto) | 20k/mese, keyless | — solo crypto | ✅ termini storage più permissivi | alternativa crypto |
 
-**Decisione:**
-- **stock/etf/fund → EODHD (free)**, endpoint `GET https://eodhd.com/api/eod/{SYM}.{EXCH}?api_token=…&fmt=json`. Ticker **`.XETRA`/`.F`**, **non `.MI`**. Limiti free: ~20 simboli/giorno, storico 1 anno → se i simboli superano ~20 o serve storico completo, upgrade naturale **EOD All World ~$19,99/mese** (100k call/giorno).
-- **crypto → CoinGecko Demo** (key gratuita), `GET /api/v3/simple/price?ids=…&vs_currencies=eur` schedulato a fine giornata. Alternativa **CoinPaprika** se la licenza di storage diventa un vincolo forte.
+**Decisione effettiva (post-errata):**
+- **stock/etf/fund → Yahoo Finance (free, keyless)**, endpoint `GET https://query1.finance.yahoo.com/v8/finance/chart/{SYMBOL}` (header `User-Agent`). Symbol Yahoo: `.MI` Borsa Italiana, `.DE` XETRA, `.L` Londra, `.PA` Parigi, `.AS` Amsterdam, nudo per US. La risposta include `meta.regularMarketPrice` e `meta.currency`. Caveat: API non ufficiale → può cambiare senza preavviso; `GBp` (pence Londra) non gestita.
+- **crypto → CoinGecko** (free, key opzionale), `GET /api/v3/simple/price?ids=…&vs_currencies=eur` schedulato a fine giornata. Alternativa **CoinPaprika** se la licenza di storage diventa un vincolo forte.
+- *(Decisione originale, scartata: EODHD per stock/etf/fund — vedi errata, free tier US-only.)*
 
-**Caveat di licenza (impatta il multitenant)**: tutti questi free tier sono **uso personale, non-commerciale, niente ridistribuzione**, e diversi (EODHD, FMP, Finnhub) impongono la **cancellazione dei dati alla cessazione**. Se l'app diventa **multitenant** ([analisi dedicata](MULTITENANT_ANALYSIS.md)), il free tier EODHD **decade** (uso commerciale/multi-utente) → servirebbe licenza a pagamento. Vedi §4 reg. 11.
+**Caveat di licenza (impatta il multitenant)**: i free tier scelti sono **uso personale, non-commerciale, niente ridistribuzione**; Yahoo è un endpoint **non ufficiale** (ToS riservati all'uso personale) e CoinGecko impone refresh cache ≤24h + attribuzione. Se l'app diventa **multitenant** ([analisi dedicata](MULTITENANT_ANALYSIS.md)) scatta l'uso commerciale → servirebbe un provider con licenza a pagamento. Vedi §4 reg. 11.
 
 ---
 
@@ -159,7 +162,7 @@ Analisi rispetto al branch di base **`master`**.
 
 ### Decisioni aperte (da confermare prima di P1)
 - **D1** — Modello prezzo: tabella globale `instrument_prices` (raccomandato) **o** scrittura diretta su `holding.last_price`?
-- ~~**D2** — Provider stock/ETF: quale fonte? Crypto: provider keyless separato?~~ **CHIUSA (§3.8): EODHD per stock/etf/fund, CoinGecko per crypto.** Ticker UCITS su `.XETRA`. Vincolo: free tier solo per uso personale → incompatibile col multitenant.
+- ~~**D2** — Provider stock/ETF: quale fonte? Crypto: provider keyless separato?~~ **CHIUSA e poi CORRETTA (§3.8 + errata): Yahoo Finance per stock/etf/fund** (EODHD free era US-only, scartato al test live), **CoinGecko per crypto.** Symbol Yahoo (`.MI`/`.DE`). Vincolo: API non ufficiali/free per uso personale → incompatibile col multitenant.
 - **D3** — Frequenza refresh: giornaliera (come i cambi) basta, o serve intraday?
 - **D4** — Asset coperti subito: solo `stock/etf/crypto`, o anche `fund/bond/commodity` (spesso senza fonte gratuita affidabile)?
 - **D5** — Precedenza: la quota auto **prevale** sul prezzo manuale, o il manuale è un override che vince sempre?
