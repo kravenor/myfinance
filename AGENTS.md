@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-06-23**
-Fase corrente: **Estensione — Previsione spese e simulazione (COMPLETATA)**
+Ultimo aggiornamento: **2026-06-27**
+Fase corrente: **Estensione — Auto-fetch quotazioni investimenti (COMPLETATA)**
 
 ---
 
@@ -69,7 +69,7 @@ Finance/
 │   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, NotificationScanner
 │   ├── app/Notifications/       # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
-│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), ScanNotifications (`notifications:scan`)
+│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── database/migrations/
 │   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransaction/SavingsGoalFactory
@@ -602,10 +602,11 @@ Conversione **reale** verso la **valuta base dell'utente** (`users.currency`). O
 
 ## 17. Gestione investimenti (estensione)
 
-Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo corrente **inserito manualmente** (architettura pronta a un futuro auto-fetch via `symbol`). Il **valore di mercato sostituisce il saldo** dei conti investment nel patrimonio netto.
+Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo corrente da **auto-fetch** (quotazione automatica via `symbol`) con fallback su prezzo manuale o costo medio. Il **valore di mercato sostituisce il saldo** dei conti investment nel patrimonio netto.
 
 ### Modello dati
-- **`investment_holdings`** ([model](backend/app/Models/InvestmentHolding.php), `BelongsToUser`): posizione su un asset (`name`, `symbol`, `asset_type`, `currency`, `quantity`, `avg_cost`, `last_price`). Helper `marketValue()` = `quantity × (last_price ?? avg_cost)`, `costBasis()` = `quantity × avg_cost`, in valuta dell'holding.
+- **`investment_holdings`** ([model](backend/app/Models/InvestmentHolding.php), `BelongsToUser`): posizione su un asset (`name`, `symbol`, `asset_type`, `currency`, `quantity`, `avg_cost`, `last_price`). `effectivePrice()` segue la precedenza **auto → manuale → costo** (`resolvedPrice ?? last_price ?? avg_cost`); `priceSource()` la espone come `'auto'|'manual'|'cost'`. `marketValue()` = `quantity × effectivePrice()`, `costBasis()` = `quantity × avg_cost`, in valuta dell'holding.
+- **`instrument_prices`** ([model](backend/app/Models/InstrumentPrice.php), globale, sul modello di `exchange_rates`): `(symbol, currency, price, as_of)` unique `(symbol, as_of)`. Una riga per `(symbol, giorno)`, accumula storico. `price` nella valuta nativa di quotazione (non necessariamente quella dell'holding).
 
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
@@ -615,14 +616,21 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 | GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard |
 | GET | `/api/investments/overview` | Riepilogo portafoglio convertito in valuta base: `total_market_value`, `total_cost_basis`, `total_unrealized_pl(_pct)`, `by_asset_type[]` (allocation %), `accounts[]` |
 
-[InvestmentHoldingResource](backend/app/Http/Resources/InvestmentHoldingResource.php) espone i calcolati `cost_basis`, `market_value`, `unrealized_pl`, `unrealized_pl_pct` (nella valuta dell'holding). La validazione del tipo conto (`investment`) è in [Store/UpdateInvestmentHoldingRequest](backend/app/Http/Requests/InvestmentHolding/StoreInvestmentHoldingRequest.php) via `Rule::exists` con `where('type','investment')`.
+[InvestmentHoldingResource](backend/app/Http/Resources/InvestmentHoldingResource.php) espone i calcolati `cost_basis`, `market_value`, `unrealized_pl`, `unrealized_pl_pct` (nella valuta dell'holding) più `effective_price`, `price_source` (`auto|manual|cost`) e `price_as_of` (data della quota auto, `null` altrimenti). La validazione del tipo conto (`investment`) è in [Store/UpdateInvestmentHoldingRequest](backend/app/Http/Requests/InvestmentHolding/StoreInvestmentHoldingRequest.php) via `Rule::exists` con `where('type','investment')`.
+
+### Auto-fetch quotazioni
+- [InvestmentPriceResolver](backend/app/Services/InvestmentPriceResolver.php)`::hydrate($holdings, $asOf)`: per ogni holding con `symbol` carica da `instrument_prices` la quota più recente con `as_of <= $asOf`, la **converte** nella valuta dell'holding (via `CurrencyConverter`) e la imposta come `resolvedPrice`. Tenant-agnostico (le quote sono un fatto globale per symbol). Iniettato in [InvestmentService](backend/app/Services/InvestmentService.php), [ReportService](backend/app/Services/ReportService.php) e [InvestmentHoldingController](backend/app/Http/Controllers/InvestmentHoldingController.php) (index/show).
+- [InvestmentPriceFetcher](backend/app/Services/InvestmentPriceFetcher.php): raccoglie i `symbol` distinti di **tutti** gli holding (`withoutGlobalScopes`), li raggruppa per `asset_type` → instrada al provider (config `finance.prices.providers`) → upsert in `instrument_prices`. Errore su un provider isolato (non blocca gli altri).
+- Provider dietro l'interfaccia [PriceProvider](backend/app/Services/Prices/PriceProvider.php): [EodhdProvider](backend/app/Services/Prices/EodhdProvider.php) (stock/etf/fund, valuta dedotta dal suffisso exchange, es. `.XETRA`→EUR) e [CoinGeckoProvider](backend/app/Services/Prices/CoinGeckoProvider.php) (crypto). **Convenzione**: per le crypto il `symbol` dell'holding è l'**id CoinGecko** (es. `bitcoin`), non il ticker.
+- Config [config/finance.php](backend/config/finance.php) sezione `prices`: mappa `asset_type`→provider, URL/`api_key`/timeout per provider, `currency_by_suffix`+`default_currency` (EODHD), `vs_currency` (CoinGecko). **Senza `FINANCE_EODHD_API_KEY` il gruppo EODHD è saltato** → la feature resta inerte e si ricade sui prezzi manuali. Le free tier sono per uso personale/non commerciale (cfr. [ADR 0001](docs/adr/0001-ordine-autofetch-vs-multitenant.md) per il conflitto licenza↔multi-tenant).
+- Comando `php artisan prices:fetch [--symbol=]`, schedulato giornalmente alle **06:30** in [routes/console.php](backend/routes/console.php). Backfill storico non implementato (il real-time dà solo l'ultimo prezzo).
 
 ### Net worth & patrimonio
 [ReportService::rawAccountBalances()](backend/app/Services/ReportService.php): per i conti `investment` il saldo (nella valuta del conto) è il **valore di mercato delle holding** (`investmentMarketValues()`, ogni holding convertita dalla sua valuta a quella del conto), **ignorando** il saldo transazionale. La conversione a valuta base segue il flusso esistente. Ricade quindi su `summary`, `cumulativeBalance`, `netWorth` e sul forecast.
-> Limitazioni note: non c'è storico prezzi → nel net worth storico i conti investment usano il prezzo corrente (valore costante nel tempo); eventuale cash non investito sul conto investment non concorre al patrimonio (il valore = solo holding). [InvestmentService::overview()](backend/app/Services/InvestmentService.php) calcola i totali al tasso/prezzo correnti.
+> `investmentMarketValues($upTo)` idrata le holding con la quota `as_of <= $upTo`, quindi il net worth storico usa la quotazione del periodo per i symbol con storico in `instrument_prices` (fallback su `last_price` dove manca). Limitazioni residue: i symbol senza quote storiche usano il prezzo corrente (valore costante nel tempo); eventuale cash non investito sul conto investment non concorre al patrimonio (il valore = solo holding). [InvestmentService::overview()](backend/app/Services/InvestmentService.php) calcola i totali al tasso/prezzo correnti.
 
 ### Frontend
-[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
+[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). La colonna "Prezzo" mostra `effective_price` con un badge **auto · {data}** quando `price_source === 'auto'`. Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
 
 ## 18. Notifiche (estensione)
 

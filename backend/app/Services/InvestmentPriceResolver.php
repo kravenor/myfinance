@@ -53,12 +53,15 @@ class InvestmentPriceResolver
                 continue;
             }
 
-            $holding->usingResolvedPrice($this->converter->convert(
-                (float) $quote->price,
-                $quote->currency,
-                $holding->currency,
-                $quote->as_of,
-            ));
+            $holding->usingResolvedPrice(
+                $this->converter->convert(
+                    (float) $quote->price,
+                    $quote->currency,
+                    $holding->currency,
+                    $quote->as_of,
+                ),
+                $quote->as_of->toDateString(),
+            );
         }
     }
 

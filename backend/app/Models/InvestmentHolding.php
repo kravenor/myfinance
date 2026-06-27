@@ -52,6 +52,9 @@ class InvestmentHolding extends Model
      */
     private ?float $resolvedPrice = null;
 
+    /** Data (Y-m-d) della quotazione automatica risolta; null se non risolta. */
+    private ?string $resolvedAsOf = null;
+
     protected function casts(): array
     {
         return [
@@ -62,9 +65,10 @@ class InvestmentHolding extends Model
         ];
     }
 
-    public function usingResolvedPrice(?float $price): static
+    public function usingResolvedPrice(?float $price, ?string $asOf = null): static
     {
         $this->resolvedPrice = $price;
+        $this->resolvedAsOf = $asOf;
 
         return $this;
     }
@@ -72,6 +76,24 @@ class InvestmentHolding extends Model
     public function resolvedPrice(): ?float
     {
         return $this->resolvedPrice;
+    }
+
+    public function resolvedAsOf(): ?string
+    {
+        return $this->resolvedAsOf;
+    }
+
+    /**
+     * Origine del prezzo effettivo: 'auto' (quotazione risolta) → 'manual'
+     * (`last_price`) → 'cost' (costo medio). Stessa precedenza di effectivePrice().
+     */
+    public function priceSource(): string
+    {
+        if ($this->resolvedPrice !== null) {
+            return 'auto';
+        }
+
+        return $this->last_price !== null ? 'manual' : 'cost';
     }
 
     /**

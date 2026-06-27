@@ -38,7 +38,10 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.market_value', '500.00')
             ->assertJsonPath('data.cost_basis', '400.00')
             ->assertJsonPath('data.unrealized_pl', '100.00')
-            ->assertJsonPath('data.unrealized_pl_pct', '25.00');
+            ->assertJsonPath('data.unrealized_pl_pct', '25.00')
+            ->assertJsonPath('data.effective_price', '50.00')
+            ->assertJsonPath('data.price_source', 'manual')
+            ->assertJsonPath('data.price_as_of', null);
     }
 
     public function test_rejects_holding_on_non_investment_account(): void
@@ -131,6 +134,28 @@ class InvestmentHoldingTest extends TestCase
             ->getJson('/api/investments/overview')
             ->assertOk()
             ->assertJsonPath('data.total_market_value', '600.00'); // 10×60 (quota), non 10×50 (manuale)
+    }
+
+    public function test_index_exposes_auto_price_source_and_as_of(): void
+    {
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+
+        InvestmentHolding::factory()->for($user)->for($account, 'account')->create([
+            'symbol' => 'VWCE.XETRA', 'asset_type' => 'etf', 'currency' => 'EUR',
+            'quantity' => 10, 'avg_cost' => 40, 'last_price' => 50,
+        ]);
+        InstrumentPrice::query()->create([
+            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 60, 'as_of' => '2026-06-20',
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/investment-holdings')
+            ->assertOk()
+            ->assertJsonPath('data.0.price_source', 'auto')
+            ->assertJsonPath('data.0.effective_price', '60.00')
+            ->assertJsonPath('data.0.price_as_of', '2026-06-20')
+            ->assertJsonPath('data.0.market_value', '600.00');
     }
 
     public function test_holdings_scoped_to_user(): void

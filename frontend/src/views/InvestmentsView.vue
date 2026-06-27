@@ -42,6 +42,10 @@ function plClass(value: string | null | undefined): string {
   return n > 0 ? 'text-green-600' : 'text-red-600'
 }
 
+function formatDay(d: string): string {
+  return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
 function reset() {
   editing.value = null
   form.value = {
@@ -251,7 +255,16 @@ onMounted(async () => {
             <td data-label="Conto">{{ accountName(h.account_id) }}</td>
             <td data-label="Quantità" class="md:text-right">{{ h.quantity }}</td>
             <td data-label="Carico" class="md:text-right">{{ formatCurrency(h.avg_cost, h.currency) }}</td>
-            <td data-label="Prezzo" class="md:text-right">{{ formatCurrency(h.last_price ?? h.avg_cost, h.currency) }}</td>
+            <td data-label="Prezzo" class="md:text-right">
+              {{ formatCurrency(h.effective_price, h.currency) }}
+              <span
+                v-if="h.price_source === 'auto'"
+                class="block text-xs text-green-600"
+                :title="h.price_as_of ? `Quotazione automatica aggiornata il ${formatDay(h.price_as_of)}` : 'Quotazione automatica'"
+              >
+                auto<template v-if="h.price_as_of"> · {{ formatDay(h.price_as_of) }}</template>
+              </span>
+            </td>
             <td data-label="Valore" class="md:text-right font-medium">{{ formatCurrency(h.market_value, h.currency) }}</td>
             <td data-label="P/L" class="md:text-right" :class="plClass(h.unrealized_pl)">
               {{ formatCurrency(h.unrealized_pl, h.currency) }}

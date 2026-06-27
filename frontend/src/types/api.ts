@@ -184,6 +184,9 @@ export interface InvestmentHolding {
   last_price: string | null
   last_price_at: string | null
   notes: string | null
+  effective_price: string
+  price_source: 'auto' | 'manual' | 'cost'
+  price_as_of: string | null
   cost_basis: string
   market_value: string
   unrealized_pl: string
