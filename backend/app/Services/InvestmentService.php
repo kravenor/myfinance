@@ -8,7 +8,10 @@ use Illuminate\Support\Facades\Auth;
 
 class InvestmentService
 {
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly InvestmentPriceResolver $priceResolver,
+    ) {}
 
     /**
      * Riepilogo del portafoglio convertito nella valuta base dell'utente
@@ -23,6 +26,7 @@ class InvestmentService
         $now = Carbon::now();
 
         $holdings = InvestmentHolding::query()->with('account')->get();
+        $this->priceResolver->hydrate($holdings, $now);
 
         $totalMarketValue = 0.0;
         $totalCostBasis = 0.0;

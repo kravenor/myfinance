@@ -10,8 +10,9 @@ use Illuminate\Support\Carbon;
 
 /**
  * Posizione (holding) su un asset detenuto in un conto di tipo investment.
- * Prezzo corrente inserito manualmente (`last_price`); architettura pronta a
- * un eventuale auto-fetch per `symbol`.
+ * Il prezzo effettivo segue la precedenza: quotazione automatica risolta
+ * (da `instrument_prices`, via InvestmentPriceResolver) → `last_price` manuale
+ * → costo medio.
  *
  * @property int $id
  * @property int $user_id
@@ -45,6 +46,12 @@ class InvestmentHolding extends Model
         'notes',
     ];
 
+    /**
+     * Prezzo da quotazione automatica (valuta dell'holding), impostato in modo
+     * transitorio da InvestmentPriceResolver::hydrate(); null se non risolto.
+     */
+    private ?float $resolvedPrice = null;
+
     protected function casts(): array
     {
         return [
@@ -55,13 +62,25 @@ class InvestmentHolding extends Model
         ];
     }
 
+    public function usingResolvedPrice(?float $price): static
+    {
+        $this->resolvedPrice = $price;
+
+        return $this;
+    }
+
+    public function resolvedPrice(): ?float
+    {
+        return $this->resolvedPrice;
+    }
+
     /**
-     * Prezzo da usare per il valore di mercato: `last_price` se presente,
-     * altrimenti il costo medio (parità in assenza di quotazione).
+     * Prezzo per il valore di mercato, in ordine di precedenza: quotazione
+     * automatica risolta → `last_price` manuale → costo medio (parità).
      */
     public function effectivePrice(): float
     {
-        return (float) ($this->last_price ?? $this->avg_cost);
+        return (float) ($this->resolvedPrice ?? $this->last_price ?? $this->avg_cost);
     }
 
     public function marketValue(): float

@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\Account;
 use App\Models\ExchangeRate;
+use App\Models\InstrumentPrice;
 use App\Models\InvestmentHolding;
 use App\Models\Transaction;
 use App\Models\User;
@@ -110,6 +111,26 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.total_unrealized_pl', '100.00')
             ->assertJsonPath('data.by_asset_type.0.asset_type', 'etf')
             ->assertJsonPath('data.by_asset_type.0.pct', '100.00');
+    }
+
+    public function test_overview_uses_auto_quote_over_manual_price(): void
+    {
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+
+        InvestmentHolding::factory()->for($user)->for($account, 'account')->create([
+            'symbol' => 'VWCE.XETRA', 'asset_type' => 'etf', 'currency' => 'EUR',
+            'quantity' => 10, 'avg_cost' => 40, 'last_price' => 50,
+        ]);
+        // Quota automatica più recente del prezzo manuale.
+        InstrumentPrice::query()->create([
+            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 60, 'as_of' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($user)
+            ->getJson('/api/investments/overview')
+            ->assertOk()
+            ->assertJsonPath('data.total_market_value', '600.00'); // 10×60 (quota), non 10×50 (manuale)
     }
 
     public function test_holdings_scoped_to_user(): void
