@@ -22,59 +22,62 @@ class FetchInstrumentPricesTest extends TestCase
         ]);
     }
 
-    public function test_fetches_eodhd_and_coingecko_with_suffix_currency(): void
+    /** @return array<string, mixed> */
+    private function yahooChart(float $price, string $currency): array
     {
-        config(['finance.prices.eodhd.api_key' => 'test-key']);
+        return ['chart' => ['result' => [['meta' => [
+            'regularMarketPrice' => $price, 'currency' => $currency,
+        ]]]]];
+    }
+
+    public function test_fetches_yahoo_and_coingecko_using_currency_from_response(): void
+    {
         Http::fake([
-            'eodhd.com/api/real-time/VWCE.XETRA*' => Http::response(['code' => 'VWCE.XETRA', 'close' => 107.5]),
-            'eodhd.com/api/real-time/AAPL.US*' => Http::response(['code' => 'AAPL.US', 'close' => 200.0]),
+            '*/v8/finance/chart/CSSPX.MI*' => Http::response($this->yahooChart(696.41, 'EUR')),
+            '*/v8/finance/chart/AAPL*' => Http::response($this->yahooChart(200.0, 'USD')),
             'api.coingecko.com/*' => Http::response(['bitcoin' => ['eur' => 50000]]),
         ]);
 
         $user = User::factory()->create();
-        $this->holding($user, 'VWCE.XETRA', 'etf');
-        $this->holding($user, 'AAPL.US', 'stock');
+        $this->holding($user, 'CSSPX.MI', 'etf');
+        $this->holding($user, 'AAPL', 'stock');
         $this->holding($user, 'bitcoin', 'crypto');
 
         $this->artisan('prices:fetch')->assertSuccessful();
 
-        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 107.5]);
-        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'AAPL.US', 'currency' => 'USD', 'price' => 200.0]);
+        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'CSSPX.MI', 'currency' => 'EUR', 'price' => 696.41]);
+        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'AAPL', 'currency' => 'USD', 'price' => 200.0]);
         $this->assertDatabaseHas('instrument_prices', ['symbol' => 'bitcoin', 'currency' => 'EUR', 'price' => 50000]);
         $this->assertSame(3, InstrumentPrice::query()->count());
     }
 
-    public function test_skips_eodhd_group_when_api_key_missing(): void
+    public function test_skips_symbol_when_quote_has_no_price(): void
     {
-        config(['finance.prices.eodhd.api_key' => null]);
-        Http::fake(['api.coingecko.com/*' => Http::response(['bitcoin' => ['eur' => 50000]])]);
+        Http::fake([
+            '*/v8/finance/chart/*' => Http::response(['chart' => ['result' => [['meta' => ['currency' => 'EUR']]]]]),
+        ]);
 
-        $user = User::factory()->create();
-        $this->holding($user, 'VWCE.XETRA', 'etf');
-        $this->holding($user, 'bitcoin', 'crypto');
+        $this->holding(User::factory()->create(), 'CSSPX.MI', 'etf');
 
         $this->artisan('prices:fetch')->assertSuccessful();
 
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'eodhd.com'));
-        $this->assertDatabaseMissing('instrument_prices', ['symbol' => 'VWCE.XETRA']);
-        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'bitcoin']);
+        $this->assertDatabaseMissing('instrument_prices', ['symbol' => 'CSSPX.MI']);
     }
 
     public function test_one_provider_failure_does_not_block_the_other(): void
     {
-        config(['finance.prices.eodhd.api_key' => 'test-key']);
         Http::fake([
-            'eodhd.com/*' => Http::response([], 500),
+            '*/v8/finance/chart/*' => Http::response([], 500),
             'api.coingecko.com/*' => Http::response(['bitcoin' => ['eur' => 50000]]),
         ]);
 
         $user = User::factory()->create();
-        $this->holding($user, 'VWCE.XETRA', 'etf');
+        $this->holding($user, 'CSSPX.MI', 'etf');
         $this->holding($user, 'bitcoin', 'crypto');
 
         $this->artisan('prices:fetch')->assertSuccessful();
 
-        $this->assertDatabaseMissing('instrument_prices', ['symbol' => 'VWCE.XETRA']);
+        $this->assertDatabaseMissing('instrument_prices', ['symbol' => 'CSSPX.MI']);
         $this->assertDatabaseHas('instrument_prices', ['symbol' => 'bitcoin']);
     }
 

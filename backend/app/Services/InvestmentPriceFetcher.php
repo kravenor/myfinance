@@ -5,8 +5,8 @@ namespace App\Services;
 use App\Models\InstrumentPrice;
 use App\Models\InvestmentHolding;
 use App\Services\Prices\CoinGeckoProvider;
-use App\Services\Prices\EodhdProvider;
 use App\Services\Prices\PriceProvider;
+use App\Services\Prices\YahooFinanceProvider;
 use Illuminate\Support\Carbon;
 use RuntimeException;
 use Throwable;
@@ -76,7 +76,7 @@ class InvestmentPriceFetcher
     private function provider(string $key): PriceProvider
     {
         return match ($key) {
-            'eodhd' => app(EodhdProvider::class),
+            'yahoo' => app(YahooFinanceProvider::class),
             'coingecko' => app(CoinGeckoProvider::class),
             default => throw new RuntimeException("Provider quotazioni sconosciuto: {$key}"),
         };

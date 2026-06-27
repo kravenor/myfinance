@@ -28,30 +28,22 @@ return [
     |--------------------------------------------------------------------------
     | Provider quotazioni strumenti (auto-fetch prezzi)
     |--------------------------------------------------------------------------
-    | Mappa asset_type → provider e relative credenziali. Senza api_key il
-    | gruppo viene saltato (l'app resta sui prezzi manuali). EODHD copre
-    | stock/etf/fund (UCITS via suffisso .XETRA), CoinGecko le crypto
-    | (symbol = id CoinGecko, es. "bitcoin"). Le free tier sono per uso
-    | personale/non commerciale: rivedere in scenario multi-tenant.
+    | Mappa asset_type → provider. Yahoo Finance (endpoint chart pubblico, no
+    | API key) copre stock/etf/fund incluse le borse EU (symbol Yahoo, es.
+    | CSSPX.MI, SXR8.DE) e restituisce la valuta; CoinGecko le crypto (symbol =
+    | id CoinGecko, es. "bitcoin"). Sono API non ufficiali/free, per uso
+    | personale/non commerciale: rivedere in scenario multi-tenant (ADR 0001).
     */
     'prices' => [
         'providers' => [
-            'stock' => 'eodhd',
-            'etf' => 'eodhd',
-            'fund' => 'eodhd',
+            'stock' => 'yahoo',
+            'etf' => 'yahoo',
+            'fund' => 'yahoo',
             'crypto' => 'coingecko',
         ],
-        'eodhd' => [
-            'url' => env('FINANCE_EODHD_URL', 'https://eodhd.com/api'),
-            'api_key' => env('FINANCE_EODHD_API_KEY'),
+        'yahoo' => [
+            'url' => env('FINANCE_YAHOO_URL', 'https://query1.finance.yahoo.com'),
             'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
-            // Valuta di quotazione per suffisso exchange; fallback su default.
-            'currency_by_suffix' => [
-                'XETRA' => 'EUR', 'MI' => 'EUR', 'PA' => 'EUR', 'AS' => 'EUR',
-                'F' => 'EUR', 'BR' => 'EUR', 'MC' => 'EUR', 'LS' => 'EUR',
-                'US' => 'USD', 'LSE' => 'GBP', 'SW' => 'CHF',
-            ],
-            'default_currency' => 'EUR',
         ],
         'coingecko' => [
             'url' => env('FINANCE_COINGECKO_URL', 'https://api.coingecko.com/api/v3'),
