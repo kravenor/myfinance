@@ -41,6 +41,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     Route::get('investments/overview', [InvestmentController::class, 'overview'])->name('investments.overview');
+    Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->name('investments.lookup');
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
 

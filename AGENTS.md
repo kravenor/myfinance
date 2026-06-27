@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-06-27**
-Fase corrente: **Estensione — Auto-fetch quotazioni investimenti (COMPLETATA)**
+Fase corrente: **Estensione — Auto-fetch quotazioni investimenti + lookup ISIN (COMPLETATA)**
 
 ---
 
@@ -605,18 +605,19 @@ Conversione **reale** verso la **valuta base dell'utente** (`users.currency`). O
 Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo corrente da **auto-fetch** (quotazione automatica via `symbol`) con fallback su prezzo manuale o costo medio. Il **valore di mercato sostituisce il saldo** dei conti investment nel patrimonio netto.
 
 ### Modello dati
-- **`investment_holdings`** ([model](backend/app/Models/InvestmentHolding.php), `BelongsToUser`): posizione su un asset (`name`, `symbol`, `asset_type`, `currency`, `quantity`, `avg_cost`, `last_price`). `effectivePrice()` segue la precedenza **auto → manuale → costo** (`resolvedPrice ?? last_price ?? avg_cost`); `priceSource()` la espone come `'auto'|'manual'|'cost'`. `marketValue()` = `quantity × effectivePrice()`, `costBasis()` = `quantity × avg_cost`, in valuta dell'holding.
+- **`investment_holdings`** ([model](backend/app/Models/InvestmentHolding.php), `BelongsToUser`): posizione su un asset (`name`, `symbol`, `isin`, `asset_type`, `currency`, `quantity`, `avg_cost`, `last_price`). `isin` è l'identificatore stabile (12 char, validato e normalizzato in maiuscolo nelle Form Request); il `symbol` Yahoo per il fetch ne deriva via lookup (un ISIN può avere più quotazioni). `effectivePrice()` segue la precedenza **auto → manuale → costo** (`resolvedPrice ?? last_price ?? avg_cost`); `priceSource()` la espone come `'auto'|'manual'|'cost'`. `marketValue()` = `quantity × effectivePrice()`, `costBasis()` = `quantity × avg_cost`, in valuta dell'holding.
 - **`instrument_prices`** ([model](backend/app/Models/InstrumentPrice.php), globale, sul modello di `exchange_rates`): `(symbol, currency, price, as_of)` unique `(symbol, as_of)`. Una riga per `(symbol, giorno)`, accumula storico. `price` nella valuta nativa di quotazione (non necessariamente quella dell'holding).
 
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
 |--------|------|------|
 | GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name` |
-| POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `currency?`, `last_price?`, `last_price_at?`, `notes?` |
+| POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `isin?`, `currency?`, `last_price?`, `last_price_at?`, `notes?` |
 | GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard |
 | GET | `/api/investments/overview` | Riepilogo portafoglio convertito in valuta base: `total_market_value`, `total_cost_basis`, `total_unrealized_pl(_pct)`, `by_asset_type[]` (allocation %), `accounts[]` |
+| GET | `/api/investments/lookup?q=&currency=` | Risolve ISIN/ticker/nome nei symbol Yahoo quotabili: `[{symbol, name, exchange, type, currency, price}]`, con la `currency` preferita in cima ([YahooSymbolLookup](backend/app/Services/Prices/YahooSymbolLookup.php), via search + chart Yahoo) |
 
-[InvestmentHoldingResource](backend/app/Http/Resources/InvestmentHoldingResource.php) espone i calcolati `cost_basis`, `market_value`, `unrealized_pl`, `unrealized_pl_pct` (nella valuta dell'holding) più `effective_price`, `price_source` (`auto|manual|cost`) e `price_as_of` (data della quota auto, `null` altrimenti). La validazione del tipo conto (`investment`) è in [Store/UpdateInvestmentHoldingRequest](backend/app/Http/Requests/InvestmentHolding/StoreInvestmentHoldingRequest.php) via `Rule::exists` con `where('type','investment')`.
+[InvestmentHoldingResource](backend/app/Http/Resources/InvestmentHoldingResource.php) espone i calcolati `cost_basis`, `market_value`, `unrealized_pl`, `unrealized_pl_pct` (nella valuta dell'holding) più `isin`, `effective_price`, `price_source` (`auto|manual|cost`) e `price_as_of` (data della quota auto, `null` altrimenti). La validazione del tipo conto (`investment`) è in [Store/UpdateInvestmentHoldingRequest](backend/app/Http/Requests/InvestmentHolding/StoreInvestmentHoldingRequest.php) via `Rule::exists` con `where('type','investment')`.
 
 ### Auto-fetch quotazioni
 - [InvestmentPriceResolver](backend/app/Services/InvestmentPriceResolver.php)`::hydrate($holdings, $asOf)`: per ogni holding con `symbol` carica da `instrument_prices` la quota più recente con `as_of <= $asOf`, la **converte** nella valuta dell'holding (via `CurrencyConverter`) e la imposta come `resolvedPrice`. Tenant-agnostico (le quote sono un fatto globale per symbol). Iniettato in [InvestmentService](backend/app/Services/InvestmentService.php), [ReportService](backend/app/Services/ReportService.php) e [InvestmentHoldingController](backend/app/Http/Controllers/InvestmentHoldingController.php) (index/show).
@@ -630,7 +631,7 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 > `investmentMarketValues($upTo)` idrata le holding con la quota `as_of <= $upTo`, quindi il net worth storico usa la quotazione del periodo per i symbol con storico in `instrument_prices` (fallback su `last_price` dove manca). Limitazioni residue: i symbol senza quote storiche usano il prezzo corrente (valore costante nel tempo); eventuale cash non investito sul conto investment non concorre al patrimonio (il valore = solo holding). [InvestmentService::overview()](backend/app/Services/InvestmentService.php) calcola i totali al tasso/prezzo correnti.
 
 ### Frontend
-[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). La colonna "Prezzo" mostra `effective_price` con un badge **auto · {data}** quando `price_source === 'auto'`. Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
+[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). Campo **ISIN** con bottone "Cerca" → `/investments/lookup`: se unico candidato compila in automatico `symbol`/`currency`, altrimenti mostra la lista delle quotazioni da scegliere. La colonna "Prezzo" mostra `effective_price` con un badge **auto · {data}** quando `price_source === 'auto'`. Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
 
 ## 18. Notifiche (estensione)
 

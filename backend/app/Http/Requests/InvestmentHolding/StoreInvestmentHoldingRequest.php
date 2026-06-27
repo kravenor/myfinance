@@ -30,6 +30,7 @@ class StoreInvestmentHoldingRequest extends FormRequest
             ],
             'name' => ['required', 'string', 'max:120'],
             'symbol' => ['nullable', 'string', 'max:40'],
+            'isin' => ['nullable', 'string', 'regex:/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/'],
             'asset_type' => ['required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'other'])],
             'currency' => ['sometimes', 'string', 'size:3'],
             'quantity' => ['required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
@@ -38,5 +39,12 @@ class StoreInvestmentHoldingRequest extends FormRequest
             'last_price_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->filled('isin')) {
+            $this->merge(['isin' => strtoupper(trim((string) $this->input('isin')))]);
+        }
     }
 }

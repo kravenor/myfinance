@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property int $account_id
  * @property string $name
  * @property string|null $symbol
+ * @property string|null $isin
  * @property string $asset_type
  * @property string $currency
  * @property string $quantity
@@ -37,6 +38,7 @@ class InvestmentHolding extends Model
         'account_id',
         'name',
         'symbol',
+        'isin',
         'asset_type',
         'currency',
         'quantity',

@@ -25,6 +25,7 @@ class InvestmentHoldingResource extends JsonResource
             'account_id' => $this->account_id,
             'name' => $this->name,
             'symbol' => $this->symbol,
+            'isin' => $this->isin,
             'asset_type' => $this->asset_type,
             'currency' => $this->currency,
             'quantity' => $this->quantity,

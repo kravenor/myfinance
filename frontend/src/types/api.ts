@@ -177,6 +177,7 @@ export interface InvestmentHolding {
   account_id: number
   name: string
   symbol: string | null
+  isin: string | null
   asset_type: AssetType
   currency: string
   quantity: string
@@ -193,6 +194,15 @@ export interface InvestmentHolding {
   unrealized_pl_pct: string | null
   created_at: string
   updated_at: string
+}
+
+export interface InstrumentCandidate {
+  symbol: string
+  name: string | null
+  exchange: string | null
+  type: string | null
+  currency: string | null
+  price: number | null
 }
 
 export interface InvestmentOverview {

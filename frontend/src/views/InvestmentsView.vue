@@ -5,7 +5,14 @@ import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import { CURRENCIES, formatCurrency } from '@/lib/money'
-import type { Account, AssetType, InvestmentHolding, InvestmentOverview, Paginated } from '@/types/api'
+import type {
+  Account,
+  AssetType,
+  InstrumentCandidate,
+  InvestmentHolding,
+  InvestmentOverview,
+  Paginated,
+} from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<InvestmentHolding>('investment-holdings')
 
@@ -20,6 +27,7 @@ const form = ref({
   account_id: 0,
   name: '',
   symbol: '',
+  isin: '',
   asset_type: 'etf' as AssetType,
   currency: 'EUR',
   quantity: '',
@@ -27,6 +35,10 @@ const form = ref({
   last_price: '',
   notes: '',
 })
+
+const lookupResults = ref<InstrumentCandidate[]>([])
+const lookupLoading = ref(false)
+const lookupError = ref('')
 
 const investmentAccounts = computed(() => accounts.value.filter((a) => a.type === 'investment'))
 
@@ -48,10 +60,13 @@ function formatDay(d: string): string {
 
 function reset() {
   editing.value = null
+  lookupResults.value = []
+  lookupError.value = ''
   form.value = {
     account_id: investmentAccounts.value[0]?.id ?? 0,
     name: '',
     symbol: '',
+    isin: '',
     asset_type: 'etf',
     currency: investmentAccounts.value[0]?.currency ?? 'EUR',
     quantity: '',
@@ -63,10 +78,13 @@ function reset() {
 
 function startEdit(h: InvestmentHolding) {
   editing.value = h
+  lookupResults.value = []
+  lookupError.value = ''
   form.value = {
     account_id: h.account_id,
     name: h.name,
     symbol: h.symbol ?? '',
+    isin: h.isin ?? '',
     asset_type: h.asset_type,
     currency: h.currency,
     quantity: h.quantity,
@@ -77,11 +95,45 @@ function startEdit(h: InvestmentHolding) {
   showForm.value = true
 }
 
+// Risolve ISIN (o ticker/nome) nei symbol Yahoo quotabili. Un solo candidato
+// → applicato in automatico; più candidati → l'utente sceglie la quotazione.
+async function lookupSymbol() {
+  const q = (form.value.isin || form.value.symbol || form.value.name).trim()
+  if (!q) return
+  lookupLoading.value = true
+  lookupError.value = ''
+  lookupResults.value = []
+  try {
+    const res = await api.get<{ data: InstrumentCandidate[] }>('/investments/lookup', {
+      params: { q, currency: form.value.currency },
+    })
+    if (res.data.data.length === 0) {
+      lookupError.value = 'Nessuno strumento trovato.'
+    } else if (res.data.data.length === 1) {
+      applyCandidate(res.data.data[0])
+    } else {
+      lookupResults.value = res.data.data
+    }
+  } catch {
+    lookupError.value = 'Ricerca non riuscita.'
+  } finally {
+    lookupLoading.value = false
+  }
+}
+
+function applyCandidate(c: InstrumentCandidate) {
+  form.value.symbol = c.symbol
+  if (c.currency) form.value.currency = c.currency
+  if (!form.value.name && c.name) form.value.name = c.name
+  lookupResults.value = []
+}
+
 async function onSubmit() {
   const payload: Record<string, unknown> = {
     account_id: form.value.account_id,
     name: form.value.name,
     symbol: form.value.symbol || null,
+    isin: form.value.isin || null,
     asset_type: form.value.asset_type,
     currency: form.value.currency,
     quantity: form.value.quantity,
@@ -186,7 +238,42 @@ onMounted(async () => {
       </div>
       <div>
         <label class="label">Ticker / Symbol</label>
-        <input v-model="form.symbol" class="input" placeholder="es. VWCE" />
+        <input v-model="form.symbol" class="input" placeholder="es. CSSPX.MI (auto da ISIN)" />
+      </div>
+      <div>
+        <label class="label">ISIN</label>
+        <div class="flex gap-2">
+          <input v-model="form.isin" class="input uppercase" maxlength="12" placeholder="es. IE00B5BMR087" />
+          <button
+            type="button"
+            class="btn-secondary whitespace-nowrap"
+            :disabled="lookupLoading"
+            @click="lookupSymbol"
+          >
+            {{ lookupLoading ? '…' : 'Cerca' }}
+          </button>
+        </div>
+      </div>
+      <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
+        <p v-if="lookupError" class="text-sm text-red-600">{{ lookupError }}</p>
+        <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
+          <li
+            v-for="c in lookupResults"
+            :key="c.symbol"
+            class="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+            @click="applyCandidate(c)"
+          >
+            <span>
+              <span class="font-medium">{{ c.symbol }}</span>
+              <span class="text-slate-400"> · {{ c.exchange }}</span>
+              <span class="block text-xs text-slate-500">{{ c.name }}</span>
+            </span>
+            <span class="whitespace-nowrap">
+              <span v-if="c.price !== null">{{ formatCurrency(String(c.price), c.currency ?? form.currency) }}</span>
+              <span v-else class="text-slate-400">n/d</span>
+            </span>
+          </li>
+        </ul>
       </div>
       <div>
         <label class="label">Conto</label>
@@ -249,7 +336,8 @@ onMounted(async () => {
           <tr v-for="h in items" :key="h.id">
             <td data-label="Asset" class="font-medium">
               {{ h.name }}
-              <span v-if="h.symbol" class="text-xs text-slate-400">{{ h.symbol }}</span>
+              <span v-if="h.symbol" class="block text-xs text-slate-400">{{ h.symbol }}</span>
+              <span v-if="h.isin" class="block text-xs text-slate-300">{{ h.isin }}</span>
             </td>
             <td data-label="Tipo" class="capitalize">{{ h.asset_type }}</td>
             <td data-label="Conto">{{ accountName(h.account_id) }}</td>

@@ -29,12 +29,14 @@ class InvestmentHoldingTest extends TestCase
             'account_id' => $account->id,
             'name' => 'Vanguard FTSE All-World',
             'symbol' => 'VWCE',
+            'isin' => 'ie00bk5bqt80',
             'asset_type' => 'etf',
             'currency' => 'EUR',
             'quantity' => 10,
             'avg_cost' => 40,
             'last_price' => 50,
         ])->assertCreated()
+            ->assertJsonPath('data.isin', 'IE00BK5BQT80')
             ->assertJsonPath('data.market_value', '500.00')
             ->assertJsonPath('data.cost_basis', '400.00')
             ->assertJsonPath('data.unrealized_pl', '100.00')
