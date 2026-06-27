@@ -66,11 +66,12 @@ Raccomando **B**. È la scelta corretta *e* coerente con `exchange_rates`; il pi
 ### 3.2 Schema `instrument_prices` (opzione B)
 - `id`, `symbol` (string, indicizzato), `currency` (3, valuta della quota), `price` decimal(24,8), `as_of` date, timestamps. Unique `(symbol, as_of)`. **No `user_id`**, **no global scope** (replica esatta del contratto `exchange_rates`).
 - (Opzionale) `asset_type`/`source` se lo stesso ticker può collidere tra mercati diversi.
+- **Formato `symbol`**: per EODHD si usa `TICKER.EXCHANGE` (es. `VWCE.XETRA`, `AAPL.US`). Gli ETF UCITS europei vanno indirizzati su **Xetra (`.XETRA`)**, **non** su Borsa Italiana (`.MI` non è coperto, vedi §3.8). Per crypto, CoinGecko usa lo *slug* (`bitcoin`), non il ticker → serve una mappatura ticker→id (endpoint `/coins/list`). Implica una validazione/normalizzazione del campo `symbol` per `asset_type`.
 
 ### 3.3 Provider pluggable
 - `App\Services\Pricing\PriceProvider` (interfaccia): `supports(string $assetType): bool`, `fetch(array $symbols): array` (→ `[symbol => ['price','currency','as_of']]`).
 - `PriceProviderFactory` per `asset_type` (come [ImportReaderFactory](../../backend/app/Services/Import/ImportReaderFactory.php)).
-- Implementazioni minime: uno stock/ETF (con api_key+rate-limit) e uno crypto (es. endpoint keyless tipo CoinGecko). Fund/bond/commodity: opzionali, ripiegano sul manuale.
+- Fonti scelte (D2, vedi §3.8): **`EodhdProvider`** per `stock/etf/fund`, **`CoinGeckoProvider`** per `crypto`. `bond/commodity`: opzionali, ripiegano sul manuale.
 
 ### 3.4 Fetcher + comando + schedule
 - `InvestmentPriceFetcher`: `InvestmentHolding::withoutGlobalScopes()->whereNotNull('symbol')->distinct()->pluck('symbol', ... )` raggruppati per `asset_type` → chiama il provider giusto → upsert in `instrument_prices`. Errore su un symbol/provider **non** blocca gli altri (a differenza dell'attuale `RuntimeException` che ferma tutto — vedi §4 reg. 4).
@@ -94,6 +95,30 @@ Nuova sezione `prices`: `providers` per asset_type, `api_key` (da `.env`, fuori 
 ### 3.7 Frontend
 - Mostrare fonte/data quota (badge "auto · aggiornato il {as_of}") leggendo i calcolati dal resource.
 - Il campo `last_price` resta come **override manuale** opzionale (la precedenza fallback è definita in §3.5).
+
+### 3.8 Scelta provider (D2 — CHIUSA)
+
+Ricerca comparata verificata contro i doc ufficiali (giugno 2026). Caso d'uso: portafoglio personale con **ETF UCITS europei** (es. VWCE), pochi simboli, solo **EOD una volta al giorno**, prezzi **salvati in DB**, preferenza free tier.
+
+**Vincolo dirimente — copertura ETF UCITS europei nel free tier**: quasi tutti i provider gratuiti sono **US-only**. Un solo free tier copre davvero gli UCITS europei: **EODHD** (verificato live: `VWCE.XETRA` quotato).
+
+| Provider | Free tier | ETF UCITS EU (free) | Storage in DB | Verdetto |
+|----------|-----------|---------------------|---------------|----------|
+| **EODHD** | 20 call/g, 1000/min, storico **solo 1 anno** | ✅ **sì, via `.XETRA`** | ✅ uso personale (cancellare entro 1 mese da disdetta) | **scelto** |
+| Twelve Data | 800/g, 8/min | ❌ Xetra=`Grow+`, Milano=`Pro+` | ⚠️ ok personale, cache non quantificata | scartato (free) |
+| FMP | 250/g, storico 5 anni | ❌ free = solo US | ⚠️ cancellare a disdetta | scartato |
+| Alpha Vantage | **25/g** (ridotto da 500) | ❓ incerto (solo azioni; Xetra=`.DEX`) | ✅ nessun divieto esplicito | scartato |
+| Finnhub | 60/min | ❌ EU premium; EOD candle ora premium anche US | ⚠️ cancellare a fine abbon. | scartato |
+| Tiingo | 1000/g (non da doc ufficiali) | ❌ solo US+CN | ✅ "internal use" | scartato |
+| Marketstack | 100 **o** 1000/mese (doc ufficiali contraddittori) | ❓ non confermato | ⚠️ no commercial sul free | scartato |
+| **CoinGecko** (crypto) | 10k/mese, 100/min | — solo crypto | ⚠️ refresh cache ≤24h + attribuzione "Powered by CoinGecko" | **scelto (crypto)** |
+| CoinPaprika (crypto) | 20k/mese, keyless | — solo crypto | ✅ termini storage più permissivi | alternativa crypto |
+
+**Decisione:**
+- **stock/etf/fund → EODHD (free)**, endpoint `GET https://eodhd.com/api/eod/{SYM}.{EXCH}?api_token=…&fmt=json`. Ticker **`.XETRA`/`.F`**, **non `.MI`**. Limiti free: ~20 simboli/giorno, storico 1 anno → se i simboli superano ~20 o serve storico completo, upgrade naturale **EOD All World ~$19,99/mese** (100k call/giorno).
+- **crypto → CoinGecko Demo** (key gratuita), `GET /api/v3/simple/price?ids=…&vs_currencies=eur` schedulato a fine giornata. Alternativa **CoinPaprika** se la licenza di storage diventa un vincolo forte.
+
+**Caveat di licenza (impatta il multitenant)**: tutti questi free tier sono **uso personale, non-commerciale, niente ridistribuzione**, e diversi (EODHD, FMP, Finnhub) impongono la **cancellazione dei dati alla cessazione**. Se l'app diventa **multitenant** ([analisi dedicata](MULTITENANT_ANALYSIS.md)), il free tier EODHD **decade** (uso commerciale/multi-utente) → servirebbe licenza a pagamento. Vedi §4 reg. 11.
 
 ---
 
@@ -119,10 +144,11 @@ Analisi rispetto al branch di base **`master`**.
 4. **Fetch fragile / parziale** — il pattern attuale lancia `RuntimeException` e **ferma tutto** al primo errore HTTP ([ExchangeRateProvider:94-111](../../backend/app/Services/ExchangeRateProvider.php)). Con N symbol e API azionarie soggette a rate-limit/timeout, un fallback per-symbol (isola il singolo errore) è necessario, altrimenti un titolo rotto azzera l'intero refresh.
 5. **Scoping / leak** — la raccolta globale dei symbol richiede `withoutGlobalScopes()` (o query grezza): va circoscritta al solo fetcher e mai esposta su path utente. Si lega all'analisi [multitenant](MULTITENANT_ANALYSIS.md): se lo scoping passerà a `tenant_id`, il fetcher resta comunque **globale** (i prezzi non sono per-tenant) — anzi B invecchia meglio.
 6. **API key & segreti** — chiavi solo in `.env`, mai nel repo; documentare in `.env.example` e AGENTS.md sez. 2/6.
-7. **`symbol` non normalizzato** — stesso titolo scritto in modi diversi (`VWCE` vs `VWCE.MI`) → quote mancanti o duplicate. Valutare normalizzazione/validazione formato per asset_type.
+7. **`symbol` non normalizzato** — il formato dipende dal provider scelto (§3.8): EODHD vuole `TICKER.EXCHANGE` con gli UCITS europei su **`.XETRA`** (NON `.MI`, che dà 404), CoinGecko vuole lo *slug* non il ticker. Stesso titolo scritto in modi diversi → quote mancanti o duplicate. Serve normalizzazione/validazione del campo `symbol` per `asset_type` (e migrazione dei symbol già inseriti a mano).
 8. **Test (PHPUnit, SQLite in-memory)** — aggiungere: fetcher con `Http::fake`, conversione quota→holding, catena fallback (quota→manuale→costo). Verificare che i test investimenti esistenti ([InvestmentHoldingTest](../../backend/tests)) restino verdi dopo il cambio di `effectivePrice()`.
 9. **Larastan livello 5** — annotare i nuovi servizi/model; il nuovo accesso a `instrument_prices` in `effectivePrice()` introduce una dipendenza (preferire un service iniettato a una query nel model, per testabilità).
 10. **Performance** — indice su `symbol` (§3.2) per i distinti; cache per-richiesta della quota più recente per symbol nei report (come fa già [CurrencyConverter](../../backend/app/Services/CurrencyConverter.php)).
+11. **Licenza dati & multitenant (verificato)** — i free tier scelti (EODHD, CoinGecko) sono **uso personale, non-commerciale, no ridistribuzione**; EODHD impone la **cancellazione dei dati entro 1 mese dalla disdetta** e CoinGecko il **refresh cache ≤24h** + attribuzione obbligatoria. Conseguenze concrete: (a) `instrument_prices` è uno storico legato all'abbonamento, non un archivio perpetuo "di proprietà"; (b) il passaggio a **multitenant** ([analisi](MULTITENANT_ANALYSIS.md)) fa scattare l'uso commerciale/multi-utente → free tier non più valido, serve piano a pagamento. **I due lavori sono in tensione: decidere l'ordine.**
 
 ### Fasi proposte
 | Fase | Contenuto |
@@ -133,7 +159,7 @@ Analisi rispetto al branch di base **`master`**.
 
 ### Decisioni aperte (da confermare prima di P1)
 - **D1** — Modello prezzo: tabella globale `instrument_prices` (raccomandato) **o** scrittura diretta su `holding.last_price`?
-- **D2** — Provider stock/ETF: quale fonte? (la scelta determina api_key/rate-limit). Crypto: provider keyless separato?
+- ~~**D2** — Provider stock/ETF: quale fonte? Crypto: provider keyless separato?~~ **CHIUSA (§3.8): EODHD per stock/etf/fund, CoinGecko per crypto.** Ticker UCITS su `.XETRA`. Vincolo: free tier solo per uso personale → incompatibile col multitenant.
 - **D3** — Frequenza refresh: giornaliera (come i cambi) basta, o serve intraday?
 - **D4** — Asset coperti subito: solo `stock/etf/crypto`, o anche `fund/bond/commodity` (spesso senza fonte gratuita affidabile)?
 - **D5** — Precedenza: la quota auto **prevale** sul prezzo manuale, o il manuale è un override che vince sempre?
