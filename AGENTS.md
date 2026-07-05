@@ -479,8 +479,16 @@ Su VM senza container scheduler, usare cron host:
 * * * * * docker compose -f /path/to/docker-compose.prod.yml exec -T php php artisan schedule:run >> /dev/null 2>&1
 ```
 
+### Deploy su Raspberry Pi (LAN, multi-progetto)
+Impianto condiviso **fuori dal repo**, in `~/Progetti/infra/` (repo a parte): **Traefik** (unico entry point :80, routing per `Host`, discovery via label Docker) + **Pi-hole** (DNS locale). Rete Docker esterna `proxy` condivisa tra l'infra e ogni progetto.
+- Setup una-tantum: `docker network create proxy`, poi `docker compose -f ~/Progetti/infra/docker-compose.yml up -d`.
+- DNS: Pi-hole risolve `*.pi.local` → IP Pi via `infra/pihole/pi-local.conf` (unico valore da tarare: l'IP). I client LAN usano la Pi come DNS.
+- finance gira dietro Traefik: [docker-compose.prod.yml](docker-compose.prod.yml) — nginx senza `ports`, label `Host(finance.pi.local)`, su reti `finance` + `proxy`. Config LAN (HTTP, `SESSION_SECURE_COOKIE=false`, host `finance.pi.local`) in `.env.production`.
+- Nuovo progetto = stesso schema: nginx senza porte pubbliche + label `Host(altro.pi.local)` + rete `proxy`. Nessuna modifica a Traefik.
+- Requisito: Raspberry Pi OS **64-bit** (le immagini mysql:8.4 ecc. sono arm64).
+
 ### Note open
-- HTTPS termination: aggiungere reverse proxy (Caddy/Traefik/Nginx host) davanti al container nginx, oppure montare certificati e ascoltare 443.
+- HTTPS termination: aggiungere reverse proxy (Caddy/Traefik/Nginx host) davanti al container nginx, oppure montare certificati e ascoltare 443. Su Pi/Traefik: aggiungere entrypoint `:443` + `certresolver` (o cert self-signed per la LAN).
 - Backup MySQL e Redis: scriptare dump giornaliero (fuori scope di questa fase).
 
 ## 13. Statistiche avanzate (estensione)

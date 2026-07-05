@@ -7,14 +7,17 @@ services:
       dockerfile: docker/nginx/Dockerfile.prod
     container_name: finance_prod_nginx
     restart: unless-stopped
-    ports:
-      - "${APP_PORT:-80}:80"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.finance.rule=Host(`finance.pi.local`)
+      - traefik.http.services.finance.loadbalancer.server.port=80
     volumes:
       - laravel_app:/var/www/html:ro
     depends_on:
       - php
     networks:
       - finance
+      - proxy
 
   php:
     build:
@@ -86,3 +89,5 @@ volumes:
 networks:
   finance:
     driver: bridge
+  proxy:
+    external: true
