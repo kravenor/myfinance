@@ -73,6 +73,10 @@ services:
     image: mysql:8.4
     container_name: finance_vps_mysql
     restart: unless-stopped
+    # Solo su localhost del VPS: per un client come DBeaver, passa da un tunnel SSH (non esporre pubblicamente).
+    # Porta host 3307 (3306 già occupata sul VPS da un altro MySQL); il container interno resta su 3306.
+    ports:
+      - "127.0.0.1:3307:3306"
     environment:
       # Nessun default: il compose fallisce se le variabili mancano (niente password di fabbrica online).
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD}
