@@ -20,7 +20,7 @@ use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TransactionImportExportController;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
+Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->name('auth.register');
 Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('password.email');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->name('password.update');
