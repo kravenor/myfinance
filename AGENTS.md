@@ -487,6 +487,9 @@ Impianto condiviso **fuori dal repo**, in `~/Progetti/infra/` (repo a parte): **
 - Nuovo progetto = stesso schema: nginx senza porte pubbliche + label `Host(altro.pi.lan)` + rete `proxy`. Nessuna modifica a Traefik.
 - Requisito: Raspberry Pi OS **64-bit** (le immagini mysql:8.4 ecc. sono arm64).
 
+### Deploy su VPS (Apache host come reverse proxy)
+Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.vps.yml) — stesso stack prod (immagini `Dockerfile.prod`, SPA buildata, `scheduler`, `queue` worker) ma nginx esposto solo su `127.0.0.1:${APP_PORT:-8080}`; Apache termina TLS e proxa il dominio pubblico verso quella porta (`ProxyPass / http://127.0.0.1:8080/` + `ProxyPreserveHost On`). Nessuna label Traefik, nessuna rete `proxy`. Richiede `.env.production` (env dei container) e variabili `DB_*` nell'`.env` di progetto per l'interpolazione compose — senza default: il compose fallisce se mancano.
+
 ### Note open
 - HTTPS termination: aggiungere reverse proxy (Caddy/Traefik/Nginx host) davanti al container nginx, oppure montare certificati e ascoltare 443. Su Pi/Traefik: aggiungere entrypoint `:443` + `certresolver` (o cert self-signed per la LAN).
 - Backup MySQL e Redis: scriptare dump giornaliero (fuori scope di questa fase).
