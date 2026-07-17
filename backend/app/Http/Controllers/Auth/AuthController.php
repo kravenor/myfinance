@@ -7,6 +7,7 @@ use App\Http\Requests\Auth\ForgotPasswordRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
+use App\Http\Requests\Auth\UpdatePasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Database\Seeders\CategorySeeder;
@@ -98,6 +99,18 @@ class AuthController extends Controller
         }
 
         return response()->json(['message' => __($status)], Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
+    public function updatePassword(UpdatePasswordRequest $request): JsonResponse
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $user->forceFill([
+            'password' => Hash::make($request->validated('password')),
+        ])->save();
+
+        return response()->json(['message' => 'Password aggiornata.']);
     }
 
     public function logout(Request $request): Response

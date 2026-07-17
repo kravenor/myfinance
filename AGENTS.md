@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-06-27**
+Ultimo aggiornamento: **2026-07-17**
 Fase corrente: **Estensione — Auto-fetch quotazioni investimenti + lookup ISIN (COMPLETATA)**
 
 ---

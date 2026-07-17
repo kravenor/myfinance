@@ -26,6 +26,31 @@ const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
 
+const passwordForm = ref({
+  current_password: '',
+  password: '',
+  password_confirmation: '',
+})
+const passwordSaving = ref(false)
+const passwordSaved = ref(false)
+const passwordError = ref('')
+
+async function onPasswordSubmit() {
+  passwordSaving.value = true
+  passwordSaved.value = false
+  passwordError.value = ''
+  try {
+    await api.put('/auth/password', passwordForm.value)
+    passwordSaved.value = true
+    passwordForm.value = { current_password: '', password: '', password_confirmation: '' }
+  } catch (e: unknown) {
+    passwordError.value = 'Aggiornamento non riuscito. Controlla la password attuale e i requisiti della nuova.'
+    throw e
+  } finally {
+    passwordSaving.value = false
+  }
+}
+
 function hydrate(prefs: NotificationPreferences) {
   form.value = {
     email: prefs.email,
@@ -145,6 +170,34 @@ onMounted(async () => {
           <span v-if="error" class="text-sm text-red-600">{{ error }}</span>
         </div>
       </template>
+    </form>
+
+    <form class="card p-4 sm:p-6 space-y-5" @submit.prevent="onPasswordSubmit">
+      <div>
+        <h2 class="font-medium">Password</h2>
+        <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account.</p>
+      </div>
+
+      <div>
+        <label class="label">Password attuale</label>
+        <input v-model="passwordForm.current_password" type="password" class="input" required autocomplete="current-password" />
+      </div>
+      <div>
+        <label class="label">Nuova password</label>
+        <input v-model="passwordForm.password" type="password" class="input" required autocomplete="new-password" />
+      </div>
+      <div>
+        <label class="label">Conferma nuova password</label>
+        <input v-model="passwordForm.password_confirmation" type="password" class="input" required autocomplete="new-password" />
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <button type="submit" class="btn-primary" :disabled="passwordSaving">
+          {{ passwordSaving ? 'Salvataggio…' : 'Cambia password' }}
+        </button>
+        <span v-if="passwordSaved" class="text-sm text-green-600">Password aggiornata.</span>
+        <span v-if="passwordError" class="text-sm text-red-600">{{ passwordError }}</span>
+      </div>
     </form>
 
     <section class="card p-4 sm:p-6 space-y-5">

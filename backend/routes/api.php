@@ -27,6 +27,7 @@ Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->n
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
+    Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
     Route::get('exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
