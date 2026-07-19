@@ -12,6 +12,4 @@ FROM nginx:1.27-alpine
 COPY docker/nginx/prod.conf /etc/nginx/conf.d/default.conf
 COPY --from=frontend-build /app/dist /var/www/spa
 
-# Laravel public/ (per static asset eventuali) viene montato runtime via volume condiviso col container php (vedi docker-compose.prod.yml).
-
 EXPOSE 80

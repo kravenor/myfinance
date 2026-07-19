@@ -13,8 +13,6 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:${APP_PORT:-8080}:80"
-    volumes:
-      - laravel_app:/var/www/html:ro
     depends_on:
       - php
     networks:
@@ -27,8 +25,6 @@ services:
     container_name: finance_vps_php
     restart: unless-stopped
     env_file: .env.production
-    volumes:
-      - laravel_app:/var/www/html
     depends_on:
       mysql:
         condition: service_healthy
@@ -45,8 +41,6 @@ services:
     restart: unless-stopped
     env_file: .env.production
     command: ["php", "artisan", "schedule:work"]
-    volumes:
-      - laravel_app:/var/www/html
     depends_on:
       php:
         condition: service_started
@@ -61,8 +55,6 @@ services:
     restart: unless-stopped
     env_file: .env.production
     command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
-    volumes:
-      - laravel_app:/var/www/html
     depends_on:
       php:
         condition: service_started
@@ -111,7 +103,6 @@ services:
 volumes:
   mysql_data:
   redis_data:
-  laravel_app:
 
 networks:
   finance:
