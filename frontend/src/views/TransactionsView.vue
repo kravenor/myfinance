@@ -167,6 +167,13 @@ function goToPage(p: number) {
   applyFilters(false)
 }
 
+function formatDate(dateString:string) {
+    const date = new Date(dateString);
+    // Then specify how you want your dates to be formatted
+    return new Intl.DateTimeFormat('default', {dateStyle: 'short'}).format(date);
+}
+ 
+
 onMounted(async () => {
   const [a, c, t] = await Promise.all([
     api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } }),
@@ -333,7 +340,7 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="tx in items" :key="tx.id">
-            <td data-label="Data">{{ tx.occurred_at }}</td>
+            <td data-label="Data">{{ formatDate(tx.occurred_at) }}</td>
             <td data-label="Tipo" class="capitalize">{{ tx.type }}</td>
             <td data-label="Conto">
               <span class="inline-flex items-center gap-2">

@@ -136,6 +136,11 @@ function deltaClass(value: string | null | undefined, lowerIsBetter = false) {
   const good = lowerIsBetter ? !isPositive : isPositive
   return good ? 'text-green-600' : 'text-red-600'
 }
+function formatDate(dateString:string) {
+    const date = new Date(dateString);
+    // Then specify how you want your dates to be formatted
+    return new Intl.DateTimeFormat('default', {dateStyle: 'short'}).format(date);
+}
 
 onMounted(refresh)
 </script>
@@ -264,7 +269,7 @@ onMounted(refresh)
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="t in top" :key="t.id">
-              <td data-label="Data">{{ t.occurred_at }}</td>
+              <td data-label="Data">{{ formatDate(t.occurred_at) }}</td>
               <td data-label="Tipo" class="capitalize">{{ t.type }}</td>
               <td data-label="Conto">{{ t.account_name ?? '—' }}</td>
               <td data-label="Categoria">{{ t.category_name ?? '—' }}</td>
