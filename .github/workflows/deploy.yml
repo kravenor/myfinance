@@ -21,6 +21,8 @@ jobs:
           passphrase: ${{ secrets.SSH_PASSPHRASE }}
           port: ${{ secrets.SSH_PORT }}
           script: |
-            cd ${{ secrets.DEPLOY_PATH }}
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            pwd
             git pull origin master
             docker compose --env-file .env.production -f docker-compose.vps.yml up -d --build
