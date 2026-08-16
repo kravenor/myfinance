@@ -91,7 +91,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
@@ -99,19 +99,30 @@ onMounted(async () => {
       </button>
     </div>
 
-    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" @submit.prevent="refresh">
-      <div>
-        <label class="label">Anno</label>
-        <input v-model.number="filters.year" type="number" min="2000" max="2100" class="input" />
-      </div>
-      <div>
-        <label class="label">Mese</label>
-        <input v-model.number="filters.month" type="number" min="1" max="12" class="input" />
-      </div>
-      <div class="flex items-end">
-        <button type="submit" class="btn-secondary w-full">Filtra</button>
-      </div>
-    </form>
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
+      aria-label="Nuovo budget"
+      @click="showForm = true; reset()"
+    >+</button>
+
+    <details class="card filter-panel" open>
+      <summary>Filtri</summary>
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" @submit.prevent="refresh">
+        <div>
+          <label class="label">Anno</label>
+          <input v-model.number="filters.year" type="number" min="2000" max="2100" class="input" />
+        </div>
+        <div>
+          <label class="label">Mese</label>
+          <input v-model.number="filters.month" type="number" min="1" max="12" class="input" />
+        </div>
+        <div class="flex items-end">
+          <button type="submit" class="btn-secondary w-full">Filtra</button>
+        </div>
+      </form>
+    </details>
 
     <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" @submit.prevent="onSubmit">
       <div>
@@ -138,9 +149,36 @@ onMounted(async () => {
       </div>
     </form>
 
-    <div class="card table-responsive md:overflow-x-auto">
+    <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+
+      <!-- Mobile: una card per budget, la barra di progresso ha bisogno di spazio orizzontale pieno (sotto md). -->
+      <ul v-else class="md:hidden divide-y divide-slate-100">
+        <li v-for="b in items" :key="b.id" class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-800 truncate">{{ categoryName(b.category_id) }}</p>
+              <p class="text-xs text-slate-500 mt-0.5">{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</p>
+            </div>
+            <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
+          </div>
+          <div class="mt-3 flex items-center gap-2">
+            <div class="flex-1 bg-slate-200 rounded h-2">
+              <div class="h-2 rounded" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
+            </div>
+            <span
+              v-if="status(b) !== 'ok'"
+              class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
+              :class="status(b) === 'exceeded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+            >{{ rawPercent(b) }}%</span>
+          </div>
+          <p class="text-xs text-slate-500 mt-1.5">{{ b.spent ?? '0.00' }} / {{ b.amount }}</p>
+        </li>
+        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessun budget per il periodo.</li>
+      </ul>
+
+      <!-- Desktop / tablet: tabella classica da md in su. -->
+      <table v-if="!loading" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Categoria</th>
@@ -153,11 +191,11 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="b in items" :key="b.id">
-            <td data-label="Categoria" class="font-medium">{{ categoryName(b.category_id) }}</td>
-            <td data-label="Periodo">{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</td>
-            <td data-label="Budget" class="md:text-right">{{ b.amount }}</td>
-            <td data-label="Speso" class="md:text-right">{{ b.spent ?? '0.00' }}</td>
-            <td data-label="Progresso">
+            <td class="font-medium">{{ categoryName(b.category_id) }}</td>
+            <td>{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</td>
+            <td class="text-right">{{ b.amount }}</td>
+            <td class="text-right">{{ b.spent ?? '0.00' }}</td>
+            <td>
               <div class="flex items-center gap-2">
                 <div class="flex-1 bg-slate-200 rounded h-2">
                   <div class="h-2 rounded" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
@@ -171,7 +209,7 @@ onMounted(async () => {
                 </span>
               </div>
             </td>
-            <td class="md:text-right actions-cell">
+            <td class="text-right">
               <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
             </td>
           </tr>

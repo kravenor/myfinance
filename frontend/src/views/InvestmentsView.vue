@@ -54,6 +54,13 @@ function plClass(value: string | null | undefined): string {
   return n > 0 ? 'text-green-600' : 'text-red-600'
 }
 
+function plBorderClass(value: string | null | undefined): string {
+  if (value === null || value === undefined) return 'border-slate-300'
+  const n = parseFloat(value)
+  if (n === 0) return 'border-slate-300'
+  return n > 0 ? 'border-green-500' : 'border-red-400'
+}
+
 function formatDay(d: string): string {
   return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
@@ -174,7 +181,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
       <button
@@ -185,6 +192,15 @@ onMounted(async () => {
         {{ showForm ? 'Annulla' : 'Nuova posizione' }}
       </button>
     </div>
+
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none disabled:opacity-40"
+      aria-label="Nuova posizione"
+      :disabled="investmentAccounts.length === 0"
+      @click="showForm = true; reset()"
+    >+</button>
 
     <p v-if="investmentAccounts.length === 0" class="card p-4 text-sm text-slate-500">
       Nessun conto di tipo <strong>investment</strong>. Creane uno in
@@ -315,10 +331,47 @@ onMounted(async () => {
       </div>
     </form>
 
-    <!-- Tabella holding -->
-    <div class="card table-responsive md:overflow-x-auto">
+    <!-- Posizioni -->
+    <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+
+      <!-- Mobile: una card per posizione, troppi campi per il collasso label/valore generico (sotto md). -->
+      <ul v-else class="md:hidden divide-y divide-slate-100">
+        <li
+          v-for="h in items"
+          :key="h.id"
+          class="p-4 border-l-4"
+          :class="plBorderClass(h.unrealized_pl)"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-800 truncate">{{ h.name }}</p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate">
+                <span class="capitalize">{{ h.asset_type }}</span> · {{ accountName(h.account_id) }}
+                <template v-if="h.symbol"> · {{ h.symbol }}</template>
+              </p>
+              <p class="text-xs text-slate-400 mt-0.5 truncate">
+                {{ h.quantity }} × {{ formatCurrency(h.effective_price, h.currency) }}
+                <span v-if="h.price_source === 'auto'" class="text-green-600">
+                  · auto<template v-if="h.price_as_of"> {{ formatDay(h.price_as_of) }}</template>
+                </span>
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="font-semibold whitespace-nowrap">{{ formatCurrency(h.market_value, h.currency) }}</p>
+              <p class="text-xs font-medium whitespace-nowrap mt-0.5" :class="plClass(h.unrealized_pl)">
+                {{ formatCurrency(h.unrealized_pl, h.currency) }}
+                <template v-if="h.unrealized_pl_pct">({{ parseFloat(h.unrealized_pl_pct) > 0 ? '+' : '' }}{{ h.unrealized_pl_pct }}%)</template>
+              </p>
+              <RowActions class="mt-2 justify-end" @edit="startEdit(h)" @delete="onDelete(h)" />
+            </div>
+          </div>
+        </li>
+        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessuna posizione.</li>
+      </ul>
+
+      <!-- Desktop / tablet: tabella classica da md in su. -->
+      <table v-if="!loading" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Asset</th>
@@ -334,16 +387,16 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="h in items" :key="h.id">
-            <td data-label="Asset" class="font-medium">
+            <td class="font-medium">
               {{ h.name }}
               <span v-if="h.symbol" class="block text-xs text-slate-400">{{ h.symbol }}</span>
               <span v-if="h.isin" class="block text-xs text-slate-300">{{ h.isin }}</span>
             </td>
-            <td data-label="Tipo" class="capitalize">{{ h.asset_type }}</td>
-            <td data-label="Conto">{{ accountName(h.account_id) }}</td>
-            <td data-label="Quantità" class="md:text-right">{{ h.quantity }}</td>
-            <td data-label="Carico" class="md:text-right">{{ formatCurrency(h.avg_cost, h.currency) }}</td>
-            <td data-label="Prezzo" class="md:text-right">
+            <td class="capitalize">{{ h.asset_type }}</td>
+            <td>{{ accountName(h.account_id) }}</td>
+            <td class="text-right">{{ h.quantity }}</td>
+            <td class="text-right">{{ formatCurrency(h.avg_cost, h.currency) }}</td>
+            <td class="text-right">
               {{ formatCurrency(h.effective_price, h.currency) }}
               <span
                 v-if="h.price_source === 'auto'"
@@ -353,14 +406,14 @@ onMounted(async () => {
                 auto<template v-if="h.price_as_of"> · {{ formatDay(h.price_as_of) }}</template>
               </span>
             </td>
-            <td data-label="Valore" class="md:text-right font-medium">{{ formatCurrency(h.market_value, h.currency) }}</td>
-            <td data-label="P/L" class="md:text-right" :class="plClass(h.unrealized_pl)">
+            <td class="text-right font-medium">{{ formatCurrency(h.market_value, h.currency) }}</td>
+            <td class="text-right" :class="plClass(h.unrealized_pl)">
               {{ formatCurrency(h.unrealized_pl, h.currency) }}
               <span v-if="h.unrealized_pl_pct" class="block text-xs">
                 {{ parseFloat(h.unrealized_pl_pct) > 0 ? '+' : '' }}{{ h.unrealized_pl_pct }}%
               </span>
             </td>
-            <td class="md:text-right actions-cell">
+            <td class="text-right">
               <RowActions @edit="startEdit(h)" @delete="onDelete(h)" />
             </td>
           </tr>

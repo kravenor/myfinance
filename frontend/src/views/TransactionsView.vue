@@ -83,6 +83,29 @@ function isPrimaryAccount(id: number | null | undefined): boolean {
   return !!accounts.value.find((a) => a.id === id && a.is_primary)
 }
 
+function categoryName(id: number | null | undefined): string {
+  if (!id) return ''
+  return categories.value.find((c) => c.id === id)?.name ?? ''
+}
+
+function txBorderClass(type: TransactionType): string {
+  if (type === 'income') return 'border-green-500'
+  if (type === 'expense') return 'border-red-400'
+  return 'border-slate-300'
+}
+
+function txAmountClass(type: TransactionType): string {
+  if (type === 'income') return 'text-green-600'
+  if (type === 'expense') return 'text-red-600'
+  return 'text-slate-700'
+}
+
+function txAmountSign(type: TransactionType): string {
+  if (type === 'income') return '+'
+  if (type === 'expense') return '−'
+  return ''
+}
+
 function reset() {
   editing.value = null
   form.value = {
@@ -189,7 +212,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
@@ -197,46 +220,57 @@ onMounted(async () => {
       </button>
     </div>
 
-    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters()">
-      <div class="sm:col-span-2 md:col-span-5">
-        <label class="label">Cerca nella descrizione</label>
-        <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave…" />
-      </div>
-      <div>
-        <label class="label">Conto</label>
-        <select v-model="filters.account_id" class="input">
-          <option value="">Tutti</option>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Tipo</label>
-        <select v-model="filters.type" class="input">
-          <option value="">Tutti</option>
-          <option value="income">income</option>
-          <option value="expense">expense</option>
-          <option value="transfer">transfer</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Da</label>
-        <input v-model="filters.from" type="date" class="input" />
-      </div>
-      <div>
-        <label class="label">A</label>
-        <input v-model="filters.to" type="date" class="input" />
-      </div>
-      <div>
-        <label class="label">Tag</label>
-        <select v-model="filters.tag_id" class="input">
-          <option value="">Tutti</option>
-          <option v-for="t in tags" :key="t.id" :value="t.id">{{ t.name }}</option>
-        </select>
-      </div>
-      <div class="flex items-end sm:col-span-2 md:col-span-1">
-        <button type="submit" class="btn-secondary w-full">Filtra</button>
-      </div>
-    </form>
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
+      aria-label="Nuova transazione"
+      @click="showForm = true; reset()"
+    >+</button>
+
+    <details class="card filter-panel" open>
+      <summary>Filtri</summary>
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters()">
+        <div class="sm:col-span-2 md:col-span-5">
+          <label class="label">Cerca nella descrizione</label>
+          <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave…" />
+        </div>
+        <div>
+          <label class="label">Conto</label>
+          <select v-model="filters.account_id" class="input">
+            <option value="">Tutti</option>
+            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Tipo</label>
+          <select v-model="filters.type" class="input">
+            <option value="">Tutti</option>
+            <option value="income">income</option>
+            <option value="expense">expense</option>
+            <option value="transfer">transfer</option>
+          </select>
+        </div>
+        <div>
+          <label class="label">Da</label>
+          <input v-model="filters.from" type="date" class="input" />
+        </div>
+        <div>
+          <label class="label">A</label>
+          <input v-model="filters.to" type="date" class="input" />
+        </div>
+        <div>
+          <label class="label">Tag</label>
+          <select v-model="filters.tag_id" class="input">
+            <option value="">Tutti</option>
+            <option v-for="t in tags" :key="t.id" :value="t.id">{{ t.name }}</option>
+          </select>
+        </div>
+        <div class="flex items-end sm:col-span-2 md:col-span-1">
+          <button type="submit" class="btn-secondary w-full">Filtra</button>
+        </div>
+      </form>
+    </details>
 
     <p v-if="meta" class="text-sm text-slate-500">
       {{ meta.total }} transazion{{ meta.total === 1 ? 'e' : 'i' }}
@@ -324,9 +358,54 @@ onMounted(async () => {
       </div>
     </form>
 
-    <div class="card table-responsive md:overflow-x-auto">
+    <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+
+      <!-- Mobile: una card per transazione, pensata per la lettura rapida (sotto md). -->
+      <ul v-else class="md:hidden divide-y divide-slate-100">
+        <li
+          v-for="tx in items"
+          :key="tx.id"
+          class="p-4 border-l-4"
+          :class="txBorderClass(tx.type)"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-800 truncate">
+                {{ tx.description || categoryName(tx.category_id) || (tx.type === 'transfer' ? 'Trasferimento' : '—') }}
+              </p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate">
+                {{ formatDate(tx.occurred_at) }} ·
+                {{ accountName(tx.account_id) }}<span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500">★</span>
+                <template v-if="tx.type === 'transfer'"> → {{ accountName(tx.transfer_account_id) }}</template>
+                <template v-else-if="tx.description && categoryName(tx.category_id)"> · {{ categoryName(tx.category_id) }}</template>
+              </p>
+              <div v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1 mt-1.5">
+                <span
+                  v-for="t in tx.tags"
+                  :key="t.id"
+                  class="inline-block px-2 py-0.5 rounded-full text-[10px] text-white"
+                  :style="{ background: t.color || '#475569' }"
+                >{{ t.name }}</span>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="font-semibold whitespace-nowrap" :class="txAmountClass(tx.type)">
+                {{ txAmountSign(tx.type) }}{{ formatCurrency(tx.amount, tx.currency) }}
+              </p>
+              <p
+                v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
+                class="text-xs font-normal text-slate-400 mt-0.5"
+              >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</p>
+              <RowActions class="mt-2 justify-end" @edit="startEdit(tx)" @delete="onDelete(tx)" />
+            </div>
+          </div>
+        </li>
+        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessuna transazione.</li>
+      </ul>
+
+      <!-- Desktop / tablet: tabella classica da md in su. -->
+      <table v-if="!loading" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Data</th>
@@ -340,18 +419,18 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="tx in items" :key="tx.id">
-            <td data-label="Data">{{ formatDate(tx.occurred_at) }}</td>
-            <td data-label="Tipo" class="capitalize">{{ tx.type }}</td>
-            <td data-label="Conto">
+            <td>{{ formatDate(tx.occurred_at) }}</td>
+            <td class="capitalize">{{ tx.type }}</td>
+            <td>
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(tx.account_id) }}</span>
                 <span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500" title="Conto principale">★</span>
               </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
-            <td data-label="Descrizione">{{ tx.description ?? '—' }}</td>
-            <td data-label="Tag">
-              <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1 md:justify-start justify-end">
+            <td>{{ tx.description ?? '—' }}</td>
+            <td>
+              <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1">
                 <span
                   v-for="t in tx.tags"
                   :key="t.id"
@@ -361,14 +440,14 @@ onMounted(async () => {
               </span>
               <span v-else class="text-slate-400">—</span>
             </td>
-            <td data-label="Importo" class="md:text-right font-medium">
+            <td class="text-right font-medium">
               {{ formatCurrency(tx.amount, tx.currency) }}
               <span
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
                 class="block text-xs font-normal text-slate-400"
               >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</span>
             </td>
-            <td class="md:text-right actions-cell">
+            <td class="text-right">
               <RowActions @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </td>
           </tr>

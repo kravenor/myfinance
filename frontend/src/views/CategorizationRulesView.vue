@@ -237,7 +237,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl sm:text-2xl font-semibold">Regole di categorizzazione</h1>
@@ -252,6 +252,14 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
+      aria-label="Nuova regola"
+      @click="showForm = true; reset()"
+    >+</button>
 
     <div
       v-if="showApply"
@@ -409,9 +417,54 @@ onMounted(async () => {
       </div>
     </form>
 
-    <div class="card table-responsive md:overflow-x-auto">
+    <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+
+      <!-- Mobile: una card per regola, troppi campi per il collasso label/valore generico (sotto md). -->
+      <ul v-else class="md:hidden divide-y divide-slate-100">
+        <li
+          v-for="r in items"
+          :key="r.id"
+          class="p-4"
+          :class="{ 'opacity-60': !r.is_active }"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-800 truncate">{{ r.name }}</p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate">
+                {{ matchTypeLabel(r.match_type) }}
+                <code class="ml-1 px-1 bg-slate-100 rounded text-xs">{{ r.pattern }}</code>
+              </p>
+              <p class="text-xs text-slate-500 mt-1 flex items-center gap-1 truncate">
+                <span
+                  v-if="categoryColor(r)"
+                  class="inline-block w-2.5 h-2.5 rounded-full shrink-0"
+                  :style="{ background: categoryColor(r) ?? undefined }"
+                />
+                {{ categoryLabel(r) }} · {{ appliesLabel(r.applies_to_type) }} · priorità {{ r.priority }}
+              </p>
+            </div>
+            <div class="text-right shrink-0 flex flex-col items-end gap-2">
+              <button
+                type="button"
+                class="text-xs px-2 py-1 rounded whitespace-nowrap"
+                :class="r.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'"
+                @click="toggleActive(r)"
+              >
+                {{ r.is_active ? 'attiva' : 'inattiva' }}
+              </button>
+              <span class="text-xs text-slate-400 whitespace-nowrap">{{ r.times_applied }} applicazioni</span>
+              <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />
+            </div>
+          </div>
+        </li>
+        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">
+          Nessuna regola. Creane una per categorizzare automaticamente le transazioni in import.
+        </li>
+      </ul>
+
+      <!-- Desktop / tablet: tabella classica da md in su. -->
+      <table v-if="!loading" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Priorità</th>
@@ -426,14 +479,14 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="r in items" :key="r.id">
-            <td data-label="Priorità">{{ r.priority }}</td>
-            <td data-label="Nome" class="font-medium">{{ r.name }}</td>
-            <td data-label="Condizione">
+            <td>{{ r.priority }}</td>
+            <td class="font-medium">{{ r.name }}</td>
+            <td>
               <span class="text-slate-500">{{ matchTypeLabel(r.match_type) }}</span>
               <code class="ml-1 px-1 bg-slate-100 rounded text-xs">{{ r.pattern }}</code>
             </td>
-            <td data-label="Si applica">{{ appliesLabel(r.applies_to_type) }}</td>
-            <td data-label="Categoria">
+            <td>{{ appliesLabel(r.applies_to_type) }}</td>
+            <td>
               <span
                 v-if="categoryColor(r)"
                 class="inline-block w-3 h-3 rounded-full align-middle mr-1"
@@ -441,8 +494,8 @@ onMounted(async () => {
               />
               {{ categoryLabel(r) }}
             </td>
-            <td data-label="Match">{{ r.times_applied }}</td>
-            <td data-label="Attiva">
+            <td>{{ r.times_applied }}</td>
+            <td>
               <button
                 type="button"
                 class="text-xs px-2 py-1 rounded"
@@ -452,7 +505,7 @@ onMounted(async () => {
                 {{ r.is_active ? 'sì' : 'no' }}
               </button>
             </td>
-            <td class="md:text-right actions-cell">
+            <td class="text-right">
               <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />
             </td>
           </tr>

@@ -162,26 +162,29 @@ onMounted(refresh)
   <div class="space-y-4">
     <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
 
-    <form class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" @submit.prevent="refresh">
-      <div>
-        <label class="label">Da</label>
-        <input v-model="filters.from" type="date" class="input" required />
-      </div>
-      <div>
-        <label class="label">A</label>
-        <input v-model="filters.to" type="date" class="input" required />
-      </div>
-      <div>
-        <label class="label">Categorie</label>
-        <select v-model="categoryType" class="input">
-          <option value="expense">expense</option>
-          <option value="income">income</option>
-        </select>
-      </div>
-      <div class="flex items-end">
-        <button class="btn-secondary w-full" type="submit">Aggiorna</button>
-      </div>
-    </form>
+    <details class="card filter-panel" open>
+      <summary>Filtri</summary>
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" @submit.prevent="refresh">
+        <div>
+          <label class="label">Da</label>
+          <input v-model="filters.from" type="date" class="input" required />
+        </div>
+        <div>
+          <label class="label">A</label>
+          <input v-model="filters.to" type="date" class="input" required />
+        </div>
+        <div>
+          <label class="label">Categorie</label>
+          <select v-model="categoryType" class="input">
+            <option value="expense">expense</option>
+            <option value="income">income</option>
+          </select>
+        </div>
+        <div class="flex items-end">
+          <button class="btn-secondary w-full" type="submit">Aggiorna</button>
+        </div>
+      </form>
+    </details>
 
     <div class="card p-4">
       <span class="label">Report visibili</span>

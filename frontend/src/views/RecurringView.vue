@@ -110,13 +110,21 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Transazioni ricorrenti</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuova ricorrente' }}
       </button>
     </div>
+
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
+      aria-label="Nuova ricorrente"
+      @click="showForm = true; reset()"
+    >+</button>
 
     <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div>
@@ -177,9 +185,37 @@ onMounted(async () => {
       </div>
     </form>
 
-    <div class="card table-responsive md:overflow-x-auto">
+    <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+
+      <!-- Mobile: una card per ricorrente, troppi campi per il collasso label/valore generico (sotto md). -->
+      <ul v-else class="md:hidden divide-y divide-slate-100">
+        <li v-for="r in items" :key="r.id" class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <p class="font-medium text-slate-800 truncate">
+                {{ r.description ?? '—' }}
+                <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'" class="ml-1">●</span>
+              </p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate capitalize">
+                {{ r.type }} · {{ accountName(r.account_id) }}<span v-if="isPrimaryAccount(r.account_id)" class="text-amber-500">★</span>
+                <template v-if="r.type === 'transfer'"> → {{ accountName(r.transfer_account_id) }}</template>
+              </p>
+              <p class="text-xs text-slate-400 mt-0.5">
+                ogni {{ r.interval }} {{ r.cadence }} · prossima {{ r.next_run_at }}
+              </p>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="font-semibold whitespace-nowrap">{{ formatCurrency(r.amount, r.currency) }}</p>
+              <RowActions class="mt-2 justify-end" @edit="startEdit(r)" @delete="onDelete(r)" />
+            </div>
+          </div>
+        </li>
+        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessuna ricorrente.</li>
+      </ul>
+
+      <!-- Desktop / tablet: tabella classica da md in su. -->
+      <table v-if="!loading" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Descrizione</th>
@@ -194,22 +230,22 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="r in items" :key="r.id">
-            <td data-label="Descrizione">{{ r.description ?? '—' }}</td>
-            <td data-label="Tipo" class="capitalize">{{ r.type }}</td>
-            <td data-label="Conto">
+            <td>{{ r.description ?? '—' }}</td>
+            <td class="capitalize">{{ r.type }}</td>
+            <td>
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(r.account_id) }}</span>
                 <span v-if="isPrimaryAccount(r.account_id)" class="text-amber-500" title="Conto principale">★</span>
               </span>
               <span v-if="r.type === 'transfer'" class="text-slate-400"> → {{ accountName(r.transfer_account_id) }}</span>
             </td>
-            <td data-label="Cadenza">every {{ r.interval }} {{ r.cadence }}</td>
-            <td data-label="Prossima">{{ r.next_run_at }}</td>
-            <td data-label="Importo" class="md:text-right font-medium">{{ formatCurrency(r.amount, r.currency) }}</td>
-            <td data-label="Attiva">
+            <td>every {{ r.interval }} {{ r.cadence }}</td>
+            <td>{{ r.next_run_at }}</td>
+            <td class="text-right font-medium">{{ formatCurrency(r.amount, r.currency) }}</td>
+            <td>
               <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'">●</span>
             </td>
-            <td class="md:text-right actions-cell">
+            <td class="text-right">
               <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />
             </td>
           </tr>

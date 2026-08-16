@@ -304,7 +304,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Obiettivi di risparmio</h1>
       <div class="flex items-center gap-2">
@@ -324,6 +324,14 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
+      aria-label="Nuovo obiettivo"
+      @click="showForm = true; resetForm()"
+    >+</button>
 
     <!-- Form creazione / modifica -->
     <form

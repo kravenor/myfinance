@@ -72,13 +72,21 @@ onMounted(() => list())
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Conti</h1>
       <button class="btn-primary" @click="showForm = !showForm; reset()">
         {{ showForm ? 'Annulla' : 'Nuovo conto' }}
       </button>
     </div>
+
+    <button
+      v-if="!showForm"
+      type="button"
+      class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
+      aria-label="Nuovo conto"
+      @click="showForm = true; reset()"
+    >+</button>
 
     <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-2 gap-4" @submit.prevent="onSubmit">
       <div>
@@ -115,9 +123,46 @@ onMounted(() => list())
       </div>
     </form>
 
-    <div class="card table-responsive md:overflow-x-auto">
+    <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+
+      <!-- Mobile: una card per conto (sotto md). -->
+      <ul v-else class="md:hidden divide-y divide-slate-100">
+        <li v-for="acc in items" :key="acc.id" class="p-4">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0 flex items-start gap-2">
+              <button
+                type="button"
+                class="text-yellow-500 shrink-0 mt-0.5"
+                :title="acc.is_primary ? 'Primario' : 'Imposta come primario'"
+                @click="setPrimary(acc)"
+              >
+                <svg v-if="acc.is_primary" xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1 0 0 0 .95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.386 2.46a1 1 0 0 0-.364 1.118l1.287 3.966c.3.921-.755 1.688-1.54 1.118l-3.386-2.46a1 1 0 0 0-1.175 0l-3.386 2.46c-.784.57-1.84-.197-1.54-1.118l1.287-3.966a1 1 0 0 0-.364-1.118L2.047 9.393c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 0 0 .95-.69l1.286-3.966z" />
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.966a1 1 0 0 0 .95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.386 2.46a1 1 0 0 0-.364 1.118l1.287 3.966c.3.921-.755 1.688-1.54 1.118l-3.386-2.46a1 1 0 0 0-1.175 0l-3.386 2.46c-.784.57-1.84-.197-1.54-1.118l1.287-3.966a1 1 0 0 0-.364-1.118L2.047 9.393c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 0 0 .95-.69l1.286-3.966z" />
+                </svg>
+              </button>
+              <div class="min-w-0">
+                <p class="font-medium text-slate-800 truncate">
+                  {{ acc.name }}
+                  <span v-if="acc.is_primary" class="text-xs text-slate-500 font-normal">(Principale)</span>
+                </p>
+                <p class="text-xs text-slate-500 mt-0.5 capitalize">{{ acc.type }} · {{ acc.currency }}</p>
+              </div>
+            </div>
+            <div class="text-right shrink-0">
+              <p class="font-semibold whitespace-nowrap">{{ formatCurrency(acc.initial_balance, acc.currency) }}</p>
+              <RowActions class="mt-2 justify-end" @edit="startEdit(acc)" @delete="onDelete(acc)" />
+            </div>
+          </div>
+        </li>
+        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessun conto.</li>
+      </ul>
+
+      <!-- Desktop / tablet: tabella classica da md in su. -->
+      <table v-if="!loading" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Nome</th>
@@ -129,7 +174,7 @@ onMounted(() => list())
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="acc in items" :key="acc.id">
-            <td data-label="Nome" class="font-medium md:flex md:items-center md:gap-2">
+            <td class="font-medium">
               <span class="inline-flex items-center gap-2">
                 <button
                   type="button"
@@ -148,10 +193,10 @@ onMounted(() => list())
                 <span v-if="acc.is_primary" class="text-xs text-slate-500">(Principale)</span>
               </span>
             </td>
-            <td data-label="Tipo" class="capitalize">{{ acc.type }}</td>
-            <td data-label="Valuta">{{ acc.currency }}</td>
-            <td data-label="Saldo iniziale" class="md:text-right">{{ formatCurrency(acc.initial_balance, acc.currency) }}</td>
-            <td class="md:text-right actions-cell">
+            <td class="capitalize">{{ acc.type }}</td>
+            <td>{{ acc.currency }}</td>
+            <td class="text-right">{{ formatCurrency(acc.initial_balance, acc.currency) }}</td>
+            <td class="text-right">
               <RowActions @edit="startEdit(acc)" @delete="onDelete(acc)" />
             </td>
           </tr>
