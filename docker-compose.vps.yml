@@ -19,6 +19,7 @@ services:
       - finance
 
   php:
+    image: finance-vps-php:latest
     build:
       context: .
       dockerfile: docker/php/Dockerfile.prod
@@ -34,9 +35,7 @@ services:
       - finance
 
   scheduler:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile.prod
+    image: finance-vps-php:latest
     container_name: finance_vps_scheduler
     restart: unless-stopped
     env_file: .env.production
@@ -48,9 +47,7 @@ services:
       - finance
 
   queue:
-    build:
-      context: .
-      dockerfile: docker/php/Dockerfile.prod
+    image: finance-vps-php:latest
     container_name: finance_vps_queue
     restart: unless-stopped
     env_file: .env.production
