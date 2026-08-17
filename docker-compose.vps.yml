@@ -23,6 +23,8 @@ services:
     build:
       context: .
       dockerfile: docker/php/Dockerfile.prod
+      secrets:
+        - composer_github_token
     container_name: finance_vps_php
     restart: unless-stopped
     env_file: .env.production
@@ -104,3 +106,10 @@ volumes:
 networks:
   finance:
     driver: bridge
+
+secrets:
+  # Facoltativo: GitHub Personal Access Token (nessuno scope necessario, solo lettura repo
+  # pubblici) per autenticare Composer verso codeload.github.com ed evitare il rate limit
+  # anonimo (HTTP 429) durante il build. Va impostato in .env.production.
+  composer_github_token:
+    environment: GITHUB_TOKEN
