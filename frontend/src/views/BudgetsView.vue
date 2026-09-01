@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import { formatMonth } from '@/lib/date'
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Budget, Category, Paginated } from '@/types/api'
+
+function budgetPeriod(year: number, month: number): string {
+  return formatMonth(`${year}-${String(month).padStart(2, '0')}`)
+}
 
 const { items, loading, list, create, update, destroy } = useCrud<Budget>('budgets')
 
@@ -158,7 +163,7 @@ onMounted(async () => {
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <p class="font-medium text-slate-800 truncate">{{ categoryName(b.category_id) }}</p>
-              <p class="text-xs text-slate-500 mt-0.5">{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</p>
+              <p class="text-xs text-slate-500 mt-0.5">{{ budgetPeriod(b.year, b.month) }}</p>
             </div>
             <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
           </div>
@@ -192,7 +197,7 @@ onMounted(async () => {
         <tbody class="divide-y divide-slate-100">
           <tr v-for="b in items" :key="b.id">
             <td class="font-medium">{{ categoryName(b.category_id) }}</td>
-            <td>{{ b.year }}-{{ String(b.month).padStart(2, '0') }}</td>
+            <td>{{ budgetPeriod(b.year, b.month) }}</td>
             <td class="text-right">{{ b.amount }}</td>
             <td class="text-right">{{ b.spent ?? '0.00' }}</td>
             <td>

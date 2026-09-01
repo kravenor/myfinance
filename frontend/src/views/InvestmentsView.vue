@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/lib/api'
@@ -61,9 +62,6 @@ function plBorderClass(value: string | null | undefined): string {
   return n > 0 ? 'border-green-500' : 'border-red-400'
 }
 
-function formatDay(d: string): string {
-  return new Date(d).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' })
-}
 
 function reset() {
   editing.value = null
@@ -353,7 +351,7 @@ onMounted(async () => {
               <p class="text-xs text-slate-400 mt-0.5 truncate">
                 {{ h.quantity }} × {{ formatCurrency(h.effective_price, h.currency) }}
                 <span v-if="h.price_source === 'auto'" class="text-green-600">
-                  · auto<template v-if="h.price_as_of"> {{ formatDay(h.price_as_of) }}</template>
+                  · auto<template v-if="h.price_as_of"> {{ formatDate(h.price_as_of) }}</template>
                 </span>
               </p>
             </div>
@@ -401,9 +399,9 @@ onMounted(async () => {
               <span
                 v-if="h.price_source === 'auto'"
                 class="block text-xs text-green-600"
-                :title="h.price_as_of ? `Quotazione automatica aggiornata il ${formatDay(h.price_as_of)}` : 'Quotazione automatica'"
+                :title="h.price_as_of ? `Quotazione automatica aggiornata il ${formatDate(h.price_as_of)}` : 'Quotazione automatica'"
               >
-                auto<template v-if="h.price_as_of"> · {{ formatDay(h.price_as_of) }}</template>
+                auto<template v-if="h.price_as_of"> · {{ formatDate(h.price_as_of) }}</template>
               </span>
             </td>
             <td class="text-right font-medium">{{ formatCurrency(h.market_value, h.currency) }}</td>

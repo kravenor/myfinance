@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
@@ -202,7 +203,7 @@ onMounted(async () => {
                 <template v-if="r.type === 'transfer'"> → {{ accountName(r.transfer_account_id) }}</template>
               </p>
               <p class="text-xs text-slate-400 mt-0.5">
-                ogni {{ r.interval }} {{ r.cadence }} · prossima {{ r.next_run_at }}
+                ogni {{ r.interval }} {{ r.cadence }} · prossima {{ formatDate(r.next_run_at) }}
               </p>
             </div>
             <div class="text-right shrink-0">
@@ -240,7 +241,7 @@ onMounted(async () => {
               <span v-if="r.type === 'transfer'" class="text-slate-400"> → {{ accountName(r.transfer_account_id) }}</span>
             </td>
             <td>every {{ r.interval }} {{ r.cadence }}</td>
-            <td>{{ r.next_run_at }}</td>
+            <td>{{ formatDate(r.next_run_at) }}</td>
             <td class="text-right font-medium">{{ formatCurrency(r.amount, r.currency) }}</td>
             <td>
               <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'">●</span>

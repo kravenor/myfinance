@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notifications'
@@ -66,7 +67,7 @@ onMounted(() => store.fetch())
               </span>
             </div>
             <p class="text-sm text-slate-600 mt-0.5">{{ n.message }}</p>
-            <p class="text-xs text-slate-400 mt-1">{{ n.created_at?.slice(0, 10) }}</p>
+            <p class="text-xs text-slate-400 mt-1">{{ formatDate(n.created_at) }}</p>
           </div>
           <button
             type="button"

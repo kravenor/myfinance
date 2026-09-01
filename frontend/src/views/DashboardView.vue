@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMonth } from '@/lib/date'
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Bar, Doughnut } from 'vue-chartjs'
@@ -41,7 +42,7 @@ const donutData = () => ({
 })
 
 const barData = () => ({
-  labels: timeline.value.map((t) => t.period),
+  labels: timeline.value.map((t) => formatMonth(t.period)),
   datasets: [
     {
       label: 'Income',

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
@@ -190,11 +191,6 @@ function goToPage(p: number) {
   applyFilters(false)
 }
 
-function formatDate(dateString:string) {
-    const date = new Date(dateString);
-    // Then specify how you want your dates to be formatted
-    return new Intl.DateTimeFormat('default', {dateStyle: 'short'}).format(date);
-}
  
 
 onMounted(async () => {
@@ -428,7 +424,7 @@ onMounted(async () => {
               </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
-            <td>{{ tx.description ?? '—' }}</td>
+            <td class="whitespace-normal break-words max-w-xs">{{ tx.description ?? '—' }}</td>
             <td>
               <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1">
                 <span

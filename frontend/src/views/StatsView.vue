@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate, formatMonth } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { Line } from 'vue-chartjs'
 import {
@@ -59,7 +60,7 @@ async function refresh() {
 const trendData = computed(() => {
   if (!trend.value) return { labels: [], datasets: [] }
   return {
-    labels: trend.value.periods,
+    labels: trend.value.periods.map(formatMonth),
     datasets: trend.value.categories.map((c, i) => ({
       label: c.category_name,
       data: c.values.map((v) => parseFloat(v)),
@@ -72,7 +73,7 @@ const trendData = computed(() => {
 })
 
 const forecastData = computed(() => ({
-  labels: forecast.value.map((p) => p.period),
+  labels: forecast.value.map((p) => formatMonth(p.period)),
   datasets: [
     {
       label: 'Net mensile previsto',
@@ -136,11 +137,6 @@ function deltaClass(value: string | null | undefined, lowerIsBetter = false) {
   const good = lowerIsBetter ? !isPositive : isPositive
   return good ? 'text-green-600' : 'text-red-600'
 }
-function formatDate(dateString:string) {
-    const date = new Date(dateString);
-    // Then specify how you want your dates to be formatted
-    return new Intl.DateTimeFormat('default', {dateStyle: 'short'}).format(date);
-}
 
 onMounted(refresh)
 </script>
@@ -165,10 +161,10 @@ onMounted(refresh)
 
       <div v-if="comparison" class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Income {{ comparison.current.label }}</p>
+          <p class="text-xs uppercase text-slate-500">Income {{ formatMonth(comparison.current.label) }}</p>
           <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.income, baseCurrency) }}</p>
           <p class="text-xs text-slate-500 mt-2">
-            vs {{ comparison.previous.label }}: {{ formatCurrency(comparison.previous.income, baseCurrency) }}
+            vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.income, baseCurrency) }}
           </p>
           <p class="text-sm mt-1" :class="deltaClass(comparison.delta.income_pct)">
             Δ {{ formatMoneyDelta(comparison.delta.income) }}
@@ -178,10 +174,10 @@ onMounted(refresh)
           </p>
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Expense {{ comparison.current.label }}</p>
+          <p class="text-xs uppercase text-slate-500">Expense {{ formatMonth(comparison.current.label) }}</p>
           <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.expense, baseCurrency) }}</p>
           <p class="text-xs text-slate-500 mt-2">
-            vs {{ comparison.previous.label }}: {{ formatCurrency(comparison.previous.expense, baseCurrency) }}
+            vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.expense, baseCurrency) }}
           </p>
           <p class="text-sm mt-1" :class="deltaClass(comparison.delta.expense_pct, true)">
             Δ {{ formatMoneyDelta(comparison.delta.expense) }}
@@ -191,7 +187,7 @@ onMounted(refresh)
           </p>
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Net {{ comparison.current.label }}</p>
+          <p class="text-xs uppercase text-slate-500">Net {{ formatMonth(comparison.current.label) }}</p>
           <p
             class="text-2xl font-semibold mt-1"
             :class="parseFloat(comparison.current.net) >= 0 ? 'text-green-600' : 'text-red-600'"
@@ -199,7 +195,7 @@ onMounted(refresh)
             {{ formatCurrency(comparison.current.net, baseCurrency) }}
           </p>
           <p class="text-xs text-slate-500 mt-2">
-            vs {{ comparison.previous.label }}: {{ formatCurrency(comparison.previous.net, baseCurrency) }}
+            vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.net, baseCurrency) }}
           </p>
           <p class="text-sm mt-1" :class="deltaClass(comparison.delta.net)">
             Δ {{ formatMoneyDelta(comparison.delta.net) }}

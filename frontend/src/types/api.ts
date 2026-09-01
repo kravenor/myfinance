@@ -12,6 +12,7 @@ export interface User {
   email: string
   currency: string
   locale: string
+  date_format: string
   notification_preferences?: NotificationPreferences
   created_at: string
 }

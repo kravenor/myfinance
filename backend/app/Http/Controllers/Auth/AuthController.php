@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 
 class AuthController extends Controller
 {
@@ -111,6 +112,20 @@ class AuthController extends Controller
         ])->save();
 
         return response()->json(['message' => 'Password aggiornata.']);
+    }
+
+    public function updatePreferences(Request $request): UserResource
+    {
+        /** @var User $user */
+        $user = $request->user();
+
+        $data = $request->validate([
+            'date_format' => ['required', 'string', Rule::in(config('finance.date_formats'))],
+        ]);
+
+        $user->update($data);
+
+        return new UserResource($user);
     }
 
     public function logout(Request $request): Response

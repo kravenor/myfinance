@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
+import { DATE_FORMATS, DEFAULT_DATE_FORMAT, formatDateWith } from '@/lib/date'
 import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
-import type { NotificationPreferences } from '@/types/api'
+import type { NotificationPreferences, User } from '@/types/api'
 
 const auth = useAuthStore()
 const menu = useMenuStore()
@@ -52,6 +53,28 @@ async function onPasswordSubmit() {
   }
 }
 
+const dateFormat = ref(DEFAULT_DATE_FORMAT)
+const dateSaving = ref(false)
+const dateSaved = ref(false)
+const dateError = ref('')
+const dateSample = computed(() => formatDateWith(new Date(), dateFormat.value))
+
+async function onDateSubmit() {
+  dateSaving.value = true
+  dateSaved.value = false
+  dateError.value = ''
+  try {
+    await api.put<{ data: User }>('/auth/preferences', { date_format: dateFormat.value })
+    await auth.fetchMe()
+    dateSaved.value = true
+  } catch (e: unknown) {
+    dateError.value = 'Salvataggio non riuscito.'
+    throw e
+  } finally {
+    dateSaving.value = false
+  }
+}
+
 function hydrate(prefs: NotificationPreferences) {
   form.value = {
     email: prefs.email,
@@ -84,6 +107,7 @@ async function onSubmit() {
 }
 
 onMounted(async () => {
+  dateFormat.value = auth.user?.date_format ?? DEFAULT_DATE_FORMAT
   try {
     const { data } = await api.get<{ data: NotificationPreferences }>('/notification-preferences')
     hydrate(data.data)
@@ -220,6 +244,34 @@ onMounted(async () => {
         </div>
       </form>
     </div>
+    <div class="card p-4 sm:p-6">
+      <form class="space-y-5" @submit.prevent="onDateSubmit">
+        <div>
+          <h2 class="font-medium">Formato data</h2>
+          <p class="text-sm text-slate-500 mt-1">
+            Come vengono mostrate le date in tutte le pagine. I campi di inserimento restano nel
+            formato del tuo dispositivo.
+          </p>
+        </div>
+
+        <div>
+          <label class="label">Formato</label>
+          <select v-model="dateFormat" class="input w-48">
+            <option v-for="f in DATE_FORMATS" :key="f" :value="f">{{ f }}</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-1">Anteprima: {{ dateSample }}</p>
+        </div>
+
+        <div class="flex items-center gap-3 pt-2">
+          <button type="submit" class="btn-primary" :disabled="dateSaving">
+            {{ dateSaving ? 'Salvataggio…' : 'Salva' }}
+          </button>
+          <span v-if="dateSaved" class="text-sm text-green-600">Formato salvato.</span>
+          <span v-if="dateError" class="text-sm text-red-600">{{ dateError }}</span>
+        </div>
+      </form>
+    </div>
+
     <section class="card p-4 sm:p-6 space-y-5">
       <div>
         <h2 class="font-medium">Sezioni del menu</h2>

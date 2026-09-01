@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
@@ -453,7 +454,7 @@ onMounted(async () => {
             {{ PACE_LABEL[g.pace.status] }}
           </span>
           <span v-if="g.pace.status !== 'completed'" class="text-slate-500">
-            entro {{ g.pace.target_date }} ·
+            entro {{ formatDate(g.pace.target_date) }} ·
             <template v-if="g.pace.status === 'overdue'">scaduto</template>
             <template v-else-if="g.pace.months_left > 0">
               {{ money(g.pace.required_per_month, g.currency) }}/mese ({{ g.pace.months_left }} mesi)
@@ -563,7 +564,7 @@ onMounted(async () => {
             </thead>
             <tbody class="divide-y divide-slate-100">
               <tr v-for="t in transactions" :key="t.id">
-                <td data-label="Data">{{ t.occurred_at }}</td>
+                <td data-label="Data">{{ formatDate(t.occurred_at) }}</td>
                 <td data-label="Tipo">
                   <span class="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
                     {{ TYPE_LABEL[t.type] }}

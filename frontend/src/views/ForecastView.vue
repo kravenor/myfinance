@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -691,8 +692,8 @@ onMounted(async () => {
                 <td data-label="Conto">{{ accountName(it.account_id) }}</td>
                 <td data-label="Categoria">{{ categoryName(it.category_id) }}</td>
                 <td data-label="Cadenza">{{ CADENCE_LABEL[it.cadence] }}</td>
-                <td data-label="Dal">{{ it.starts_on }}</td>
-                <td data-label="Fino">{{ it.ends_on ?? '—' }}</td>
+                <td data-label="Dal">{{ formatDate(it.starts_on) }}</td>
+                <td data-label="Fino">{{ formatDate(it.ends_on) }}</td>
                 <td data-label="Importo" class="md:text-right font-medium">
                   {{ money(it.amount, it.currency) }}
                 </td>

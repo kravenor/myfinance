@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
@@ -343,7 +344,7 @@ onMounted(async () => {
               </thead>
               <tbody class="divide-y divide-slate-100">
                 <tr v-for="s in applyPreview.sample" :key="s.transaction_id">
-                  <td>{{ s.occurred_at }}</td>
+                  <td>{{ formatDate(s.occurred_at) }}</td>
                   <td>{{ s.description }}</td>
                   <td>{{ categoryNameById(s.suggested_category_id) }}</td>
                 </tr>

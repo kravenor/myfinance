@@ -68,6 +68,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Formati data supportati
+    |--------------------------------------------------------------------------
+    | Whitelist per la preferenza utente `users.date_format`: popola il select
+    | in Impostazioni e valida l'input. Token: d = giorno, m = mese, M = mese
+    | abbreviato, Y = anno.
+    */
+    'date_formats' => ['d/m/Y', 'Y-m-d', 'm/d/Y', 'd.m.Y', 'd M Y'],
+
+    /*
+    |--------------------------------------------------------------------------
     | Notifiche
     |--------------------------------------------------------------------------
     | Le notifiche in-app (canale database) sono sempre attive. Il canale mail

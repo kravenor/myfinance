@@ -31,12 +31,18 @@ class User extends Authenticatable
         'budget_threshold' => 80,
     ];
 
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'date_format' => 'd/m/Y',
+    ];
+
     protected $fillable = [
         'name',
         'email',
         'password',
         'currency',
         'locale',
+        'date_format',
         'notification_preferences',
     ];
 

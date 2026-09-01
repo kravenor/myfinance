@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMonth } from '@/lib/date'
 import { computed, onMounted, ref, watch } from 'vue'
 import { Bar, Doughnut, Line } from 'vue-chartjs'
 import {
@@ -102,7 +103,7 @@ const tagDonutData = () => ({
 })
 
 const barData = () => ({
-  labels: timeline.value.map((t) => t.period),
+  labels: timeline.value.map((t) => formatMonth(t.period)),
   datasets: [
     { label: 'Income', data: timeline.value.map((t) => parseFloat(t.income)), backgroundColor: '#22c55e' },
     { label: 'Expense', data: timeline.value.map((t) => parseFloat(t.expense)), backgroundColor: '#ef4444' },
@@ -110,7 +111,7 @@ const barData = () => ({
 })
 
 const lineData = () => ({
-  labels: netWorth.value.map((p) => p.period),
+  labels: netWorth.value.map((p) => formatMonth(p.period)),
   datasets: [
     {
       label: 'Patrimonio netto',

@@ -22,6 +22,7 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'currency' => $this->currency,
             'locale' => $this->locale,
+            'date_format' => $this->date_format,
             'notification_preferences' => $this->notificationPreferences(),
             'created_at' => $this->created_at?->toIso8601String(),
         ];
