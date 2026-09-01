@@ -58,3 +58,36 @@ export function formatMonth(period: string | null | undefined): string {
     .replace(/^[^dmMY]+|[^dmMY]+$/g, '')
   return formatDateWith(new Date(+match[1], +match[2] - 1, 1), monthFormat)
 }
+
+const MAX_MONTH_START_DAY = 28
+
+function monthStartDay(): number {
+  const day = useAuthStore().user?.month_start_day ?? 1
+  return Math.min(MAX_MONTH_START_DAY, Math.max(1, day))
+}
+
+function toIsoDate(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
+/**
+ * Inizio del "mese finanziario" che contiene `ref` (preferenza
+ * `month_start_day`): con `1` è il 1° del mese, come prima.
+ */
+export function financialMonthStart(ref: Date = new Date()): Date {
+  const day = monthStartDay()
+  const start = new Date(ref.getFullYear(), ref.getMonth(), day)
+  if (ref.getDate() < day) start.setMonth(start.getMonth() - 1)
+  return start
+}
+
+/** Range ISO `from`/`to` del mese finanziario che contiene `ref`. */
+export function financialMonthRange(ref: Date = new Date()): { from: string; to: string } {
+  const start = financialMonthStart(ref)
+  const end = new Date(start.getFullYear(), start.getMonth() + 1, start.getDate() - 1)
+  return { from: toIsoDate(start), to: toIsoDate(end) }
+}

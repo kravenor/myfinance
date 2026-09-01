@@ -8,6 +8,7 @@ use App\Models\InvestmentHolding;
 use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
+use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -63,10 +64,9 @@ class ReportService
         }
 
         if ($unit === 'month') {
-            $currentFrom = $reference->copy()->startOfMonth();
-            $currentTo = $reference->copy()->endOfMonth();
-            $previousFrom = $reference->copy()->subMonthNoOverflow()->startOfMonth();
-            $previousTo = $reference->copy()->subMonthNoOverflow()->endOfMonth();
+            [$currentFrom, $currentTo] = FinancialMonth::range($reference);
+            // Il giorno prima dell'inizio del ciclo corrente cade nel precedente.
+            [$previousFrom, $previousTo] = FinancialMonth::range($currentFrom->copy()->subDay());
         } else {
             $currentFrom = $reference->copy()->startOfYear();
             $currentTo = $reference->copy()->endOfYear();
@@ -127,7 +127,7 @@ class ReportService
             $base = $this->toBase($t);
             $cid = (int) $t->category_id;
             $totalPerCat[$cid] = ($totalPerCat[$cid] ?? 0.0) + $base;
-            $key = $t->occurred_at->format('Y-m');
+            $key = FinancialMonth::key($t->occurred_at);
             $series[$cid][$key] = ($series[$cid][$key] ?? 0.0) + $base;
         }
 
@@ -193,8 +193,8 @@ class ReportService
     public function cashFlowForecast(int $months = 6): array
     {
         $months = max(1, min(24, $months));
-        $start = Carbon::now()->startOfMonth();
-        $end = $start->copy()->addMonthsNoOverflow($months - 1)->endOfMonth();
+        [$start] = FinancialMonth::range(Carbon::now());
+        $end = $start->copy()->addMonthsNoOverflow($months)->subDay()->endOfDay();
         $base = $this->baseCurrency();
 
         $buckets = $this->monthBuckets($start, $end);
@@ -212,7 +212,7 @@ class ReportService
                     break;
                 }
                 if ($cursor->gte($start)) {
-                    $key = $cursor->format('Y-m');
+                    $key = FinancialMonth::key($cursor);
                     if (isset($deltas[$key])) {
                         $deltas[$key][$r->type] += $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
                     }
@@ -368,7 +368,7 @@ class ReportService
         $buckets = $this->monthBuckets($from, $to);
 
         foreach ($transactions as $t) {
-            $key = $t->occurred_at->format('Y-m');
+            $key = FinancialMonth::key($t->occurred_at);
             if (! isset($buckets[$key])) {
                 continue;
             }
@@ -392,7 +392,7 @@ class ReportService
     {
         $out = [];
         foreach (array_keys($this->monthBuckets($from, $to)) as $key) {
-            $monthEnd = Carbon::parse($key.'-01')->endOfMonth();
+            $monthEnd = FinancialMonth::fromKey($key)[1];
             $out[] = [
                 'period' => $key,
                 'net_worth' => $this->fmt($this->cumulativeBalance($monthEnd)),
@@ -521,8 +521,8 @@ class ReportService
      */
     private function monthBuckets(Carbon $from, Carbon $to): array
     {
-        $cursor = $from->copy()->startOfMonth();
-        $end = $to->copy()->startOfMonth();
+        [$cursor] = FinancialMonth::range($from);
+        [$end] = FinancialMonth::range($to);
         $buckets = [];
         while ($cursor->lte($end)) {
             $buckets[$cursor->format('Y-m')] = ['income' => 0.0, 'expense' => 0.0];

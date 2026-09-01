@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\RecurringTransaction;
 use App\Models\Scenario;
 use App\Models\ScenarioItem;
+use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 
@@ -79,8 +80,8 @@ class ExpenseForecastService
     private function bootstrap(int $months): array
     {
         $months = max(1, min(24, $months));
-        $start = Carbon::now()->startOfMonth();
-        $end = $start->copy()->addMonthsNoOverflow($months - 1)->endOfMonth();
+        [$start] = FinancialMonth::range(Carbon::now());
+        $end = $start->copy()->addMonthsNoOverflow($months)->subDay()->endOfDay();
         $base = strtoupper(Auth::user()->currency);
 
         return [$start, $end, $this->periods($start, $end), $base];
@@ -104,8 +105,8 @@ class ExpenseForecastService
         $byCategory = $this->initCategoryGrid($categories->pluck('id')->all(), $periods);
 
         // Ricorrenti expense per categoria
-        $start = Carbon::parse($periods[0].'-01')->startOfMonth();
-        $end = Carbon::parse(end($periods).'-01')->endOfMonth();
+        [$start] = FinancialMonth::fromKey($periods[0]);
+        [, $end] = FinancialMonth::fromKey(end($periods));
         $recurringTotals = $this->aggregateRecurring($periods, $start, $end, $base);
         foreach ($recurringTotals as $catId => $perPeriod) {
             foreach ($perPeriod as $period => $amount) {
@@ -272,7 +273,7 @@ class ExpenseForecastService
                     break;
                 }
                 if ($cursor->gte($start)) {
-                    $key = $cursor->format('Y-m');
+                    $key = FinancialMonth::key($cursor);
                     if (isset($valid[$key])) {
                         $totals[$key] += $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
                     }
@@ -351,7 +352,7 @@ class ExpenseForecastService
                     break;
                 }
                 if ($cursor->gte($start)) {
-                    $key = $cursor->format('Y-m');
+                    $key = FinancialMonth::key($cursor);
                     if (isset($valid[$key])) {
                         $amount = $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
                         $cid = (int) $r->category_id;
@@ -421,7 +422,7 @@ class ExpenseForecastService
                 if ($occ->lt($start)) {
                     continue;
                 }
-                $key = $occ->format('Y-m');
+                $key = FinancialMonth::key($occ);
                 if (! isset($valid[$key])) {
                     continue;
                 }

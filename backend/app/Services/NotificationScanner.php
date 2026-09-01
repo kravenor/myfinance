@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Notifications\BudgetThresholdNotification;
 use App\Notifications\Contracts\Dedupable;
 use App\Notifications\SavingsGoalRiskNotification;
+use App\Support\FinancialMonth;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
@@ -29,7 +30,8 @@ class NotificationScanner
 
         if ($prefs['budget']) {
             $threshold = (float) $prefs['budget_threshold'];
-            foreach ($this->budgetAlerts->alerts($now->year, $now->month, $threshold) as $alert) {
+            [$currentStart] = FinancialMonth::range($now);
+            foreach ($this->budgetAlerts->alerts($currentStart->year, $currentStart->month, $threshold) as $alert) {
                 $sent += $this->dispatch($user, new BudgetThresholdNotification($alert));
             }
         }

@@ -34,6 +34,7 @@ class User extends Authenticatable
     /** @var array<string, mixed> */
     protected $attributes = [
         'date_format' => 'd/m/Y',
+        'month_start_day' => 1,
     ];
 
     protected $fillable = [
@@ -43,6 +44,7 @@ class User extends Authenticatable
         'currency',
         'locale',
         'date_format',
+        'month_start_day',
         'notification_preferences',
     ];
 
@@ -57,6 +59,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'notification_preferences' => 'array',
+            'month_start_day' => 'integer',
         ];
     }
 

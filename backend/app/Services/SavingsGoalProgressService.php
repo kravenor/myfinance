@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
+use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
 
 class SavingsGoalProgressService
@@ -58,7 +59,7 @@ class SavingsGoalProgressService
     {
         return match ($goal->recurrence) {
             'weekly' => [$now->copy()->startOfWeek(), $now->copy()->endOfWeek()],
-            'monthly' => [$now->copy()->startOfMonth(), $now->copy()->endOfMonth()],
+            'monthly' => FinancialMonth::range($now),
             'yearly' => [$now->copy()->startOfYear(), $now->copy()->endOfYear()],
             default => [$goal->start_date?->copy(), $goal->target_date?->copy()],
         };

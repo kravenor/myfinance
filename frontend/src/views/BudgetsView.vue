@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMonth } from '@/lib/date'
+import { financialMonthStart, formatMonth } from '@/lib/date'
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
@@ -13,8 +13,9 @@ function budgetPeriod(year: number, month: number): string {
 const { items, loading, list, create, update, destroy } = useCrud<Budget>('budgets')
 
 const categories = ref<Category[]>([])
-const now = new Date()
-const filters = ref({ year: now.getFullYear(), month: now.getMonth() + 1 })
+// Periodo di default: il ciclo finanziario corrente (vedi month_start_day).
+const currentCycle = financialMonthStart()
+const filters = ref({ year: currentCycle.getFullYear(), month: currentCycle.getMonth() + 1 })
 
 const editing = ref<Budget | null>(null)
 const showForm = ref(false)

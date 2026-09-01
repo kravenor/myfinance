@@ -9,6 +9,7 @@ use App\Models\Budget;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Services\BudgetAlertService;
+use App\Support\FinancialMonth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -49,9 +50,10 @@ class BudgetController extends Controller
     {
         $this->authorize('viewAny', Budget::class);
 
-        $now = Carbon::now();
-        $year = $request->filled('year') ? $request->integer('year') : $now->year;
-        $month = $request->filled('month') ? $request->integer('month') : $now->month;
+        // Il periodo di default è il ciclo finanziario corrente, non il mese di calendario.
+        [$currentStart] = FinancialMonth::range(Carbon::now());
+        $year = $request->filled('year') ? $request->integer('year') : $currentStart->year;
+        $month = $request->filled('month') ? $request->integer('month') : $currentStart->month;
 
         /** @var User $user */
         $user = $request->user();
@@ -106,8 +108,7 @@ class BudgetController extends Controller
     private function attachSpent(array $budgets): void
     {
         foreach ($budgets as $budget) {
-            $start = Carbon::createFromDate($budget->year, $budget->month, 1)->startOfDay();
-            $end = $start->copy()->endOfMonth();
+            [$start, $end] = FinancialMonth::forYearMonth($budget->year, $budget->month);
 
             $spent = Transaction::query()
                 ->where('type', 'expense')

@@ -10,6 +10,7 @@ use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\UpdatePasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Support\FinancialMonth;
 use Database\Seeders\CategorySeeder;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
@@ -120,7 +121,8 @@ class AuthController extends Controller
         $user = $request->user();
 
         $data = $request->validate([
-            'date_format' => ['required', 'string', Rule::in(config('finance.date_formats'))],
+            'date_format' => ['sometimes', 'string', Rule::in(config('finance.date_formats'))],
+            'month_start_day' => ['sometimes', 'integer', 'between:1,'.FinancialMonth::MAX_START_DAY],
         ]);
 
         $user->update($data);

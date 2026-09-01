@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\ExpenseForecastService;
 use App\Services\ReportService;
+use App\Support\FinancialMonth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -165,13 +166,17 @@ class ReportController extends Controller
      */
     private function range(Request $request, int $defaultMonths = 1): array
     {
+        [$currentStart, $currentEnd] = FinancialMonth::range(Carbon::now());
+
         $to = $request->filled('to')
             ? Carbon::parse($request->string('to'))->endOfDay()
-            : Carbon::now()->endOfMonth();
+            : $currentEnd;
 
         $from = $request->filled('from')
             ? Carbon::parse($request->string('from'))->startOfDay()
-            : $to->copy()->startOfMonth()->subMonthsNoOverflow($defaultMonths - 1);
+            : ($request->filled('to')
+                ? FinancialMonth::range($to)[0]->subMonthsNoOverflow($defaultMonths - 1)
+                : $currentStart->copy()->subMonthsNoOverflow($defaultMonths - 1));
 
         return [$from, $to];
     }

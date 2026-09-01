@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
-import { DATE_FORMATS, DEFAULT_DATE_FORMAT, formatDateWith } from '@/lib/date'
+import { DATE_FORMATS, DEFAULT_DATE_FORMAT, formatDateWith, financialMonthRange } from '@/lib/date'
 import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import type { NotificationPreferences, User } from '@/types/api'
@@ -54,17 +54,26 @@ async function onPasswordSubmit() {
 }
 
 const dateFormat = ref(DEFAULT_DATE_FORMAT)
+const monthStartDay = ref(1)
+const monthStartDays = Array.from({ length: 28 }, (_, i) => i + 1)
 const dateSaving = ref(false)
 const dateSaved = ref(false)
 const dateError = ref('')
 const dateSample = computed(() => formatDateWith(new Date(), dateFormat.value))
+const cycleSample = computed(() => {
+  const { from, to } = financialMonthRange()
+  return `${formatDateWith(from, dateFormat.value)} → ${formatDateWith(to, dateFormat.value)}`
+})
 
 async function onDateSubmit() {
   dateSaving.value = true
   dateSaved.value = false
   dateError.value = ''
   try {
-    await api.put<{ data: User }>('/auth/preferences', { date_format: dateFormat.value })
+    await api.put<{ data: User }>('/auth/preferences', {
+      date_format: dateFormat.value,
+      month_start_day: monthStartDay.value,
+    })
     await auth.fetchMe()
     dateSaved.value = true
   } catch (e: unknown) {
@@ -108,6 +117,7 @@ async function onSubmit() {
 
 onMounted(async () => {
   dateFormat.value = auth.user?.date_format ?? DEFAULT_DATE_FORMAT
+  monthStartDay.value = auth.user?.month_start_day ?? 1
   try {
     const { data } = await api.get<{ data: NotificationPreferences }>('/notification-preferences')
     hydrate(data.data)
@@ -247,10 +257,10 @@ onMounted(async () => {
     <div class="card p-4 sm:p-6">
       <form class="space-y-5" @submit.prevent="onDateSubmit">
         <div>
-          <h2 class="font-medium">Formato data</h2>
+          <h2 class="font-medium">Periodo e data</h2>
           <p class="text-sm text-slate-500 mt-1">
-            Come vengono mostrate le date in tutte le pagine. I campi di inserimento restano nel
-            formato del tuo dispositivo.
+            Come vengono mostrate le date e da che giorno parte il mese nei calcoli (budget,
+            report, previsioni). I campi di inserimento restano nel formato del tuo dispositivo.
           </p>
         </div>
 
@@ -260,6 +270,17 @@ onMounted(async () => {
             <option v-for="f in DATE_FORMATS" :key="f" :value="f">{{ f }}</option>
           </select>
           <p class="text-xs text-slate-500 mt-1">Anteprima: {{ dateSample }}</p>
+        </div>
+
+        <div>
+          <label class="label">Giorno di inizio del mese</label>
+          <select v-model.number="monthStartDay" class="input w-48">
+            <option v-for="d in monthStartDays" :key="d" :value="d">{{ d }}</option>
+          </select>
+          <p class="text-xs text-slate-500 mt-1">
+            Utile se il tuo mese parte dallo stipendio. Periodo corrente: {{ cycleSample }}.
+            Cambiarlo non rinumera i budget già inseriti, ma ricalcola quanto risulta speso.
+          </p>
         </div>
 
         <div class="flex items-center gap-3 pt-2">

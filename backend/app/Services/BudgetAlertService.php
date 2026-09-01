@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Models\Budget;
 use App\Models\Transaction;
-use Illuminate\Support\Carbon;
+use App\Support\FinancialMonth;
 
 class BudgetAlertService
 {
@@ -32,8 +32,7 @@ class BudgetAlertService
             return [];
         }
 
-        $start = Carbon::createFromDate($year, $month, 1)->startOfDay();
-        $end = $start->copy()->endOfMonth();
+        [$start, $end] = FinancialMonth::forYearMonth($year, $month);
 
         $spentByCategory = Transaction::query()
             ->where('type', 'expense')

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatMonth } from '@/lib/date'
+import { financialMonthRange, formatMonth } from '@/lib/date'
 import { computed, onMounted, ref, watch } from 'vue'
 import { Bar, Doughnut, Line } from 'vue-chartjs'
 import {
@@ -21,12 +21,9 @@ ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, LineElement
 
 function defaultRange() {
   const now = new Date()
-  const to = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  const from = new Date(now.getFullYear() - 1, now.getMonth(), 1)
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  }
+  const { to } = financialMonthRange(now)
+  const { from } = financialMonthRange(new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()))
+  return { from, to }
 }
 
 const filters = ref(defaultRange())

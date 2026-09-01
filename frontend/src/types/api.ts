@@ -13,6 +13,7 @@ export interface User {
   currency: string
   locale: string
   date_format: string
+  month_start_day: number
   notification_preferences?: NotificationPreferences
   created_at: string
 }
