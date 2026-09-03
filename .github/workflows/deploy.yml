@@ -25,4 +25,15 @@ jobs:
             cd "${{ vars.DEPLOY_PATH }}"
             pwd
             git pull origin master
-            docker compose --env-file .env.production -f docker-compose.vps.yml up -d --build
+
+            COMPOSE="docker compose --env-file .env.production -f docker-compose.vps.yml"
+            $COMPOSE up -d --build
+
+            # Backup prima di toccare lo schema: il codice si torna indietro con git,
+            # una migration no. Lo stack è già su, quindi il dump non può fallire
+            # per database spento.
+            COMPOSE_FILE=docker-compose.vps.yml COMPOSE_ENV_FILES=.env.production ./scripts/backup.sh
+
+            # Senza questo le migration non venivano mai eseguite in produzione: le
+            # colonne nuove restavano assenti e le scritture andavano in errore 500.
+            $COMPOSE exec -T php php artisan migrate --force

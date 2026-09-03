@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('investments/overview', [InvestmentController::class, 'overview'])->name('investments.overview');
     Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->name('investments.lookup');
+    Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->name('investments.refresh-prices');
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
 

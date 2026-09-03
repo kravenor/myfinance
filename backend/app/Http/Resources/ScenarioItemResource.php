@@ -19,6 +19,7 @@ class ScenarioItemResource extends JsonResource
         return [
             'id' => $this->id,
             'scenario_id' => $this->scenario_id,
+            'type' => $this->type,
             'account_id' => $this->account_id,
             'category_id' => $this->category_id,
             'description' => $this->description,

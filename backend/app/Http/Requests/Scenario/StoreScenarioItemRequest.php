@@ -20,6 +20,7 @@ class StoreScenarioItemRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'type' => ['sometimes', Rule::in(['expense', 'income'])],
             'account_id' => [
                 'nullable',
                 'integer',

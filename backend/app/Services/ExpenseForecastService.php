@@ -18,8 +18,9 @@ use Illuminate\Support\Facades\Auth;
  * - se esiste un budget per quel mese → usa il budget come forecast base;
  * - altrimenti → somma delle ricorrenti expense che cadono nel mese.
  *
- * Le entrate previste vengono dalle ricorrenti income. Il "residuo a fine mese"
- * è `entrate − uscite_totali` (forecast base + extra scenario).
+ * Le entrate previste vengono dalle ricorrenti income, più gli item income
+ * dello scenario simulato. Il "residuo a fine mese" è `entrate − uscite_totali`
+ * (forecast base + extra scenario).
  */
 class ExpenseForecastService
 {
@@ -125,9 +126,11 @@ class ExpenseForecastService
             }
         }
 
-        // Item dello scenario
+        // Item dello scenario: le uscite entrano nella griglia per categoria,
+        // le entrate si sommano alle entrate del mese.
+        $scenarioIncome = [];
         if ($scenario) {
-            $scenarioTotals = $this->aggregateScenario($scenario, $periods, $start, $end, $base);
+            [$scenarioTotals, $scenarioIncome] = $this->aggregateScenario($scenario, $periods, $start, $end, $base);
             foreach ($scenarioTotals as $catKey => $perPeriod) {
                 if (! isset($byCategory[$catKey])) {
                     $byCategory[$catKey] = $this->emptyCells($periods);
@@ -204,7 +207,7 @@ class ExpenseForecastService
 
         foreach ($periods as $period) {
             $t = $totalsByMonth[$period];
-            $income = $incomePerMonth[$period] ?? 0.0;
+            $income = ($incomePerMonth[$period] ?? 0.0) + ($scenarioIncome[$period] ?? 0.0);
             $net = $income - $t['expense_total'];
 
             $sumIncome += $income;
@@ -400,12 +403,16 @@ class ExpenseForecastService
     }
 
     /**
+     * Item dello scenario separati per tipo: le uscite per categoria e mese, le
+     * entrate solo per mese (non hanno una riga nella tabella delle uscite).
+     *
      * @param  array<int, string>  $periods
-     * @return array<int|string, array<string, float>>
+     * @return array{0: array<int|string, array<string, float>>, 1: array<string, float>}
      */
     private function aggregateScenario(Scenario $scenario, array $periods, Carbon $start, Carbon $end, string $base): array
     {
         $totals = [];
+        $income = [];
         $valid = array_flip($periods);
 
         $items = ScenarioItem::query()
@@ -427,12 +434,19 @@ class ExpenseForecastService
                     continue;
                 }
                 $amount = $this->converter->convert((float) $item->amount, $item->currency, $base, $occ);
+
+                if ($item->type === 'income') {
+                    $income[$key] = ($income[$key] ?? 0.0) + $amount;
+
+                    continue;
+                }
+
                 $catKey = $item->category_id ?? 'uncategorized';
                 $totals[$catKey][$key] = ($totals[$catKey][$key] ?? 0.0) + $amount;
             }
         }
 
-        return $totals;
+        return [$totals, $income];
     }
 
     /**

@@ -40,6 +40,7 @@ return [
             'etf' => 'yahoo',
             'fund' => 'yahoo',
             'crypto' => 'coingecko',
+            'bond' => 'borsaitaliana',
         ],
         'yahoo' => [
             'url' => env('FINANCE_YAHOO_URL', 'https://query1.finance.yahoo.com'),
@@ -50,6 +51,12 @@ return [
             'api_key' => env('FINANCE_COINGECKO_API_KEY'), // opzionale (demo/pro)
             'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
             'vs_currency' => env('FINANCE_COINGECKO_VS', 'EUR'),
+        ],
+        'borsaitaliana' => [
+            // Scheda titolo del MOT: il segmento /btp/ vale per ogni tipo di
+            // obbligazione (BOT, CCT, corporate). Nessuna API, si legge l'HTML.
+            'url' => env('FINANCE_BORSAITALIANA_URL', 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda'),
+            'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
         ],
     ],
 
