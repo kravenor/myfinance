@@ -88,9 +88,10 @@ Finance/
 │   ├── tailwind.config.js
 │   ├── postcss.config.js
 │   ├── tsconfig.json
-│   ├── index.html
+│   ├── index.html         # meta PWA (manifest, theme-color, apple-touch-icon)
+│   ├── public/            # asset statici serviti a root: manifest.webmanifest, icon-192/512.png, sw.js
 │   └── src/
-│       ├── main.ts            # bootstrap (Pinia + Router)
+│       ├── main.ts            # bootstrap (Pinia + Router) + registrazione service worker (solo prod)
 │       ├── App.vue            # root + onMounted fetchMe
 │       ├── style.css          # Tailwind directives + componenti (btn, input, card, table)
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
@@ -263,6 +264,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 - [x] **Estensione** — Usabilità mobile (sidebar a drawer, tabelle a card stack, filtri collassabili, FAB, touch target 44px — convenzioni in §6)
 - [x] **Estensione** — Cambio password da Impostazioni (`PUT /auth/password` con `current_password`)
+- [x] **Estensione** — PWA installabile (manifest + icone + service worker vuoto per l'installabilità Chrome; nessuna cache offline)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
@@ -421,6 +423,14 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 ### Fix backend collegati
 - `routes/web.php` espone una rotta nominata `login` che ritorna JSON 401 (evita `RouteNotFoundException` quando `auth:sanctum` cerca di redirigere richieste non-JSON).
 - `bootstrap/app.php`: `shouldRenderJsonWhen` e custom render per `AuthenticationException` su path `api/*`.
+
+### PWA (installabile)
+L'app si installa sulla home screen e parte a schermo pieno (`display: standalone`). Tutto statico in `frontend/public/`, servito da Vite in dev e copiato in `dist/` dalla build:
+- `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#4f46e5` (indigo-600, l'accento dell'app), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
+- `icon-192.png` / `icon-512.png` — **segnaposto** generati a mano (barre bianche su fondo indigo, full-bleed perché le maskable vengono ritagliate dall'OS): sostituibili con un'icona vera senza toccare altro.
+- `sw.js` — service worker **vuoto di proposito**, registrato solo in produzione da [main.ts](frontend/src/main.ts). Serve unicamente al criterio di installabilità di Chrome (manifest + handler `fetch`), che altrimenti non offre "Installa app" su Android; iOS installa col solo manifest. Nessuna cache: un'app di dati vive di richieste fresche, e una cache offline darebbe solo saldi vecchi da debuggare.
+- [index.html](frontend/index.html) — `theme-color`, `manifest`, `apple-touch-icon` e i meta `apple-mobile-web-app-*` (iOS non legge il manifest per lo schermo pieno).
+- [docker/nginx/prod.conf](docker/nginx/prod.conf) — `location = /manifest.webmanifest` con `default_type application/manifest+json`: nginx non conosce quell'estensione e lo servirebbe come `application/octet-stream`, con Chrome che ignora il manifest. Va corretto in una location dedicata perché un blocco `types { }` nel `server` sostituirebbe l'intera mappa MIME.
 
 ## 10. Report & dashboard (Fase 7)
 
