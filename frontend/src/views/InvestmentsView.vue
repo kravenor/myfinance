@@ -40,6 +40,7 @@ const form = ref({
 const lookupResults = ref<InstrumentCandidate[]>([])
 const lookupLoading = ref(false)
 const lookupError = ref('')
+const refreshingPrices = ref(false)
 
 const investmentAccounts = computed(() => accounts.value.filter((a) => a.type === 'investment'))
 
@@ -170,6 +171,16 @@ async function refresh() {
   overview.value = o.data.data
 }
 
+async function refreshPrices() {
+  refreshingPrices.value = true
+  try {
+    await api.post('/investments/refresh-prices')
+    await refresh()
+  } finally {
+    refreshingPrices.value = false
+  }
+}
+
 onMounted(async () => {
   const a = await api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } })
   accounts.value = a.data.data
@@ -182,13 +193,23 @@ onMounted(async () => {
   <div class="space-y-6 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
-      <button
-        class="btn-primary"
-        :disabled="investmentAccounts.length === 0"
-        @click="showForm = !showForm; reset()"
-      >
-        {{ showForm ? 'Annulla' : 'Nuova posizione' }}
-      </button>
+      <div class="flex gap-2">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="refreshingPrices"
+          @click="refreshPrices"
+        >
+          {{ refreshingPrices ? 'Aggiornamento…' : 'Aggiorna quotazioni' }}
+        </button>
+        <button
+          class="btn-primary"
+          :disabled="investmentAccounts.length === 0"
+          @click="showForm = !showForm; reset()"
+        >
+          {{ showForm ? 'Annulla' : 'Nuova posizione' }}
+        </button>
+      </div>
     </div>
 
     <button
@@ -253,6 +274,10 @@ onMounted(async () => {
       <div>
         <label class="label">Ticker / Symbol</label>
         <input v-model="form.symbol" class="input" placeholder="es. CSSPX.MI (auto da ISIN)" />
+        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+          Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+          quotazione sul MOT di Borsa Italiana.
+        </p>
       </div>
       <div>
         <label class="label">ISIN</label>
@@ -310,6 +335,9 @@ onMounted(async () => {
       <div>
         <label class="label">Quantità</label>
         <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
+        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+          Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
+        </p>
       </div>
       <div>
         <label class="label">Prezzo di carico ({{ form.currency }})</label>

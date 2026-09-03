@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InvestmentHolding;
+use App\Services\InvestmentPriceFetcher;
 use App\Services\InvestmentService;
 use App\Services\Prices\YahooSymbolLookup;
 use Illuminate\Http\JsonResponse;
@@ -17,6 +18,13 @@ class InvestmentController extends Controller
         $this->authorize('viewAny', InvestmentHolding::class);
 
         return response()->json(['data' => $this->service->overview()]);
+    }
+
+    public function refreshPrices(InvestmentPriceFetcher $fetcher): JsonResponse
+    {
+        $this->authorize('viewAny', InvestmentHolding::class);
+
+        return response()->json(['data' => ['updated' => $fetcher->fetchLatest()]]);
     }
 
     /**

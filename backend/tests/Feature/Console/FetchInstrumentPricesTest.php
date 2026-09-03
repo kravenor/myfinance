@@ -51,6 +51,26 @@ class FetchInstrumentPricesTest extends TestCase
         $this->assertSame(3, InstrumentPrice::query()->count());
     }
 
+    public function test_routes_bond_isin_to_borsa_italiana(): void
+    {
+        Http::fake([
+            'borsaitaliana.it/*' => Http::response(
+                '<strong>Prezzo di riferimento</strong><span class="t-text -right">101,51</span>'
+                .'<strong>Data di riferimento</strong><span class="t-text -right">02/09/2026</span>'
+            ),
+        ]);
+
+        $this->holding(User::factory()->create(), 'IT0005534984', 'bond');
+
+        $this->artisan('prices:fetch')->assertSuccessful();
+
+        // Prezzo in percentuale del nominale → 1,0151 per euro nominale.
+        $this->assertDatabaseHas('instrument_prices', [
+            'symbol' => 'IT0005534984', 'currency' => 'EUR', 'price' => 1.0151, 'as_of' => '2026-09-02',
+        ]);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'IT0005534984.html'));
+    }
+
     public function test_skips_symbol_when_quote_has_no_price(): void
     {
         Http::fake([
