@@ -38,5 +38,8 @@ frontend/*.log
 # Docker
 docker/mysql/data/
 
+# Backup DB (scripts/backup.sh)
+backups/
+
 # Logs
 *.log

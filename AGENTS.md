@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-07-17**
-Fase corrente: **Estensione — Auto-fetch quotazioni investimenti + lookup ISIN (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-03**
+Fase corrente: **Estensione — Preferenze di periodo e formato data (COMPLETATA)**
 
 ---
 
@@ -49,14 +49,14 @@ Finance/
 ├── .env                   # variabili reali (gitignored)
 ├── .gitignore
 │
-├── backend/               # progetto Laravel 11
+├── backend/               # progetto Laravel 12
 │   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, Scenario, ScenarioItem
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
 │   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, Investment (overview), Notification, NotificationPreference, Scenario, ScenarioItem (nested)
-│   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me)
-│   │   ├── Requests/Auth/      # RegisterRequest, LoginRequest (con throttle)
+│   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me, forgot/reset password, updatePassword, updatePreferences)
+│   │   ├── Requests/Auth/      # Register, Login (con throttle), ForgotPassword, ResetPassword, UpdatePassword
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
 │   │   ├── Requests/Category/  # Store/UpdateCategoryRequest (validazione parent_id + ciclo)
 │   │   ├── Requests/Tag/       # Store/UpdateTagRequest (unique per user)
@@ -66,11 +66,13 @@ Finance/
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoalResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, NotificationScanner
-│   ├── app/Notifications/       # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
-│   │   └── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, InvestmentPriceFetcher, InvestmentPriceResolver, NotificationScanner, TransactionImportService, TransactionExportService
+│   │   ├── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
+│   │   └── Prices/             # PriceProvider (interfaccia) + YahooFinanceProvider/CoinGeckoProvider + YahooSymbolLookup
+│   ├── app/Notifications/  # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
+│   ├── app/Support/       # FinancialMonth (confini del "mese finanziario", vedi §6)
 │   ├── database/migrations/
 │   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransaction/SavingsGoalFactory
 │   ├── database/seeders/  # DatabaseSeeder, CategorySeeder (seedFor pubblico)
@@ -93,13 +95,18 @@ Finance/
 │       ├── style.css          # Tailwind directives + componenti (btn, input, card, table)
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
+│       ├── lib/date.ts        # formatDate/formatDateWith/formatMonth + financialMonthStart/Range (vedi §6)
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
 │       ├── stores/auth.ts     # Pinia: user, login, register, logout, fetchMe
 │       ├── stores/menu.ts     # Pinia: NAV_ITEMS + visibilità sezioni menu (localStorage `menu.hidden`)
+│       ├── stores/notifications.ts # Pinia: lista notifiche + unreadCount
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       └── views/             # Login, Register, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
+│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga tabella/card)
+│       └── views/             # Login, Register, ForgotPassword, ResetPassword, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
+│
+├── scripts/               # backup.sh / restore.sh (dump MySQL, vedi §12)
 │
 ├── docker/
 │   ├── php/
@@ -109,7 +116,9 @@ Finance/
 │   │   └── default.conf   # vhost reverse-proxy + Laravel
 │   └── mysql/             # eventuali init.sql/conf
 │
-└── docs/                  # documentazione aggiuntiva (ADR, schema DB)
+└── docs/
+    ├── adr/               # decisioni architetturali (NNNN-titolo.md)
+    └── analysis/          # analisi per task/estensione (vedi §9 regola 7)
 ```
 
 ## 4. Servizi Docker
@@ -196,6 +205,9 @@ make check           # pipeline completa (pint + stan + test + lint + type-check
 make prod-build      # build immagini produzione
 make prod-up         # avvia stack produzione
 make prod-down       # ferma stack produzione
+
+make backup          # dump gzippato del DB in backups/ (retention 14 giorni)
+make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 ```
 
 ## 6. Convenzioni di sviluppo
@@ -249,6 +261,10 @@ make prod-down       # ferma stack produzione
 - [x] **Estensione** — Preferenze notifiche da interfaccia (pagina Impostazioni: email on/off + destinazione, toggle per tipo, soglia budget configurabile; `users.notification_preferences`)
 - [x] **Estensione** — Visibilità sezioni menu da Impostazioni (toggle per voce, preferenza solo-client in `localStorage` `menu.hidden`; Dashboard/Impostazioni sempre visibili)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
+- [x] **Estensione** — Usabilità mobile (sidebar a drawer, tabelle a card stack, filtri collassabili, FAB, touch target 44px — convenzioni in §6)
+- [x] **Estensione** — Cambio password da Impostazioni (`PUT /auth/password` con `current_password`)
+- [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
+- [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -299,6 +315,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | POST | `/api/auth/reset-password` | — | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
 | POST | `/api/auth/logout` | `auth:sanctum` | Logout web + sanctum, invalida sessione, 204 |
 | GET | `/api/auth/me` | `auth:sanctum` | Ritorna utente corrente |
+| PUT | `/api/auth/password` | `auth:sanctum` | Cambio password da autenticato: `current_password` (regola `current_password`), `password` (confirmed + `Password::defaults()`). 200 con messaggio, 422 se la password attuale non combacia |
 | PUT | `/api/auth/preferences` | `auth:sanctum` | Aggiorna le preferenze utente (`date_format` sulla whitelist `finance.date_formats`, `month_start_day` 1–28; entrambi opzionali), ritorna `UserResource` |
 
 **Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView.
@@ -493,9 +510,45 @@ Impianto condiviso **fuori dal repo**, in `~/Progetti/infra/` (repo a parte): **
 ### Deploy su VPS (Apache host come reverse proxy)
 Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.vps.yml) — stesso stack prod (immagini `Dockerfile.prod`, SPA buildata, `scheduler`, `queue` worker) ma nginx esposto solo su `127.0.0.1:${APP_PORT:-8080}`; Apache termina TLS e proxa il dominio pubblico verso quella porta (`ProxyPass / http://127.0.0.1:8080/` + `ProxyPreserveHost On`). Nessuna label Traefik, nessuna rete `proxy`. Richiede `.env.production` (env dei container) e variabili `DB_*` nell'`.env` di progetto per l'interpolazione compose — senza default: il compose fallisce se mancano.
 
-### Note open
-- HTTPS termination: aggiungere reverse proxy (Caddy/Traefik/Nginx host) davanti al container nginx, oppure montare certificati e ascoltare 443. Su Pi/Traefik: aggiungere entrypoint `:443` + `certresolver` (o cert self-signed per la LAN).
-- Backup MySQL e Redis: scriptare dump giornaliero (fuori scope di questa fase).
+### HTTPS
+Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.
+
+Lato applicazione serve una cosa sola, già configurata: `trustProxies` in [bootstrap/app.php](backend/bootstrap/app.php) limitato a loopback + reti private (`10/8`, `172.16/12`, `192.168/16`). Senza, Laravel vede `http`, genera redirect e link di reset password in chiaro e attribuisce il rate limit all'IP del proxy invece che al client. La restrizione alle reti private evita che gli header `X-Forwarded-*` siano credibili se il container venisse mai esposto direttamente. Test: [TrustedProxyTest](backend/tests/Feature/TrustedProxyTest.php).
+
+**VPS (Apache host)** — Apache termina TLS e deve dichiarare lo schema originale:
+```apache
+<VirtualHost *:443>
+    ServerName finance.example.com
+    ProxyPreserveHost On
+    RequestHeader set X-Forwarded-Proto "https"
+    ProxyPass        / http://127.0.0.1:8080/
+    ProxyPassReverse / http://127.0.0.1:8080/
+    # SSLCertificateFile/KeyFile: gestiti da certbot
+</VirtualHost>
+```
+Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
+
+**Raspberry Pi (Traefik, LAN)** — l'impianto è nel repo `infra` fuori da qui: aggiungere l'entrypoint `:443` e, non essendo `*.pi.lan` risolvibile da Let's Encrypt, un certificato self-signed (o una CA locale da installare sui client). Finché resta in LAN, HTTP + `SESSION_SECURE_COOKIE=false` è la config supportata.
+
+### Backup
+[scripts/backup.sh](scripts/backup.sh) — `mysqldump --single-transaction` gzippato in `backups/` (gitignored), nome `finance-YYYYMMDD-HHMMSS.sql.gz`, retention `BACKUP_KEEP_DAYS` (default 14). Le credenziali sono lette dall'env del container (`MYSQL_PWD`), non passano dalla riga di comando dell'host. Il dump viene scritto in `.part` e promosso solo se termina con `-- Dump completed`: un file troncato non sostituisce mai un backup valido, e lo script esce **1** (niente `.part` residuo).
+
+[scripts/restore.sh](scripts/restore.sh) — ripristino dal dump, con conferma esplicita (`-y` per saltarla in automatismi).
+
+```bash
+make backup                                     # stack di sviluppo
+make restore FILE=backups/finance-....sql.gz    # ripristino
+
+# altri stack: variabili native di compose, nessun flag negli script
+COMPOSE_FILE=docker-compose.vps.yml COMPOSE_ENV_FILES=.env.production ./scripts/backup.sh
+```
+
+Cron host (dump alle 03:15):
+```
+15 3 * * * cd /srv/finance && COMPOSE_FILE=docker-compose.vps.yml COMPOSE_ENV_FILES=.env.production ./scripts/backup.sh >> /var/log/finance-backup.log 2>&1
+```
+
+**Redis non viene salvato**: contiene solo cache, sessioni e code — dati derivati, ricostruibili. Un backup **fuori dalla macchina** (rsync/rclone della cartella `backups/` verso un altro host o storage) resta da aggiungere: il dump locale non protegge dalla perdita del disco. Quando arriveranno gli allegati alle transazioni, aggiungere al backup un tar di `storage/app`.
 
 ## 13. Statistiche avanzate (estensione)
 
@@ -687,7 +740,11 @@ API: `GET /api/notification-preferences`, `PUT /api/notification-preferences` ([
 
 ### Frontend
 Store Pinia [notifications.ts](frontend/src/stores/notifications.ts) (lista + `unreadCount` + fetch/markRead/markAllRead/remove). [NotificationsView.vue](frontend/src/views/NotificationsView.vue) (`/notifications`): lista con stato letto/non letto, badge `level` colorato, click → segna letta + naviga all'`url`, "segna tutte come lette", elimina. [AppLayout](frontend/src/components/AppLayout.vue) carica le notifiche al mount e mostra un **badge col conteggio non lette** sulla voce "Notifiche" in sidebar.
-[SettingsView.vue](frontend/src/views/SettingsView.vue) (`/settings`, voce "Impostazioni" in sidebar): form preferenze notifiche (toggle email + email destinazione, toggle budget/obiettivi, soglia budget); salva via `PUT /notification-preferences` e ricarica `auth.fetchMe()`.
+[SettingsView.vue](frontend/src/views/SettingsView.vue) (`/settings`, voce "Impostazioni" in sidebar) raccoglie quattro card:
+1. **Notifiche** — toggle email + email destinazione, toggle budget/obiettivi, soglia budget; salva via `PUT /notification-preferences` e ricarica `auth.fetchMe()`.
+2. **Password** — cambio password (`PUT /auth/password`, richiede la password attuale).
+3. **Periodo e data** — select `month_start_day` (1–28) e `date_format` con anteprima live; salva via `PUT /auth/preferences` + `auth.fetchMe()` (la preferenza si propaga reattivamente a tutte le view, vedi §6).
+4. **Sezioni del menu** — visibilità delle voci di navigazione (solo client, `localStorage`, vedi §9).
 
 ## 19. Previsioni e simulazione (estensione)
 
@@ -745,3 +802,4 @@ Gli item con `category_id = null` confluiscono nella riga "Senza categoria" del 
 4. **Niente fuori scope**: lavora sulla fase corrente, non anticipare fasi successive senza richiesta esplicita.
 5. **Comandi**: usa sempre il `Makefile` come riferimento per i comandi standard.
 6. **Decisioni architetturali rilevanti**: crea un ADR in `docs/adr/NNNN-titolo.md`.
+7. **Analisi di estensioni/task**: file in `docs/analysis/NOME-ANALYSIS.md` (flusso attuale → modifiche → dettaglio fix → impatti e regressioni). In questo progetto le analisi **vanno committate**, in deroga alla regola globale.
