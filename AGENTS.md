@@ -510,6 +510,8 @@ Impianto condiviso **fuori dal repo**, in `~/Progetti/infra/` (repo a parte): **
 ### Deploy su VPS (Apache host come reverse proxy)
 Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.vps.yml) — stesso stack prod (immagini `Dockerfile.prod`, SPA buildata, `scheduler`, `queue` worker) ma nginx esposto solo su `127.0.0.1:${APP_PORT:-8080}`; Apache termina TLS e proxa il dominio pubblico verso quella porta (`ProxyPass / http://127.0.0.1:8080/` + `ProxyPreserveHost On`). Nessuna label Traefik, nessuna rete `proxy`. Richiede `.env.production` (env dei container) e variabili `DB_*` nell'`.env` di progetto per l'interpolazione compose — senza default: il compose fallisce se mancano.
 
+Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte dopo una CI verde su `master` e via SSH esegue `git pull` → `up -d --build` → **backup** → **`artisan migrate --force`**. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
+
 ### HTTPS
 Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.
 
