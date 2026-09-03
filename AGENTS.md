@@ -263,7 +263,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 - [x] **Estensione** — Usabilità mobile (sidebar a drawer, tabelle a card stack, filtri collassabili, FAB, touch target 44px — convenzioni in §6)
 - [x] **Estensione** — Cambio password da Impostazioni (`PUT /auth/password` con `current_password`)
-- [x] **Estensione** — Riconciliazione conto (saldo reale vs calcolato a una data, differenza materializzata come transazione di rettifica; conti investment esclusi)
+- [x] **Estensione** — Riconciliazione conto (saldo reale vs calcolato a una data, differenza materializzata come transazione di rettifica con `is_adjustment`: dentro i saldi, fuori da statistiche e budget; conti investment esclusi)
 - [x] **Estensione** — Entrate negli scenari (`scenario_items.type` income/expense: gli item income alzano le entrate previste invece delle uscite)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
@@ -282,7 +282,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
 | `tags` | `name`, `color` — unique per `(user_id, name)` |
 | `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
-| `transactions` | `account_id`, `category_id`, `transfer_account_id`, `recurring_transaction_id`, `type`, `amount`, `currency`, `occurred_at`, `description`, `notes`, `external_id` |
+| `transactions` | `account_id`, `category_id`, `transfer_account_id`, `recurring_transaction_id`, `type`, `is_adjustment` (bool, default false: rettifica di riconciliazione — dentro i saldi, fuori dalle statistiche), `amount`, `currency`, `occurred_at`, `description`, `notes`, `external_id` |
 | `budgets` | `category_id`, `year`, `month`, `amount` — unique per `(user_id, category_id, year, month)` |
 | `tag_transaction` | pivot `transaction_id` + `tag_id` (convenzione Laravel alfabetica) |
 | `savings_goals` | `name`, `target_amount`, `currency` (default `EUR`), `account_id` (nullable, `nullOnDelete`), `target_date` (nullable), `recurrence` (none/weekly/monthly/yearly), `start_date` (nullable), `color`, `icon`, `status` (active/completed/archived), `notes` — progresso derivato live dalle transazioni del conto, nessun ledger separato |
@@ -337,11 +337,22 @@ Tutte le rotte sotto `auth:sanctum`. Index in paginazione (default 25, override 
 | GET | `/api/accounts/{account}/reconciliation` | `date?` (default oggi) → saldo **calcolato** a fine giornata: `{account_id, date, currency, computed_balance}` |
 | POST | `/api/accounts/{account}/reconciliation` | `balance` (saldo reale, anche negativo), `date?`, `description?`, `category_id?` → crea la rettifica |
 
-**Riconciliazione** ([AccountController::reconcile](backend/app/Http/Controllers/AccountController.php)): confronta il saldo reale del conto col saldo calcolato dall'app e materializza la differenza come **transazione di rettifica** (`income` se il reale è più alto, `expense` se più basso; importo `abs(differenza)`, descrizione default "Rettifica saldo", categoria opzionale → altrimenti finisce in "Senza categoria" nei report). Il saldo calcolato arriva da `ReportService::balanceFor()`, che riusa l'aggregato dei saldi per conto: nessuna logica di saldo duplicata.
+**Riconciliazione** ([AccountController::reconcile](backend/app/Http/Controllers/AccountController.php)): confronta il saldo reale del conto col saldo calcolato dall'app e materializza la differenza come **transazione di rettifica** (`income` se il reale è più alto, `expense` se più basso; importo `abs(differenza)`, descrizione default "Rettifica saldo", categoria opzionale). Il saldo calcolato arriva da `ReportService::balanceFor()`, che riusa l'aggregato dei saldi per conto: nessuna logica di saldo duplicata.
 - **Idempotente per costruzione**: dopo la rettifica il calcolato coincide col reale, quindi ripetere la stessa riconciliazione non crea nulla (`adjusted: false`).
 - Differenze sotto il centesimo non creano transazioni.
 - I conti `investment` sono **rifiutati** (422): lì il saldo è il valore di mercato delle holding, si allinea correggendo quantità e prezzi.
-- Frontend: icona "Riconcilia saldo" per riga in [AccountsView](frontend/src/views/AccountsView.vue) (slot `#before` di `RowActions`) → modale con data, saldo calcolato, saldo reale e differenza in anteprima.
+- Frontend: icona "Riconcilia saldo" per riga in [AccountsView](frontend/src/views/AccountsView.vue) (slot `#before` di `RowActions`) → modale con data, saldo calcolato, saldo reale e differenza in anteprima. Nell'elenco transazioni la rettifica porta un badge `rettifica` (`.badge-adjustment` in `style.css`), altrimenti sembrerebbe un'entrata o un'uscita come le altre.
+
+#### `is_adjustment`: dentro i saldi, fuori dalle statistiche
+La rettifica tiene in piedi il saldo ma non è un'entrata o un'uscita vera, quindi non deve inquinare le statistiche. Il filtro è un unico scope, [`Transaction::scopeExcludingAdjustments()`](backend/app/Models/Transaction.php) (colonna qualificata `transactions.is_adjustment`, perché `byTag` fa join), applicato **solo** dove serve:
+
+| Escludono le rettifiche | Le contano |
+|---|---|
+| `ReportService`: `totalsFor` (summary, saving rate, period comparison), `byCategory`, `byTag`, `timeline`, `categoryTrend`, `topTransactions` | `ReportService::rawAccountBalances` → saldi per conto, `net_worth`, `cash-flow forecast` |
+| Speso dei budget: `BudgetController::index`, `BudgetAlertService` | Elenco transazioni (`TransactionController`) ed export CSV: sono il libro mastro, devono mostrare tutto |
+| | `SavingsGoalProgressService`: il progresso di un obiettivo è denaro reale sul conto, escluderlo lo farebbe divergere dal saldo |
+
+Aggiungendo una nuova aggregazione statistica su `transactions`, va aggiunto `->excludingAdjustments()`: è l'unica cosa da ricordare.
 
 ### Categories — `apiResource('categories')`
 | Metodo | Path | Note |

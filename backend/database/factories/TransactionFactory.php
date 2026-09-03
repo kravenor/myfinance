@@ -26,6 +26,7 @@ class TransactionFactory extends Factory
             'transfer_account_id' => null,
             'recurring_transaction_id' => null,
             'type' => 'expense',
+            'is_adjustment' => false,
             'amount' => fake()->randomFloat(2, 1, 500),
             'currency' => 'EUR',
             'occurred_at' => fake()->dateTimeBetween('-30 days', 'now')->format('Y-m-d'),

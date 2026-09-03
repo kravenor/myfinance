@@ -78,6 +78,8 @@ export interface Transaction {
   transfer_account_id: number | null
   recurring_transaction_id: number | null
   type: TransactionType
+  /** Rettifica di riconciliazione: conta nei saldi, non nelle statistiche. */
+  is_adjustment: boolean
   amount: string
   transfer_amount: string | null
   currency: string

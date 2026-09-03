@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToUser;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $transfer_account_id
  * @property int|null $recurring_transaction_id
  * @property string $type
+ * @property bool $is_adjustment
  * @property string $amount
  * @property string|null $transfer_amount
  * @property string $currency
@@ -29,12 +31,18 @@ class Transaction extends Model
 {
     use BelongsToUser, HasFactory;
 
+    /** @var array<string, mixed> */
+    protected $attributes = [
+        'is_adjustment' => false,
+    ];
+
     protected $fillable = [
         'user_id',
         'account_id',
         'category_id',
         'transfer_account_id',
         'type',
+        'is_adjustment',
         'amount',
         'transfer_amount',
         'currency',
@@ -51,7 +59,23 @@ class Transaction extends Model
             'amount' => 'decimal:2',
             'transfer_amount' => 'decimal:2',
             'occurred_at' => 'date:Y-m-d',
+            'is_adjustment' => 'boolean',
         ];
+    }
+
+    /**
+     * Le rettifiche di riconciliazione tengono in piedi il **saldo** ma non
+     * sono entrate o uscite vere: vanno escluse da ogni statistica (totali,
+     * per categoria, per tag, timeline, trend, speso dei budget). I saldi e il
+     * patrimonio netto invece le contano, altrimenti la riconciliazione non
+     * servirebbe a niente. Colonna qualificata: alcune query fanno join.
+     *
+     * @param  Builder<Transaction>  $query
+     * @return Builder<Transaction>
+     */
+    public function scopeExcludingAdjustments(Builder $query): Builder
+    {
+        return $query->where('transactions.is_adjustment', false);
     }
 
     public function account(): BelongsTo

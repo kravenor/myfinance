@@ -131,6 +131,9 @@ class AccountController extends Controller
             'account_id' => $account->id,
             'category_id' => $request->validated('category_id'),
             'type' => $difference > 0 ? 'income' : 'expense',
+            // Fuori dalle statistiche: tiene in piedi il saldo, non è un'entrata
+            // o un'uscita vera (vedi Transaction::scopeExcludingAdjustments).
+            'is_adjustment' => true,
             'amount' => abs($difference),
             'currency' => $account->currency,
             'occurred_at' => $date->toDateString(),

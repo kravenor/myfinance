@@ -369,6 +369,7 @@ onMounted(async () => {
             <div class="min-w-0">
               <p class="font-medium text-slate-800 truncate">
                 {{ tx.description || categoryName(tx.category_id) || (tx.type === 'transfer' ? 'Trasferimento' : '—') }}
+                <span v-if="tx.is_adjustment" class="badge-adjustment">rettifica</span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
                 {{ formatDate(tx.occurred_at) }} ·
@@ -424,7 +425,10 @@ onMounted(async () => {
               </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
-            <td class="whitespace-normal break-words max-w-xs">{{ tx.description ?? '—' }}</td>
+            <td class="whitespace-normal break-words max-w-xs">
+              {{ tx.description ?? '—' }}
+              <span v-if="tx.is_adjustment" class="badge-adjustment">rettifica</span>
+            </td>
             <td>
               <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1">
                 <span

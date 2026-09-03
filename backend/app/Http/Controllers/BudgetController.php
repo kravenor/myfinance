@@ -111,6 +111,7 @@ class BudgetController extends Controller
             [$start, $end] = FinancialMonth::forYearMonth($budget->year, $budget->month);
 
             $spent = Transaction::query()
+                ->excludingAdjustments()
                 ->where('type', 'expense')
                 ->where('category_id', $budget->category_id)
                 ->whereBetween('occurred_at', [$start->toDateString(), $end->toDateString()])

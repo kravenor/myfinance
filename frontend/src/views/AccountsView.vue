@@ -322,7 +322,7 @@ onMounted(() => list())
             <h2 class="text-lg font-semibold">Riconcilia — {{ recAccount.name }}</h2>
             <p class="text-sm text-slate-500">
               Inserisci il saldo reale del conto: la differenza col saldo calcolato diventa una
-              transazione di rettifica.
+              transazione di rettifica, contata nel saldo ma esclusa dalle statistiche e dai budget.
             </p>
           </div>
           <button
