@@ -263,6 +263,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 - [x] **Estensione** — Usabilità mobile (sidebar a drawer, tabelle a card stack, filtri collassabili, FAB, touch target 44px — convenzioni in §6)
 - [x] **Estensione** — Cambio password da Impostazioni (`PUT /auth/password` con `current_password`)
+- [x] **Estensione** — Riconciliazione conto (saldo reale vs calcolato a una data, differenza materializzata come transazione di rettifica; conti investment esclusi)
 - [x] **Estensione** — Entrate negli scenari (`scenario_items.type` income/expense: gli item income alzano le entrate previste invece delle uscite)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
@@ -333,6 +334,14 @@ Tutte le rotte sotto `auth:sanctum`. Index in paginazione (default 25, override 
 | GET | `/api/accounts/{account}` | — |
 | PATCH/PUT | `/api/accounts/{account}` | campi `sometimes` |
 | DELETE | `/api/accounts/{account}` | 204 |
+| GET | `/api/accounts/{account}/reconciliation` | `date?` (default oggi) → saldo **calcolato** a fine giornata: `{account_id, date, currency, computed_balance}` |
+| POST | `/api/accounts/{account}/reconciliation` | `balance` (saldo reale, anche negativo), `date?`, `description?`, `category_id?` → crea la rettifica |
+
+**Riconciliazione** ([AccountController::reconcile](backend/app/Http/Controllers/AccountController.php)): confronta il saldo reale del conto col saldo calcolato dall'app e materializza la differenza come **transazione di rettifica** (`income` se il reale è più alto, `expense` se più basso; importo `abs(differenza)`, descrizione default "Rettifica saldo", categoria opzionale → altrimenti finisce in "Senza categoria" nei report). Il saldo calcolato arriva da `ReportService::balanceFor()`, che riusa l'aggregato dei saldi per conto: nessuna logica di saldo duplicata.
+- **Idempotente per costruzione**: dopo la rettifica il calcolato coincide col reale, quindi ripetere la stessa riconciliazione non crea nulla (`adjusted: false`).
+- Differenze sotto il centesimo non creano transazioni.
+- I conti `investment` sono **rifiutati** (422): lì il saldo è il valore di mercato delle holding, si allinea correggendo quantità e prezzi.
+- Frontend: icona "Riconcilia saldo" per riga in [AccountsView](frontend/src/views/AccountsView.vue) (slot `#before` di `RowActions`) → modale con data, saldo calcolato, saldo reale e differenza in anteprima.
 
 ### Categories — `apiResource('categories')`
 | Metodo | Path | Note |

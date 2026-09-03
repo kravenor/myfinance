@@ -403,6 +403,18 @@ class ReportService
     }
 
     /**
+     * Saldo calcolato di un singolo conto al $upTo, nella valuta del conto.
+     * Riusa l'aggregato di tutti i conti: sono poche righe per un uso personale
+     * e la logica dei saldi resta in un posto solo.
+     */
+    public function balanceFor(Account $account, Carbon $upTo): float
+    {
+        $row = $this->rawAccountBalances($upTo)->firstWhere('id', $account->id);
+
+        return (float) ($row['balance'] ?? 0.0);
+    }
+
+    /**
      * Saldo per conto al $upTo: importo nella valuta propria del conto +
      * controvalore nella valuta base (al tasso corrente del $upTo).
      *

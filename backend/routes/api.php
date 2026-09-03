@@ -47,6 +47,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
 
+    Route::get('accounts/{account}/reconciliation', [AccountController::class, 'reconciliation'])
+        ->name('accounts.reconciliation.show');
+    Route::post('accounts/{account}/reconciliation', [AccountController::class, 'reconcile'])
+        ->name('accounts.reconciliation.store');
     Route::apiResource('accounts', AccountController::class);
     Route::apiResource('categories', CategoryController::class);
     Route::apiResource('tags', TagController::class);
