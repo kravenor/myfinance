@@ -12,6 +12,7 @@ import type {
   Scenario,
   ScenarioCadence,
   ScenarioItem,
+  ScenarioItemType,
 } from '@/types/api'
 import type {
   ExpenseForecast,
@@ -141,6 +142,7 @@ const itemsLoading = ref(false)
 const today = new Date().toISOString().slice(0, 10)
 
 const itemForm = ref({
+  type: 'expense' as ScenarioItemType,
   description: '',
   account_id: '' as number | '',
   category_id: '' as number | '',
@@ -154,6 +156,7 @@ const itemForm = ref({
 
 function resetItemForm() {
   itemForm.value = {
+    type: 'expense',
     description: '',
     account_id: '',
     category_id: '',
@@ -165,6 +168,15 @@ function resetItemForm() {
     ends_on: '',
   }
 }
+
+// ponytail: la categoria colloca le uscite nella griglia per categoria; per le
+// entrate il forecast non la usa, quindi il campo si nasconde e si azzera.
+watch(
+  () => itemForm.value.type,
+  (type) => {
+    if (type === 'income') itemForm.value.category_id = ''
+  },
+)
 
 // Auto-allinea la valuta al conto selezionato
 watch(
@@ -204,6 +216,7 @@ async function loadItems() {
 async function addItem() {
   if (!itemsScenario.value) return
   await api.post(`/scenarios/${itemsScenario.value.id}/items`, {
+    type: itemForm.value.type,
     description: itemForm.value.description || null,
     account_id: itemForm.value.account_id === '' ? null : itemForm.value.account_id,
     category_id: itemForm.value.category_id === '' ? null : itemForm.value.category_id,
@@ -222,7 +235,7 @@ async function addItem() {
 
 async function deleteItem(it: ScenarioItem) {
   if (!itemsScenario.value) return
-  if (!confirm('Eliminare questa spesa simulata?')) return
+  if (!confirm('Eliminare questa voce simulata?')) return
   await api.delete(`/scenarios/${itemsScenario.value.id}/items/${it.id}`)
   await loadItems()
   await loadScenarios()
@@ -610,8 +623,10 @@ onMounted(async () => {
       <div class="card w-full max-w-3xl my-8 p-5 space-y-4">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <h2 class="text-lg font-semibold">Spese simulate — {{ itemsScenario.name }}</h2>
-            <p class="text-sm text-slate-500">Aggiungi spese ipotetiche per simulare l'impatto sui mesi successivi.</p>
+            <h2 class="text-lg font-semibold">Voci simulate — {{ itemsScenario.name }}</h2>
+            <p class="text-sm text-slate-500">
+              Aggiungi uscite o entrate ipotetiche per simulare l'impatto sui mesi successivi.
+            </p>
           </div>
           <button class="icon-btn icon-btn-delete" aria-label="Chiudi" @click="closeItems">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-5 h-5">
@@ -621,6 +636,13 @@ onMounted(async () => {
         </div>
 
         <form class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end" @submit.prevent="addItem">
+          <div>
+            <label class="label">Tipo</label>
+            <select v-model="itemForm.type" class="input">
+              <option value="expense">Uscita</option>
+              <option value="income">Entrata</option>
+            </select>
+          </div>
           <div class="col-span-2">
             <label class="label">Descrizione</label>
             <input v-model="itemForm.description" type="text" maxlength="255" class="input" placeholder="es. Vacanza Sardegna" />
@@ -642,7 +664,7 @@ onMounted(async () => {
               <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
             </select>
           </div>
-          <div>
+          <div v-if="itemForm.type === 'expense'">
             <label class="label">Categoria</label>
             <select v-model="itemForm.category_id" class="input">
               <option value="">—</option>
@@ -667,7 +689,7 @@ onMounted(async () => {
             <input v-model="itemForm.ends_on" type="date" class="input" />
           </div>
           <div class="col-span-2 sm:col-span-6 flex justify-end">
-            <button type="submit" class="btn-primary">Aggiungi spesa</button>
+            <button type="submit" class="btn-primary">Aggiungi voce</button>
           </div>
         </form>
 
@@ -676,6 +698,7 @@ onMounted(async () => {
           <table v-else class="table">
             <thead class="bg-slate-100">
               <tr>
+                <th>Tipo</th>
                 <th>Descrizione</th>
                 <th>Conto</th>
                 <th>Categoria</th>
@@ -688,14 +711,23 @@ onMounted(async () => {
             </thead>
             <tbody class="divide-y divide-slate-100">
               <tr v-for="it in items" :key="it.id">
+                <td data-label="Tipo">
+                  <span :class="it.type === 'income' ? 'text-green-600' : 'text-slate-600'">
+                    {{ it.type === 'income' ? 'Entrata' : 'Uscita' }}
+                  </span>
+                </td>
                 <td data-label="Descrizione">{{ it.description ?? '—' }}</td>
                 <td data-label="Conto">{{ accountName(it.account_id) }}</td>
                 <td data-label="Categoria">{{ categoryName(it.category_id) }}</td>
                 <td data-label="Cadenza">{{ CADENCE_LABEL[it.cadence] }}</td>
                 <td data-label="Dal">{{ formatDate(it.starts_on) }}</td>
                 <td data-label="Fino">{{ formatDate(it.ends_on) }}</td>
-                <td data-label="Importo" class="md:text-right font-medium">
-                  {{ money(it.amount, it.currency) }}
+                <td
+                  data-label="Importo"
+                  class="md:text-right font-medium"
+                  :class="it.type === 'income' ? 'text-green-600' : ''"
+                >
+                  {{ it.type === 'income' ? '+' : '−' }}{{ money(it.amount, it.currency) }}
                 </td>
                 <td class="md:text-right actions-cell">
                   <button class="icon-btn icon-btn-delete" aria-label="Elimina" @click="deleteItem(it)">
@@ -706,8 +738,8 @@ onMounted(async () => {
                 </td>
               </tr>
               <tr v-if="items.length === 0">
-                <td colspan="8" class="text-center text-slate-500 py-6">
-                  Nessuna spesa simulata. Aggiungine una per vedere l'impatto sul forecast.
+                <td colspan="9" class="text-center text-slate-500 py-6">
+                  Nessuna voce simulata. Aggiungine una per vedere l'impatto sul forecast.
                 </td>
               </tr>
             </tbody>

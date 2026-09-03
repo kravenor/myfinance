@@ -263,6 +263,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 - [x] **Estensione** — Usabilità mobile (sidebar a drawer, tabelle a card stack, filtri collassabili, FAB, touch target 44px — convenzioni in §6)
 - [x] **Estensione** — Cambio password da Impostazioni (`PUT /auth/password` con `current_password`)
+- [x] **Estensione** — Entrate negli scenari (`scenario_items.type` income/expense: gli item income alzano le entrate previste invece delle uscite)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
@@ -274,7 +275,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 |---------|------------------|
 | `users` | `name`, `email` (unique), `password`, `currency` (default `EUR`), `locale` (default `it`), `date_format` (default `d/m/Y`, whitelist in `config/finance.php` → `finance.date_formats`), `month_start_day` (tinyint 1–28, default 1: giorno di inizio del "mese finanziario"), `notification_preferences` (JSON nullable: preferenze notifiche per-utente) |
 | `scenarios` | `name`, `description` (nullable), `color` (nullable), `is_active` (default true) |
-| `scenario_items` | `scenario_id` (cascade), `account_id` (nullable, `nullOnDelete`), `category_id` (nullable, `nullOnDelete`), `description` (nullable), `amount`, `currency` (default `EUR`), `cadence` enum (one_time/monthly/quarterly/yearly), `interval` (default 1), `starts_on`, `ends_on` (nullable) |
+| `scenario_items` | `scenario_id` (cascade), `type` enum(expense/income) default `expense`, `account_id` (nullable, `nullOnDelete`), `category_id` (nullable, `nullOnDelete`), `description` (nullable), `amount`, `currency` (default `EUR`), `cadence` enum (one_time/monthly/quarterly/yearly), `interval` (default 1), `starts_on`, `ends_on` (nullable) |
 | `personal_access_tokens` | Sanctum |
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
@@ -751,7 +752,7 @@ Store Pinia [notifications.ts](frontend/src/stores/notifications.ts) (lista + `u
 Risponde alla domanda "**quanto mi resta a fine mese per vivere**" su un orizzonte di 3/6/12/24 mesi, in **baseline** e per ogni **scenario** salvato. Il dato di testa è il `net = entrate − uscite`, calcolato per ogni mese.
 
 ### Composizione del forecast
-**Entrate previste** per mese = Σ delle `recurring_transactions` di tipo `income` attive che cadono nel mese (espanse via `advance()`).
+**Entrate previste** per mese = Σ delle `recurring_transactions` di tipo `income` attive che cadono nel mese (espanse via `advance()`), **più** gli `scenario_items` con `type = income` dello scenario selezionato. Le entrate ricorrenti sono l'unica fonte del baseline: un'entrata inserita solo come transazione singola non compare nel forecast.
 
 **Uscite previste** per `(categoria, mese)`:
 - se esiste un `budget` per quel mese → `forecast_base = budget.amount` (logica: il budget = quanto pensi di spendere);
@@ -762,9 +763,9 @@ Lo scenario eventualmente selezionato aggiunge `scenario_extra`; il totale uscit
 
 ### Schema scenari
 - **`scenarios`** ([model](backend/app/Models/Scenario.php), `BelongsToUser`): `name`, `description?`, `color?`, `is_active`.
-- **`scenario_items`** ([model](backend/app/Models/ScenarioItem.php), `BelongsToUser`): `scenario_id` (cascade), `account_id?` (`nullOnDelete`, owned-by-user), `category_id?` (`nullOnDelete`, owned-by-user), `description?`, `amount`, `currency` (default `EUR`, allineato automaticamente al conto in UI), `cadence` (`one_time`/`monthly`/`quarterly`/`yearly`), `interval` (default 1), `starts_on`, `ends_on?`.
+- **`scenario_items`** ([model](backend/app/Models/ScenarioItem.php), `BelongsToUser`): `scenario_id` (cascade), `type` (`expense`/`income`, default `expense` sia in DB sia in `$attributes` del model — senza il default in memoria la risposta del POST avrebbe `type: null`), `account_id?` (`nullOnDelete`, owned-by-user), `category_id?` (`nullOnDelete`, owned-by-user), `description?`, `amount`, `currency` (default `EUR`, allineato automaticamente al conto in UI), `cadence` (`one_time`/`monthly`/`quarterly`/`yearly`), `interval` (default 1), `starts_on`, `ends_on?`.
 
-Gli item con `category_id = null` confluiscono nella riga "Senza categoria" del breakdown.
+Gli item `expense` con `category_id = null` confluiscono nella riga "Senza categoria" del breakdown. Gli item `income` **non** hanno riga per categoria (la categoria non li colloca da nessuna parte, e il form la nasconde): si sommano alle entrate del mese, dove alzano `income` e `net` lasciando intatti `expense_total` e la colonna `scenario`, che resta la quota di uscite.
 
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
@@ -774,7 +775,7 @@ Gli item con `category_id = null` confluiscono nella riga "Senza categoria" del 
 | GET | `/api/scenarios/{scenario}` | Include `items` |
 | PATCH/DELETE | `/api/scenarios/{scenario}` | CRUD standard (cascade su items) |
 | GET | `/api/scenarios/{scenario}/items` | Nested + `scoped()` |
-| POST | `/api/scenarios/{scenario}/items` | `amount`, `cadence`, `starts_on` obbligatori; `account_id?`, `category_id?`, `description?`, `currency?`, `interval?`, `ends_on?` |
+| POST | `/api/scenarios/{scenario}/items` | `amount`, `cadence`, `starts_on` obbligatori; `type?` (`expense` default/`income`), `account_id?`, `category_id?`, `description?`, `currency?`, `interval?`, `ends_on?` |
 | PATCH/DELETE | `/api/scenarios/{scenario}/items/{item}` | CRUD standard, scoped |
 | GET | `/api/reports/expense-forecast?months=&scenario_id=` | `months` 1–24 (default 6); con `scenario_id` la risposta include lo scenario meta + l'extra simulato per ogni cella |
 | GET | `/api/reports/expense-forecast/compare?months=&scenario_ids[]=` | Restituisce `{baseline, scenarios: [...]}`; senza `scenario_ids` include automaticamente **tutti gli scenari attivi** |

@@ -22,6 +22,7 @@ class ScenarioItemFactory extends Factory
         return [
             'user_id' => User::factory(),
             'scenario_id' => Scenario::factory(),
+            'type' => 'expense',
             'account_id' => null,
             'category_id' => null,
             'description' => fake()->sentence(3),

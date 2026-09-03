@@ -194,6 +194,82 @@ class ExpenseForecastTest extends TestCase
         $this->assertSame($scenario->id, $resp['scenario']['id']);
     }
 
+    public function test_scenario_income_item_raises_income_and_net_without_touching_expenses(): void
+    {
+        Carbon::setTestNow('2026-06-01');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->for($user)->create(['type' => 'expense']);
+
+        RecurringTransaction::factory()->for($user)->create([
+            'account_id' => $account->id,
+            'category_id' => $category->id,
+            'type' => 'expense',
+            'amount' => 100,
+            'currency' => 'EUR',
+            'cadence' => 'monthly',
+            'interval' => 1,
+            'starts_on' => '2026-06-15',
+            'next_run_at' => '2026-06-15',
+            'is_active' => true,
+        ]);
+
+        $scenario = Scenario::factory()->for($user)->create();
+        ScenarioItem::factory()->for($user)->for($scenario)->create([
+            'type' => 'income',
+            'category_id' => null,
+            'amount' => 800,
+            'currency' => 'EUR',
+            'cadence' => 'one_time',
+            'starts_on' => '2026-06-20',
+            'ends_on' => null,
+        ]);
+
+        $resp = $this->actingAs($user)
+            ->getJson("/api/reports/expense-forecast?months=2&scenario_id={$scenario->id}")
+            ->assertOk()
+            ->json('data');
+
+        $june = $resp['totals_by_month'][0];
+        $this->assertSame('800.00', $june['income']);
+        $this->assertSame('100.00', $june['expense_total'], 'un item income non deve gonfiare le uscite');
+        $this->assertSame('0.00', $june['scenario'], 'la colonna scenario resta la quota di uscite');
+        $this->assertSame('700.00', $june['net']);
+        $this->assertSame('800.00', $resp['summary']['total_income']);
+
+        // Nessuna riga per categoria: le entrate non stanno nella tabella delle uscite.
+        $this->assertCount(1, $resp['categories']);
+        $this->assertSame($category->id, $resp['categories'][0]['category_id']);
+    }
+
+    public function test_scenario_income_does_not_leak_into_the_baseline_of_compare(): void
+    {
+        Carbon::setTestNow('2026-06-01');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $scenario = Scenario::factory()->for($user)->create(['is_active' => true]);
+        ScenarioItem::factory()->for($user)->for($scenario)->create([
+            'type' => 'income',
+            'category_id' => null,
+            'amount' => 500,
+            'currency' => 'EUR',
+            'cadence' => 'monthly',
+            'interval' => 1,
+            'starts_on' => '2026-06-05',
+            'ends_on' => null,
+        ]);
+
+        $resp = $this->actingAs($user)
+            ->getJson('/api/reports/expense-forecast/compare?months=2')
+            ->assertOk()
+            ->json('data');
+
+        $this->assertSame('0.00', $resp['baseline']['totals_by_month'][0]['income']);
+        $this->assertSame('500.00', $resp['scenarios'][0]['totals_by_month'][0]['income']);
+        $this->assertSame('500.00', $resp['scenarios'][0]['totals_by_month'][1]['income']);
+    }
+
     public function test_compare_endpoint_returns_baseline_plus_active_scenarios(): void
     {
         Carbon::setTestNow('2026-06-01');

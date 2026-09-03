@@ -237,9 +237,12 @@ export interface AppNotification {
 }
 
 export type ScenarioCadence = 'one_time' | 'monthly' | 'quarterly' | 'yearly'
+export type ScenarioItemType = 'expense' | 'income'
+
 export interface ScenarioItem {
   id: number
   scenario_id: number
+  type: ScenarioItemType
   account_id: number | null
   category_id: number | null
   description: string | null

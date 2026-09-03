@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $user_id
  * @property int $scenario_id
+ * @property string $type
  * @property int|null $account_id
  * @property int|null $category_id
  * @property string|null $description
@@ -29,9 +30,20 @@ class ScenarioItem extends Model
 {
     use BelongsToUser, HasFactory;
 
+    /**
+     * Il default del DB non arriva al model appena creato: senza questo la
+     * risposta del POST avrebbe `type: null` fino al primo reload.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'type' => 'expense',
+    ];
+
     protected $fillable = [
         'user_id',
         'scenario_id',
+        'type',
         'account_id',
         'category_id',
         'description',
