@@ -40,6 +40,7 @@ const form = ref({
 const lookupResults = ref<InstrumentCandidate[]>([])
 const lookupLoading = ref(false)
 const lookupError = ref('')
+const refreshingPrices = ref(false)
 
 const investmentAccounts = computed(() => accounts.value.filter((a) => a.type === 'investment'))
 
@@ -170,6 +171,16 @@ async function refresh() {
   overview.value = o.data.data
 }
 
+async function refreshPrices() {
+  refreshingPrices.value = true
+  try {
+    await api.post('/investments/refresh-prices')
+    await refresh()
+  } finally {
+    refreshingPrices.value = false
+  }
+}
+
 onMounted(async () => {
   const a = await api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } })
   accounts.value = a.data.data
@@ -182,13 +193,23 @@ onMounted(async () => {
   <div class="space-y-6 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
-      <button
-        class="btn-primary"
-        :disabled="investmentAccounts.length === 0"
-        @click="showForm = !showForm; reset()"
-      >
-        {{ showForm ? 'Annulla' : 'Nuova posizione' }}
-      </button>
+      <div class="flex gap-2">
+        <button
+          type="button"
+          class="btn-secondary"
+          :disabled="refreshingPrices"
+          @click="refreshPrices"
+        >
+          {{ refreshingPrices ? 'Aggiornamento…' : 'Aggiorna quotazioni' }}
+        </button>
+        <button
+          class="btn-primary"
+          :disabled="investmentAccounts.length === 0"
+          @click="showForm = !showForm; reset()"
+        >
+          {{ showForm ? 'Annulla' : 'Nuova posizione' }}
+        </button>
+      </div>
     </div>
 
     <button
