@@ -78,6 +78,8 @@ export interface Transaction {
   transfer_account_id: number | null
   recurring_transaction_id: number | null
   type: TransactionType
+  /** Rettifica di riconciliazione: conta nei saldi, non nelle statistiche. */
+  is_adjustment: boolean
   amount: string
   transfer_amount: string | null
   currency: string
@@ -237,6 +239,21 @@ export interface AppNotification {
 }
 
 export type ScenarioCadence = 'one_time' | 'monthly' | 'quarterly' | 'yearly'
+/**
+ * Risposta della riconciliazione conto. I campi oltre `computed_balance`
+ * arrivano solo dal POST: la GET è la sola anteprima del saldo calcolato.
+ */
+export interface AccountReconciliation {
+  account_id: number
+  date: string
+  currency: string
+  computed_balance: string
+  real_balance?: string
+  difference?: string
+  adjusted?: boolean
+  transaction?: Transaction | null
+}
+
 export type ScenarioItemType = 'expense' | 'income'
 
 export interface ScenarioItem {

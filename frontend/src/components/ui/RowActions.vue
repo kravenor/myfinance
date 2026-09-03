@@ -20,6 +20,7 @@ withDefaults(
 
 <template>
   <div class="inline-flex items-center gap-1 justify-end">
+    <slot name="before" />
     <button
       type="button"
       class="icon-btn icon-btn-edit"

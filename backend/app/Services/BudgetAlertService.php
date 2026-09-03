@@ -35,6 +35,7 @@ class BudgetAlertService
         [$start, $end] = FinancialMonth::forYearMonth($year, $month);
 
         $spentByCategory = Transaction::query()
+            ->excludingAdjustments()
             ->where('type', 'expense')
             ->whereIn('category_id', $budgets->pluck('category_id')->all())
             ->whereBetween('occurred_at', [$start->toDateString(), $end->toDateString()])

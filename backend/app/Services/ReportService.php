@@ -116,6 +116,7 @@ class ReportService
         $monthsKeys = array_keys($this->monthBuckets($from, $to));
 
         $rows = Transaction::query()
+            ->excludingAdjustments()
             ->where('type', $type)
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
             ->whereNotNull('category_id')
@@ -153,6 +154,7 @@ class ReportService
     public function topTransactions(Carbon $from, Carbon $to, string $type, int $limit = 10): array
     {
         $query = Transaction::query()
+            ->excludingAdjustments()
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()]);
 
         if ($type !== '') {
@@ -243,6 +245,7 @@ class ReportService
     private function totalsFor(Carbon $from, Carbon $to): array
     {
         $rows = Transaction::query()
+            ->excludingAdjustments()
             ->whereIn('type', ['income', 'expense'])
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
             ->get(['type', 'amount', 'currency', 'occurred_at']);
@@ -291,6 +294,7 @@ class ReportService
     public function byCategory(Carbon $from, Carbon $to, string $type): array
     {
         $rows = Transaction::query()
+            ->excludingAdjustments()
             ->where('type', $type)
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
             ->get(['category_id', 'amount', 'currency', 'occurred_at']);
@@ -323,6 +327,7 @@ class ReportService
     public function byTag(Carbon $from, Carbon $to, string $type): array
     {
         $rows = Transaction::query()
+            ->excludingAdjustments()
             ->where('transactions.type', $type)
             ->whereBetween('transactions.occurred_at', [$from->toDateString(), $to->toDateString()])
             ->join('tag_transaction', 'tag_transaction.transaction_id', '=', 'transactions.id')
@@ -361,6 +366,7 @@ class ReportService
     public function timeline(Carbon $from, Carbon $to): array
     {
         $transactions = Transaction::query()
+            ->excludingAdjustments()
             ->whereIn('type', ['income', 'expense'])
             ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
             ->get(['type', 'amount', 'currency', 'occurred_at']);
@@ -400,6 +406,18 @@ class ReportService
         }
 
         return $out;
+    }
+
+    /**
+     * Saldo calcolato di un singolo conto al $upTo, nella valuta del conto.
+     * Riusa l'aggregato di tutti i conti: sono poche righe per un uso personale
+     * e la logica dei saldi resta in un posto solo.
+     */
+    public function balanceFor(Account $account, Carbon $upTo): float
+    {
+        $row = $this->rawAccountBalances($upTo)->firstWhere('id', $account->id);
+
+        return (float) ($row['balance'] ?? 0.0);
     }
 
     /**

@@ -23,6 +23,7 @@ class TransactionResource extends JsonResource
             'transfer_account_id' => $this->transfer_account_id,
             'recurring_transaction_id' => $this->recurring_transaction_id,
             'type' => $this->type,
+            'is_adjustment' => $this->is_adjustment,
             'amount' => $this->amount,
             'transfer_amount' => $this->transfer_amount,
             'currency' => $this->currency,

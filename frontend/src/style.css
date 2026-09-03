@@ -54,6 +54,11 @@
   .table tbody tr:hover {
     @apply bg-slate-50;
   }
+  /* Rettifica di riconciliazione: fuori dalle statistiche, va riconoscibile
+     nell'elenco (altrimenti sembra un'entrata o un'uscita come le altre). */
+  .badge-adjustment {
+    @apply inline-block align-middle ml-1 px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wide bg-slate-200 text-slate-600;
+  }
   .icon-btn {
     @apply inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 rounded-md transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed;
   }
