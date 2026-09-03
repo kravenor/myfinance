@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down
+.PHONY: help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down backup restore
 
 help: ## Mostra i comandi disponibili
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -91,3 +91,10 @@ prod-up: ## Avvia stack produzione
 
 prod-down: ## Ferma stack produzione
 	$(COMPOSE) -f docker-compose.prod.yml --env-file .env.production down
+
+backup: ## Dump gzippato del DB in backups/ (vedi scripts/backup.sh per prod/vps)
+	./scripts/backup.sh
+
+restore: ## Ripristina un dump: make restore FILE=backups/finance-....sql.gz
+	@test -n "$(FILE)" || { echo "uso: make restore FILE=backups/finance-....sql.gz"; exit 2; }
+	./scripts/restore.sh "$(FILE)"

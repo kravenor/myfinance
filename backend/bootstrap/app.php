@@ -15,6 +15,18 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+
+        // Dietro il reverse proxy che termina TLS (Apache sul VPS, Traefik sulla
+        // Pi) l'app deve fidarsi di X-Forwarded-*: senza, Laravel vede `http` e
+        // genera redirect e link (reset password) in chiaro. Ristretto alle reti
+        // private: i container non sono raggiungibili direttamente da internet,
+        // quindi solo il proxy può presentare quegli header.
+        $middleware->trustProxies(at: [
+            '127.0.0.1',
+            '10.0.0.0/8',
+            '172.16.0.0/12',
+            '192.168.0.0/16',
+        ]);
         $middleware->validateCsrfTokens(except: [
             'sanctum/csrf-cookie',
         ]);
