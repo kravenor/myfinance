@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\InstrumentPrice;
 use App\Models\InvestmentHolding;
+use App\Services\Prices\BorsaItalianaProvider;
 use App\Services\Prices\CoinGeckoProvider;
 use App\Services\Prices\PriceProvider;
 use App\Services\Prices\YahooFinanceProvider;
@@ -78,6 +79,7 @@ class InvestmentPriceFetcher
         return match ($key) {
             'yahoo' => app(YahooFinanceProvider::class),
             'coingecko' => app(CoinGeckoProvider::class),
+            'borsaitaliana' => app(BorsaItalianaProvider::class),
             default => throw new RuntimeException("Provider quotazioni sconosciuto: {$key}"),
         };
     }

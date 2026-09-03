@@ -253,6 +253,10 @@ onMounted(async () => {
       <div>
         <label class="label">Ticker / Symbol</label>
         <input v-model="form.symbol" class="input" placeholder="es. CSSPX.MI (auto da ISIN)" />
+        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+          Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+          quotazione sul MOT di Borsa Italiana.
+        </p>
       </div>
       <div>
         <label class="label">ISIN</label>
@@ -310,6 +314,9 @@ onMounted(async () => {
       <div>
         <label class="label">Quantità</label>
         <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
+        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+          Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
+        </p>
       </div>
       <div>
         <label class="label">Prezzo di carico ({{ form.currency }})</label>
