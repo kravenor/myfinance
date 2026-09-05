@@ -80,6 +80,41 @@ class ScenarioTest extends TestCase
             ->assertJsonPath('data.currency', 'USD');
     }
 
+    public function test_nested_item_defaults_to_expense_and_accepts_income(): void
+    {
+        $user = User::factory()->create();
+        $scenario = Scenario::factory()->for($user)->create();
+
+        $this->actingAs($user)
+            ->postJson("/api/scenarios/{$scenario->id}/items", [
+                'amount' => 100,
+                'cadence' => 'one_time',
+                'starts_on' => '2026-07-15',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.type', 'expense');
+
+        $this->actingAs($user)
+            ->postJson("/api/scenarios/{$scenario->id}/items", [
+                'type' => 'income',
+                'amount' => 1500,
+                'cadence' => 'monthly',
+                'starts_on' => '2026-07-27',
+                'description' => 'Affitto incassato',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.type', 'income');
+
+        $this->actingAs($user)
+            ->postJson("/api/scenarios/{$scenario->id}/items", [
+                'type' => 'transfer',
+                'amount' => 100,
+                'cadence' => 'one_time',
+                'starts_on' => '2026-07-15',
+            ])
+            ->assertStatus(422);
+    }
+
     public function test_nested_item_rejects_cross_scenario_access(): void
     {
         $user = User::factory()->create();

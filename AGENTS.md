@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-09-03**
-Fase corrente: **Estensione — Preferenze di periodo e formato data (COMPLETATA)**
+Fase corrente: **Estensione — Quotazioni obbligazioni/BTP da Borsa Italiana (COMPLETATA)**
 
 ---
 
@@ -68,7 +68,7 @@ Finance/
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoalResource
 │   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, InvestmentPriceFetcher, InvestmentPriceResolver, NotificationScanner, TransactionImportService, TransactionExportService
 │   │   ├── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
-│   │   └── Prices/             # PriceProvider (interfaccia) + YahooFinanceProvider/CoinGeckoProvider + YahooSymbolLookup
+│   │   └── Prices/             # PriceProvider (interfaccia) + Yahoo/CoinGecko/BorsaItalianaProvider + YahooSymbolLookup
 │   ├── app/Notifications/  # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
@@ -88,9 +88,10 @@ Finance/
 │   ├── tailwind.config.js
 │   ├── postcss.config.js
 │   ├── tsconfig.json
-│   ├── index.html
+│   ├── index.html         # meta PWA (manifest, theme-color, apple-touch-icon)
+│   ├── public/            # asset statici serviti a root: manifest.webmanifest, icon-192/512.png, sw.js
 │   └── src/
-│       ├── main.ts            # bootstrap (Pinia + Router)
+│       ├── main.ts            # bootstrap (Pinia + Router) + registrazione service worker (solo prod)
 │       ├── App.vue            # root + onMounted fetchMe
 │       ├── style.css          # Tailwind directives + componenti (btn, input, card, table)
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
@@ -263,6 +264,9 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Previsioni: "resta a fine mese" + simulazione scenari (entrate vs uscite mese per mese, baseline + tutti gli scenari attivi a confronto, item con conto/valuta/categoria/cadenza)
 - [x] **Estensione** — Usabilità mobile (sidebar a drawer, tabelle a card stack, filtri collassabili, FAB, touch target 44px — convenzioni in §6)
 - [x] **Estensione** — Cambio password da Impostazioni (`PUT /auth/password` con `current_password`)
+- [x] **Estensione** — PWA installabile (manifest + icone + service worker vuoto per l'installabilità Chrome; nessuna cache offline)
+- [x] **Estensione** — Quotazioni obbligazioni/BTP: `asset_type = 'bond'` instradato a [BorsaItalianaProvider](backend/app/Services/Prices/BorsaItalianaProvider.php) (scheda MOT per ISIN, prezzo in % del nominale diviso per 100)
+- [x] **Estensione** — Entrate negli scenari (`scenario_items.type` income/expense: gli item income alzano le entrate previste invece delle uscite)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
@@ -274,7 +278,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 |---------|------------------|
 | `users` | `name`, `email` (unique), `password`, `currency` (default `EUR`), `locale` (default `it`), `date_format` (default `d/m/Y`, whitelist in `config/finance.php` → `finance.date_formats`), `month_start_day` (tinyint 1–28, default 1: giorno di inizio del "mese finanziario"), `notification_preferences` (JSON nullable: preferenze notifiche per-utente) |
 | `scenarios` | `name`, `description` (nullable), `color` (nullable), `is_active` (default true) |
-| `scenario_items` | `scenario_id` (cascade), `account_id` (nullable, `nullOnDelete`), `category_id` (nullable, `nullOnDelete`), `description` (nullable), `amount`, `currency` (default `EUR`), `cadence` enum (one_time/monthly/quarterly/yearly), `interval` (default 1), `starts_on`, `ends_on` (nullable) |
+| `scenario_items` | `scenario_id` (cascade), `type` enum(expense/income) default `expense`, `account_id` (nullable, `nullOnDelete`), `category_id` (nullable, `nullOnDelete`), `description` (nullable), `amount`, `currency` (default `EUR`), `cadence` enum (one_time/monthly/quarterly/yearly), `interval` (default 1), `starts_on`, `ends_on` (nullable) |
 | `personal_access_tokens` | Sanctum |
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
@@ -422,6 +426,14 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 - `routes/web.php` espone una rotta nominata `login` che ritorna JSON 401 (evita `RouteNotFoundException` quando `auth:sanctum` cerca di redirigere richieste non-JSON).
 - `bootstrap/app.php`: `shouldRenderJsonWhen` e custom render per `AuthenticationException` su path `api/*`.
 
+### PWA (installabile)
+L'app si installa sulla home screen e parte a schermo pieno (`display: standalone`). Tutto statico in `frontend/public/`, servito da Vite in dev e copiato in `dist/` dalla build:
+- `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#4f46e5` (indigo-600, l'accento dell'app), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
+- `icon-192.png` / `icon-512.png` — **segnaposto** generati a mano (barre bianche su fondo indigo, full-bleed perché le maskable vengono ritagliate dall'OS): sostituibili con un'icona vera senza toccare altro.
+- `sw.js` — service worker **vuoto di proposito**, registrato solo in produzione da [main.ts](frontend/src/main.ts). Serve unicamente al criterio di installabilità di Chrome (manifest + handler `fetch`), che altrimenti non offre "Installa app" su Android; iOS installa col solo manifest. Nessuna cache: un'app di dati vive di richieste fresche, e una cache offline darebbe solo saldi vecchi da debuggare.
+- [index.html](frontend/index.html) — `theme-color`, `manifest`, `apple-touch-icon` e i meta `apple-mobile-web-app-*` (iOS non legge il manifest per lo schermo pieno).
+- [docker/nginx/prod.conf](docker/nginx/prod.conf) — `location = /manifest.webmanifest` con `default_type application/manifest+json`: nginx non conosce quell'estensione e lo servirebbe come `application/octet-stream`, con Chrome che ignora il manifest. Va corretto in una location dedicata perché un blocco `types { }` nel `server` sostituirebbe l'intera mappa MIME.
+
 ## 10. Report & dashboard (Fase 7)
 
 ### Endpoint (`auth:sanctum`)
@@ -509,6 +521,8 @@ Impianto condiviso **fuori dal repo**, in `~/Progetti/infra/` (repo a parte): **
 
 ### Deploy su VPS (Apache host come reverse proxy)
 Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.vps.yml) — stesso stack prod (immagini `Dockerfile.prod`, SPA buildata, `scheduler`, `queue` worker) ma nginx esposto solo su `127.0.0.1:${APP_PORT:-8080}`; Apache termina TLS e proxa il dominio pubblico verso quella porta (`ProxyPass / http://127.0.0.1:8080/` + `ProxyPreserveHost On`). Nessuna label Traefik, nessuna rete `proxy`. Richiede `.env.production` (env dei container) e variabili `DB_*` nell'`.env` di progetto per l'interpolazione compose — senza default: il compose fallisce se mancano.
+
+Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte dopo una CI verde su `master` e via SSH esegue `git pull` → `up -d --build` → **backup** → **`artisan migrate --force`**. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
 
 ### HTTPS
 Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.
@@ -689,8 +703,18 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 ### Auto-fetch quotazioni
 - [InvestmentPriceResolver](backend/app/Services/InvestmentPriceResolver.php)`::hydrate($holdings, $asOf)`: per ogni holding con `symbol` carica da `instrument_prices` la quota più recente con `as_of <= $asOf`, la **converte** nella valuta dell'holding (via `CurrencyConverter`) e la imposta come `resolvedPrice`. Tenant-agnostico (le quote sono un fatto globale per symbol). Iniettato in [InvestmentService](backend/app/Services/InvestmentService.php), [ReportService](backend/app/Services/ReportService.php) e [InvestmentHoldingController](backend/app/Http/Controllers/InvestmentHoldingController.php) (index/show).
 - [InvestmentPriceFetcher](backend/app/Services/InvestmentPriceFetcher.php): raccoglie i `symbol` distinti di **tutti** gli holding (`withoutGlobalScopes`), li raggruppa per `asset_type` → instrada al provider (config `finance.prices.providers`) → upsert in `instrument_prices`. Errore su un provider isolato (non blocca gli altri).
-- Provider dietro l'interfaccia [PriceProvider](backend/app/Services/Prices/PriceProvider.php): [YahooFinanceProvider](backend/app/Services/Prices/YahooFinanceProvider.php) (stock/etf/fund, endpoint chart pubblico **senza API key**, copre le borse EU e restituisce la valuta nella risposta) e [CoinGeckoProvider](backend/app/Services/Prices/CoinGeckoProvider.php) (crypto). **Convenzioni symbol**: per le azioni/ETF il symbol è quello **Yahoo** (es. `CSSPX.MI` per Borsa Italiana, `SXR8.DE` per XETRA, `AAPL` per US); per le crypto è l'**id CoinGecko** (es. `bitcoin`), non il ticker.
-- Config [config/finance.php](backend/config/finance.php) sezione `prices`: mappa `asset_type`→provider, URL/timeout per provider, `vs_currency` (CoinGecko). Nessuna API key necessaria (Yahoo è keyless, CoinGecko gira sulla free tier senza key). Sono **API non ufficiali/free per uso personale/non commerciale** (cfr. [ADR 0001](docs/adr/0001-ordine-autofetch-vs-multitenant.md) per il conflitto licenza↔multi-tenant). Nota storica: EODHD era la scelta iniziale (D2) ma il suo free tier copre **solo i mercati USA** (EU → 404, verificato live), da cui lo switch a Yahoo.
+- Provider dietro l'interfaccia [PriceProvider](backend/app/Services/Prices/PriceProvider.php): [YahooFinanceProvider](backend/app/Services/Prices/YahooFinanceProvider.php) (stock/etf/fund, endpoint chart pubblico **senza API key**, copre le borse EU e restituisce la valuta nella risposta), [CoinGeckoProvider](backend/app/Services/Prices/CoinGeckoProvider.php) (crypto) e [BorsaItalianaProvider](backend/app/Services/Prices/BorsaItalianaProvider.php) (bond, vedi sotto). **Convenzioni symbol**: per le azioni/ETF il symbol è quello **Yahoo** (es. `CSSPX.MI` per Borsa Italiana, `SXR8.DE` per XETRA, `AAPL` per US); per le crypto è l'**id CoinGecko** (es. `bitcoin`), non il ticker; per le obbligazioni è l'**ISIN** (es. `IT0005534984`).
+
+#### Obbligazioni / BTP (BorsaItalianaProvider)
+`asset_type = 'bond'` → scraping della scheda titolo del MOT (`{url}/{ISIN}.html?lang=it`, default `https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda`). Nessuna API pubblica esiste per i BTP: Yahoo li ha solo su EuroTLX (`.TI`) con il feed **fermo al 2019**, Google Finance non li copre affatto, Twelve Data/EODHD li mettono nei piani a pagamento (analisi completa in [BTP-PRICES-ANALYSIS.md](docs/analysis/BTP-PRICES-ANALYSIS.md)).
+- Il segmento `/btp/` dell'URL è **indifferente al tipo di titolo**: lo stesso template copre BTP, BOT, CCT, BTP Italia/Valore e i corporate sul MOT.
+- Legge `Prezzo di riferimento` + `Data di riferimento` (chiusura del giorno precedente) e la valuta da `Valuta di Negoziazione` (default EUR). 301 verso `{ISIN}-MOTX.html`, seguito da Guzzle.
+- **Il prezzo viene diviso per 100**: le obbligazioni si quotano in percentuale del nominale, quindi `quantity` dell'holding è il **valore nominale** (5000) e `quantity × price` dà il valore di mercato senza casi speciali in `marketValue()`. `avg_cost` segue la stessa scala (0,985 per un acquisto a 98,5).
+- **Auto-copia ISIN → symbol**: un holding `bond` senza `symbol` ma con `isin` riceve l'ISIN come `symbol` in un hook `saving` su [InvestmentHolding](backend/app/Models/InvestmentHolding.php). Nel model e non nelle Form Request perché in update `asset_type` può non essere nel payload. Un `symbol` esplicito non viene toccato, e per gli asset non-bond non scatta nulla (per gli ETF un ISIN ha più quotazioni, il ticker Yahoo si ricava dal lookup).
+- Symbol non in forma ISIN → nessuna richiesta al sito. ISIN inesistente → il sito risponde **200 senza i campi prezzo**, il symbol viene omesso (resta l'ultimo prezzo noto o quello manuale).
+- Nessun rate limit per IP rilevato (25 richieste sequenziali + 20 in parallelo, tutte 200) e la scheda titolo non è in `robots.txt` (lì c'è solo `/contratti.html*page=`). 1 richiesta per ISIN, ~60 KB di HTML.
+- Prezzo **corso secco**, senza rateo di interesse (la scheda espone `Rateo Lordo` separatamente): è quello che mostrano i broker in portafoglio.
+- Config [config/finance.php](backend/config/finance.php) sezione `prices`: mappa `asset_type`→provider, URL/timeout per provider, `vs_currency` (CoinGecko). Nessuna API key necessaria (Yahoo è keyless, CoinGecko gira sulla free tier senza key, Borsa Italiana è scraping pubblico). Sono **API non ufficiali/free per uso personale/non commerciale** (cfr. [ADR 0001](docs/adr/0001-ordine-autofetch-vs-multitenant.md) per il conflitto licenza↔multi-tenant). Nota storica: EODHD era la scelta iniziale (D2) ma il suo free tier copre **solo i mercati USA** (EU → 404, verificato live), da cui lo switch a Yahoo.
 - Comando `php artisan prices:fetch [--symbol=]`, schedulato giornalmente alle **06:30** in [routes/console.php](backend/routes/console.php). Backfill storico non implementato (il real-time dà solo l'ultimo prezzo).
 
 ### Net worth & patrimonio
@@ -698,7 +722,7 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 > `investmentMarketValues($upTo)` idrata le holding con la quota `as_of <= $upTo`, quindi il net worth storico usa la quotazione del periodo per i symbol con storico in `instrument_prices` (fallback su `last_price` dove manca). Limitazioni residue: i symbol senza quote storiche usano il prezzo corrente (valore costante nel tempo); eventuale cash non investito sul conto investment non concorre al patrimonio (il valore = solo holding). [InvestmentService::overview()](backend/app/Services/InvestmentService.php) calcola i totali al tasso/prezzo correnti.
 
 ### Frontend
-[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). Campo **ISIN** con bottone "Cerca" → `/investments/lookup`: se unico candidato compila in automatico `symbol`/`currency`, altrimenti mostra la lista delle quotazioni da scegliere. La colonna "Prezzo" mostra `effective_price` con un badge **auto · {data}** quando `price_source === 'auto'`. Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
+[InvestmentsView.vue](frontend/src/views/InvestmentsView.vue) (`/investments` in sidebar, voce "Investimenti" tra Obiettivi e Ricorrenti): card riepilogo (valore di mercato, P/L latente con %, allocation per asset type), tabella holding con valore e P/L colorati, form inline CRUD (select conto investment + select valuta + select asset type, prezzo corrente opzionale). Campo **ISIN** con bottone "Cerca" → `/investments/lookup`: se unico candidato compila in automatico `symbol`/`currency`, altrimenti mostra la lista delle quotazioni da scegliere. La colonna "Prezzo" mostra `effective_price` con un badge **auto · {data}** quando `price_source === 'auto'`. Con `asset_type = 'bond'` compaiono due hint sotto Ticker e Quantità (il Ticker si può lasciare vuoto, ci finisce l'ISIN; quantità = nominale). Importi formattati con [money.ts](frontend/src/lib/money.ts). Tipi `InvestmentHolding`/`InvestmentOverview` in [types/api.ts](frontend/src/types/api.ts).
 
 ## 18. Notifiche (estensione)
 
@@ -751,7 +775,7 @@ Store Pinia [notifications.ts](frontend/src/stores/notifications.ts) (lista + `u
 Risponde alla domanda "**quanto mi resta a fine mese per vivere**" su un orizzonte di 3/6/12/24 mesi, in **baseline** e per ogni **scenario** salvato. Il dato di testa è il `net = entrate − uscite`, calcolato per ogni mese.
 
 ### Composizione del forecast
-**Entrate previste** per mese = Σ delle `recurring_transactions` di tipo `income` attive che cadono nel mese (espanse via `advance()`).
+**Entrate previste** per mese = Σ delle `recurring_transactions` di tipo `income` attive che cadono nel mese (espanse via `advance()`), **più** gli `scenario_items` con `type = income` dello scenario selezionato. Le entrate ricorrenti sono l'unica fonte del baseline: un'entrata inserita solo come transazione singola non compare nel forecast.
 
 **Uscite previste** per `(categoria, mese)`:
 - se esiste un `budget` per quel mese → `forecast_base = budget.amount` (logica: il budget = quanto pensi di spendere);
@@ -762,9 +786,9 @@ Lo scenario eventualmente selezionato aggiunge `scenario_extra`; il totale uscit
 
 ### Schema scenari
 - **`scenarios`** ([model](backend/app/Models/Scenario.php), `BelongsToUser`): `name`, `description?`, `color?`, `is_active`.
-- **`scenario_items`** ([model](backend/app/Models/ScenarioItem.php), `BelongsToUser`): `scenario_id` (cascade), `account_id?` (`nullOnDelete`, owned-by-user), `category_id?` (`nullOnDelete`, owned-by-user), `description?`, `amount`, `currency` (default `EUR`, allineato automaticamente al conto in UI), `cadence` (`one_time`/`monthly`/`quarterly`/`yearly`), `interval` (default 1), `starts_on`, `ends_on?`.
+- **`scenario_items`** ([model](backend/app/Models/ScenarioItem.php), `BelongsToUser`): `scenario_id` (cascade), `type` (`expense`/`income`, default `expense` sia in DB sia in `$attributes` del model — senza il default in memoria la risposta del POST avrebbe `type: null`), `account_id?` (`nullOnDelete`, owned-by-user), `category_id?` (`nullOnDelete`, owned-by-user), `description?`, `amount`, `currency` (default `EUR`, allineato automaticamente al conto in UI), `cadence` (`one_time`/`monthly`/`quarterly`/`yearly`), `interval` (default 1), `starts_on`, `ends_on?`.
 
-Gli item con `category_id = null` confluiscono nella riga "Senza categoria" del breakdown.
+Gli item `expense` con `category_id = null` confluiscono nella riga "Senza categoria" del breakdown. Gli item `income` **non** hanno riga per categoria (la categoria non li colloca da nessuna parte, e il form la nasconde): si sommano alle entrate del mese, dove alzano `income` e `net` lasciando intatti `expense_total` e la colonna `scenario`, che resta la quota di uscite.
 
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
@@ -774,7 +798,7 @@ Gli item con `category_id = null` confluiscono nella riga "Senza categoria" del 
 | GET | `/api/scenarios/{scenario}` | Include `items` |
 | PATCH/DELETE | `/api/scenarios/{scenario}` | CRUD standard (cascade su items) |
 | GET | `/api/scenarios/{scenario}/items` | Nested + `scoped()` |
-| POST | `/api/scenarios/{scenario}/items` | `amount`, `cadence`, `starts_on` obbligatori; `account_id?`, `category_id?`, `description?`, `currency?`, `interval?`, `ends_on?` |
+| POST | `/api/scenarios/{scenario}/items` | `amount`, `cadence`, `starts_on` obbligatori; `type?` (`expense` default/`income`), `account_id?`, `category_id?`, `description?`, `currency?`, `interval?`, `ends_on?` |
 | PATCH/DELETE | `/api/scenarios/{scenario}/items/{item}` | CRUD standard, scoped |
 | GET | `/api/reports/expense-forecast?months=&scenario_id=` | `months` 1–24 (default 6); con `scenario_id` la risposta include lo scenario meta + l'extra simulato per ogni cella |
 | GET | `/api/reports/expense-forecast/compare?months=&scenario_ids[]=` | Restituisce `{baseline, scenarios: [...]}`; senza `scenario_ids` include automaticamente **tutti gli scenari attivi** |

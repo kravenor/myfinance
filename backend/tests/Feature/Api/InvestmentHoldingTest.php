@@ -46,6 +46,70 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.price_as_of', null);
     }
 
+    public function test_bond_uses_isin_as_symbol_when_symbol_is_empty(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => 'investment']);
+
+        $this->actingAs($user)->postJson('/api/investment-holdings', [
+            'account_id' => $account->id,
+            'name' => 'BTP 1FB37 4%',
+            'isin' => 'it0003934657',
+            'asset_type' => 'bond',
+            'quantity' => 5000,
+            'avg_cost' => 0.985,
+        ])->assertCreated()
+            ->assertJsonPath('data.symbol', 'IT0003934657');
+    }
+
+    public function test_bond_keeps_an_explicit_symbol(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => 'investment']);
+
+        $this->actingAs($user)->postJson('/api/investment-holdings', [
+            'account_id' => $account->id,
+            'name' => 'Bond estero',
+            'symbol' => 'XS0000000019',
+            'isin' => 'IT0003934657',
+            'asset_type' => 'bond',
+            'quantity' => 1000,
+            'avg_cost' => 1,
+        ])->assertCreated()
+            ->assertJsonPath('data.symbol', 'XS0000000019');
+    }
+
+    public function test_non_bond_does_not_get_the_isin_as_symbol(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => 'investment']);
+
+        $this->actingAs($user)->postJson('/api/investment-holdings', [
+            'account_id' => $account->id,
+            'name' => 'Vanguard FTSE All-World',
+            'isin' => 'IE00BK5BQT80',
+            'asset_type' => 'etf',
+            'quantity' => 10,
+            'avg_cost' => 40,
+        ])->assertCreated()
+            ->assertJsonPath('data.symbol', null);
+    }
+
+    /** In update `asset_type` può non essere nel payload: il valore viene dal model. */
+    public function test_update_fills_symbol_on_an_existing_bond(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => 'investment']);
+        $holding = InvestmentHolding::factory()->for($user)->for($account, 'account')->create([
+            'asset_type' => 'bond', 'symbol' => null, 'isin' => null,
+        ]);
+
+        $this->actingAs($user)
+            ->putJson("/api/investment-holdings/{$holding->id}", ['isin' => 'it0005534984'])
+            ->assertOk()
+            ->assertJsonPath('data.symbol', 'IT0005534984');
+    }
+
     public function test_rejects_holding_on_non_investment_account(): void
     {
         $user = User::factory()->create();

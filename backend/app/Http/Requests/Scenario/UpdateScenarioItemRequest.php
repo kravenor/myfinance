@@ -20,6 +20,7 @@ class UpdateScenarioItemRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'type' => ['sometimes', Rule::in(['expense', 'income'])],
             'account_id' => [
                 'sometimes',
                 'nullable',
