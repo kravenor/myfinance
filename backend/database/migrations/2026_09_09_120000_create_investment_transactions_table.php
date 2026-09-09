@@ -23,7 +23,7 @@ return new class extends Migration
             $table->timestamps();
 
             // Ordine con cui HoldingPositionRecalculator ripercorre il registro.
-            $table->index(['investment_holding_id', 'occurred_at', 'id']);
+            $table->index(['investment_holding_id', 'occurred_at', 'id'], 'investment_transactions_holding_occurred_id_index');
         });
 
         Schema::table('investment_holdings', function (Blueprint $table) {
