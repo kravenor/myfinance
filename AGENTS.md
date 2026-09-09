@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-03**
-Fase corrente: **Estensione — Quotazioni obbligazioni/BTP da Borsa Italiana (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-09**
+Fase corrente: **Estensione — "Ricordami" al login (COMPLETATA)**
 
 ---
 
@@ -268,6 +268,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Quotazioni obbligazioni/BTP: `asset_type = 'bond'` instradato a [BorsaItalianaProvider](backend/app/Services/Prices/BorsaItalianaProvider.php) (scheda MOT per ISIN, prezzo in % del nominale diviso per 100)
 - [x] **Estensione** — Entrate negli scenari (`scenario_items.type` income/expense: gli item income alzano le entrate previste invece delle uscite)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
+- [x] **Estensione** — "Ricordami" al login (checkbox in [LoginView](frontend/src/views/LoginView.vue), flag `remember` → `Auth::attempt` con recaller cookie: la sessione della PWA sopravvive alla scadenza di `SESSION_LIFETIME`)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -314,7 +315,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 |--------|------|------------|------|
 | GET | `/sanctum/csrf-cookie` | — | Pre-flight CSRF (gestito da Sanctum) |
 | POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201) |
-| POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email, ritorna `UserResource` |
+| POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email, ritorna `UserResource`. `remember` (bool, opzionale) attiva il recaller cookie di Laravel: alla scadenza della sessione l'utente viene ri-autenticato senza reinserire la password |
 | POST | `/api/auth/forgot-password` | — | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
 | POST | `/api/auth/reset-password` | — | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
 | POST | `/api/auth/logout` | `auth:sanctum` | Logout web + sanctum, invalida sessione, 204 |

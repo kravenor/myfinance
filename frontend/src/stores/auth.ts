@@ -21,10 +21,10 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(email: string, password: string): Promise<void> {
+  async function login(email: string, password: string, remember = false): Promise<void> {
     loading.value = true
     try {
-      const { data } = await api.post<{ data: User }>('/auth/login', { email, password })
+      const { data } = await api.post<{ data: User }>('/auth/login', { email, password, remember })
       user.value = data.data
     } finally {
       loading.value = false
