@@ -4,6 +4,8 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -41,6 +43,37 @@ class LoginTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors('email');
         $this->assertGuest();
+    }
+
+    public function test_remember_flag_issues_a_persistent_recaller_token(): void
+    {
+        User::factory()->create([
+            'email' => 'mario@example.com',
+            'password' => Hash::make('Password123!'),
+        ]);
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'mario@example.com',
+            'password' => 'Password123!',
+            'remember' => true,
+        ])->assertOk();
+
+        $this->assertTrue(Cookie::hasQueued(Auth::guard('web')->getRecallerName()));
+    }
+
+    public function test_login_without_remember_does_not_queue_a_recaller_cookie(): void
+    {
+        User::factory()->create([
+            'email' => 'mario@example.com',
+            'password' => Hash::make('Password123!'),
+        ]);
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'mario@example.com',
+            'password' => 'Password123!',
+        ])->assertOk();
+
+        $this->assertFalse(Cookie::hasQueued(Auth::guard('web')->getRecallerName()));
     }
 
     public function test_login_requires_email_and_password(): void

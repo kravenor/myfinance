@@ -9,13 +9,14 @@ const route = useRoute()
 
 const email = ref('demo@finance.local')
 const password = ref('password')
+const remember = ref(true)
 const error = ref<string | null>(null)
 const resetDone = ref(route.query.reset === '1')
 
 async function onSubmit() {
   error.value = null
   try {
-    await auth.login(email.value, password.value)
+    await auth.login(email.value, password.value, remember.value)
     const redirect = (route.query.redirect as string) || '/'
     router.push(redirect)
   } catch (e: unknown) {
@@ -40,8 +41,12 @@ async function onSubmit() {
         <label class="label" for="password">Password</label>
         <input id="password" v-model="password" type="password" required class="input" />
       </div>
-      <div class="text-right -mt-2">
-        <RouterLink to="/forgot-password" class="text-sm text-indigo-600 hover:underline">
+      <div class="flex items-center justify-between gap-3 -mt-2">
+        <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer py-2">
+          <input v-model="remember" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+          Ricordami
+        </label>
+        <RouterLink to="/forgot-password" class="text-sm text-indigo-600 hover:underline py-2">
           Password dimenticata?
         </RouterLink>
       </div>
