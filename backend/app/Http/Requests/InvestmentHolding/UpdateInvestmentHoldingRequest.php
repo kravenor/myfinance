@@ -15,6 +15,10 @@ class UpdateInvestmentHoldingRequest extends FormRequest
     }
 
     /**
+     * `quantity` e `avg_cost` non compaiono: sono derivati dal registro movimenti
+     * (`investment-holdings/{id}/transactions`) e un update diretto li
+     * sovrascriverebbe fino al ricalcolo successivo.
+     *
      * @return array<string, mixed>
      */
     public function rules(): array
@@ -33,8 +37,6 @@ class UpdateInvestmentHoldingRequest extends FormRequest
             'isin' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/'],
             'asset_type' => ['sometimes', 'required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'other'])],
             'currency' => ['sometimes', 'string', 'size:3'],
-            'quantity' => ['sometimes', 'required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
-            'avg_cost' => ['sometimes', 'required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
             'last_price' => ['sometimes', 'nullable', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
             'last_price_at' => ['sometimes', 'nullable', 'date'],
             'notes' => ['sometimes', 'nullable', 'string', 'max:2000'],

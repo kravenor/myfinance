@@ -1,28 +1,74 @@
 <script setup lang="ts">
-import { formatDate } from '@/lib/date'
+import { formatDate, formatMonth } from '@/lib/date'
+import { Line } from 'vue-chartjs'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  Filler,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Tooltip,
+} from 'chart.js'
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
+import HoldingMovements from '@/components/HoldingMovements.vue'
 import { CURRENCIES, formatCurrency } from '@/lib/money'
 import type {
   Account,
   AssetType,
   InstrumentCandidate,
+  InvestmentHistory,
   InvestmentHolding,
   InvestmentOverview,
   Paginated,
 } from '@/types/api'
 
+ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
+
 const { items, loading, list, create, update, destroy } = useCrud<InvestmentHolding>('investment-holdings')
 
 const accounts = ref<Account[]>([])
 const overview = ref<InvestmentOverview | null>(null)
+const history = ref<InvestmentHistory | null>(null)
+
+// Versato vs valore: la serie parte dal primo movimento, non prima.
+const historyData = computed(() => ({
+  labels: (history.value?.points ?? []).map((p) => formatMonth(p.month)),
+  datasets: [
+    {
+      label: 'Versato',
+      data: (history.value?.points ?? []).map((p) => parseFloat(p.invested)),
+      borderColor: '#94a3b8',
+      backgroundColor: 'rgba(148,163,184,0.12)',
+      fill: true,
+      tension: 0.3,
+    },
+    {
+      label: 'Valore',
+      data: (history.value?.points ?? []).map((p) => parseFloat(p.market_value)),
+      borderColor: '#6366f1',
+      backgroundColor: 'rgba(99,102,241,0.15)',
+      fill: true,
+      tension: 0.3,
+    },
+  ],
+}))
+
+const chartOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom' as const } },
+}
 
 const assetTypes: AssetType[] = ['etf', 'stock', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'other']
 
 const editing = ref<InvestmentHolding | null>(null)
+const movementsFor = ref<InvestmentHolding | null>(null)
 const showForm = ref(false)
 const form = ref({
   account_id: 0,
@@ -147,6 +193,11 @@ async function onSubmit() {
     last_price: form.value.last_price === '' ? null : form.value.last_price,
     notes: form.value.notes || null,
   }
+  // In modifica quantità e carico arrivano dal registro movimenti: l'API li ignora.
+  if (editing.value) {
+    delete payload.quantity
+    delete payload.avg_cost
+  }
   if (form.value.last_price !== '') payload.last_price_at = new Date().toISOString()
 
   if (editing.value) {
@@ -165,10 +216,20 @@ async function onDelete(h: InvestmentHolding) {
   await refresh()
 }
 
+async function onMovementsChanged() {
+  const id = movementsFor.value?.id
+  await refresh()
+  movementsFor.value = items.value.find((h) => h.id === id) ?? null
+}
+
 async function refresh() {
   await list({ per_page: 200 })
-  const o = await api.get<{ data: InvestmentOverview }>('/investments/overview')
+  const [o, h] = await Promise.all([
+    api.get<{ data: InvestmentOverview }>('/investments/overview'),
+    api.get<InvestmentHistory>('/investments/history'),
+  ])
   overview.value = o.data.data
+  history.value = h.data
 }
 
 async function refreshPrices() {
@@ -332,16 +393,19 @@ onMounted(async () => {
           <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
         </select>
       </div>
-      <div>
-        <label class="label">Quantità</label>
+      <div v-if="!editing">
+        <label class="label">Quantità iniziale</label>
         <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
         <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
           Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
         </p>
       </div>
-      <div>
+      <div v-if="!editing">
         <label class="label">Prezzo di carico ({{ form.currency }})</label>
         <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" required />
+      </div>
+      <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
+        Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
       </div>
       <div>
         <label class="label">Prezzo corrente ({{ form.currency }})</label>
@@ -356,6 +420,17 @@ onMounted(async () => {
         <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
       </div>
     </form>
+
+    <!-- Versato vs valore: nessun punto prima del primo movimento. -->
+    <div v-if="(history?.points.length ?? 0) > 1" class="card p-4">
+      <div class="flex items-baseline justify-between gap-3 mb-2">
+        <h2 class="font-semibold text-slate-800">Versato vs valore</h2>
+        <p class="text-xs text-slate-500">dal primo movimento</p>
+      </div>
+      <div class="h-64">
+        <Line :data="historyData" :options="chartOptions" />
+      </div>
+    </div>
 
     <!-- Posizioni -->
     <div class="card">
@@ -389,7 +464,14 @@ onMounted(async () => {
                 {{ formatCurrency(h.unrealized_pl, h.currency) }}
                 <template v-if="h.unrealized_pl_pct">({{ parseFloat(h.unrealized_pl_pct) > 0 ? '+' : '' }}{{ h.unrealized_pl_pct }}%)</template>
               </p>
-              <RowActions class="mt-2 justify-end" @edit="startEdit(h)" @delete="onDelete(h)" />
+              <div class="mt-2 flex items-center gap-1 justify-end">
+                <button type="button" class="icon-btn" title="Movimenti" aria-label="Movimenti" @click="movementsFor = h">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                    <path d="M3 4.75A.75.75 0 0 1 3.75 4h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 4.75Zm0 5a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 9.75Zm0 5a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75Z" />
+                  </svg>
+                </button>
+                <RowActions @edit="startEdit(h)" @delete="onDelete(h)" />
+              </div>
             </div>
           </div>
         </li>
@@ -405,6 +487,7 @@ onMounted(async () => {
             <th>Conto</th>
             <th class="text-right">Quantità</th>
             <th class="text-right">Carico</th>
+            <th class="text-right">Versato</th>
             <th class="text-right">Prezzo</th>
             <th class="text-right">Valore</th>
             <th class="text-right">P/L</th>
@@ -422,6 +505,7 @@ onMounted(async () => {
             <td>{{ accountName(h.account_id) }}</td>
             <td class="text-right">{{ h.quantity }}</td>
             <td class="text-right">{{ formatCurrency(h.avg_cost, h.currency) }}</td>
+            <td class="text-right text-slate-500">{{ formatCurrency(h.net_invested, h.currency) }}</td>
             <td class="text-right">
               {{ formatCurrency(h.effective_price, h.currency) }}
               <span
@@ -440,14 +524,28 @@ onMounted(async () => {
               </span>
             </td>
             <td class="text-right">
-              <RowActions @edit="startEdit(h)" @delete="onDelete(h)" />
+              <div class="inline-flex items-center gap-1">
+                <button type="button" class="icon-btn" title="Movimenti" aria-label="Movimenti" @click="movementsFor = h">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                    <path d="M3 4.75A.75.75 0 0 1 3.75 4h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 4.75Zm0 5a.75.75 0 0 1 .75-.75h12.5a.75.75 0 0 1 0 1.5H3.75A.75.75 0 0 1 3 9.75Zm0 5a.75.75 0 0 1 .75-.75h7.5a.75.75 0 0 1 0 1.5h-7.5a.75.75 0 0 1-.75-.75Z" />
+                  </svg>
+                </button>
+                <RowActions @edit="startEdit(h)" @delete="onDelete(h)" />
+              </div>
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="9" class="text-center text-slate-500 py-6">Nessuna posizione.</td>
+            <td colspan="10" class="text-center text-slate-500 py-6">Nessuna posizione.</td>
           </tr>
         </tbody>
       </table>
     </div>
+
+    <HoldingMovements
+      v-if="movementsFor"
+      :holding="movementsFor"
+      @close="movementsFor = null"
+      @changed="onMovementsChanged"
+    />
   </div>
 </template>

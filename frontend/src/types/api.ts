@@ -194,8 +194,38 @@ export interface InvestmentHolding {
   market_value: string
   unrealized_pl: string
   unrealized_pl_pct: string | null
+  net_invested: string
+  realized_pl: string
   created_at: string
   updated_at: string
+}
+
+export interface InvestmentHistoryPoint {
+  month: string
+  as_of: string
+  invested: string
+  market_value: string
+  unrealized_pl: string
+}
+
+export interface InvestmentHistory {
+  base_currency: string
+  points: InvestmentHistoryPoint[]
+}
+
+export type InvestmentSide = 'buy' | 'sell'
+
+export interface InvestmentTransaction {
+  id: number
+  investment_holding_id: number
+  side: InvestmentSide
+  occurred_at: string
+  quantity: string
+  price: string
+  fees: string
+  notes: string | null
+  cash_flow: string
+  created_at: string
 }
 
 export interface InstrumentCandidate {

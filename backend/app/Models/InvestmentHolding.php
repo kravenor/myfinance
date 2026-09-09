@@ -3,13 +3,17 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToUser;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * Posizione (holding) su un asset detenuto in un conto di tipo investment.
+ * Quantità e costo medio non si scrivono a mano: sono derivati dal registro
+ * movimenti (`transactions`) da HoldingPositionRecalculator.
  * Il prezzo effettivo segue la precedenza: quotazione automatica risolta
  * (da `instrument_prices`, via InvestmentPriceResolver) → `last_price` manuale
  * → costo medio.
@@ -24,10 +28,13 @@ use Illuminate\Support\Carbon;
  * @property string $currency
  * @property string $quantity
  * @property string $avg_cost
+ * @property string $realized_pl
+ * @property string $net_invested
  * @property string|null $last_price
  * @property Carbon|null $last_price_at
  * @property string|null $notes
  * @property-read Account|null $account
+ * @property-read Collection<int, InvestmentTransaction> $transactions
  */
 class InvestmentHolding extends Model
 {
@@ -43,6 +50,8 @@ class InvestmentHolding extends Model
         'currency',
         'quantity',
         'avg_cost',
+        'realized_pl',
+        'net_invested',
         'last_price',
         'last_price_at',
         'notes',
@@ -75,6 +84,8 @@ class InvestmentHolding extends Model
         return [
             'quantity' => 'decimal:8',
             'avg_cost' => 'decimal:8',
+            'realized_pl' => 'decimal:2',
+            'net_invested' => 'decimal:2',
             'last_price' => 'decimal:8',
             'last_price_at' => 'datetime',
         ];
@@ -133,5 +144,11 @@ class InvestmentHolding extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /** Registro dei movimenti da cui è derivata la posizione. */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(InvestmentTransaction::class);
     }
 }
