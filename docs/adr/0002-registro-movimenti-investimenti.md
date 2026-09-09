@@ -89,6 +89,14 @@ Il bonifico verso il conto investment resta una `transfer` (o una ricorrente) re
 
 *Non c'è doppio conteggio:* in [ReportService](../../backend/app/Services/ReportService.php) il saldo di un conto `investment` è il valore di mercato delle holding, non la somma delle sue transazioni.
 
+### D11 — Il registro non ha una policy propria: autorizza quella dell'holding
+
+`InvestmentTransactionController` chiama sempre `authorize('view'|'update', $investmentHolding)`. Un `InvestmentTransactionPolicy` era stato creato e poi rimosso: non veniva invocato da nessuna parte.
+
+*Perché:* è la convenzione già in uso per le risorse annidate (`ScenarioItem` non ha una policy, comanda `ScenarioPolicy`). È il possesso del padre a dare accesso ai figli, e duplicare il controllo sul figlio aggiunge un file che nessuno chiama — quindi che nessuno tiene aggiornato.
+
+*Nota:* la prima difesa resta comunque `UserScope`, che rende invisibile l'holding di un altro utente e fa rispondere **404** prima ancora che la policy entri in gioco. La policy copre i casi che lo scope non vede: `viewAny`/`create` (nessun record da filtrare) e le query con `withoutGlobalScopes()`.
+
 ## Percorsi di upgrade aperti
 
 Ordinati per rapporto valore/costo. Ognuno indica cosa toccare.
