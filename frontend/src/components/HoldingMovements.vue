@@ -15,17 +15,29 @@ const saving = ref(false)
 const error = ref('')
 const editingId = ref<number | null>(null)
 
+// Prezzo di default: la quotazione già risolta per l'holding (auto o manuale),
+// così l'utente non deve andarla a cercare per registrare una rata PAC.
 const blank = () => ({
   side: 'buy' as InvestmentSide,
   occurred_at: new Date().toISOString().slice(0, 10),
+  amount: '',
   quantity: '',
-  price: '',
+  price: props.holding.effective_price,
   fees: '',
   notes: '',
 })
 const form = ref(blank())
 
 const base = computed(() => `/investment-holdings/${props.holding.id}/transactions`)
+
+// Per un acquisto, l'utente pensa in importo versato (es. rata PAC): la quantità
+// è derivata, non serve farla calcolare a mano.
+const computedQuantity = computed(() => {
+  const amount = parseFloat(form.value.amount)
+  const price = parseFloat(form.value.price)
+  if (!amount || !price) return null
+  return amount / price
+})
 
 // Il totale versato è la cassa netta immessa: serve il confronto con il valore
 // attuale, che è la lettura che conta in un PAC.
@@ -50,6 +62,7 @@ function startEdit(m: InvestmentTransaction) {
   form.value = {
     side: m.side,
     occurred_at: m.occurred_at,
+    amount: '',
     quantity: m.quantity,
     price: m.price,
     fees: m.fees,
@@ -69,7 +82,7 @@ async function onSubmit() {
   const payload = {
     side: form.value.side,
     occurred_at: form.value.occurred_at,
-    quantity: form.value.quantity,
+    quantity: computedQuantity.value !== null ? String(computedQuantity.value) : form.value.quantity,
     price: form.value.price,
     fees: form.value.fees === '' ? 0 : form.value.fees,
     notes: form.value.notes || null,
@@ -149,13 +162,27 @@ onMounted(load)
             <label class="label">Data</label>
             <input v-model="form.occurred_at" type="date" class="input" required />
           </div>
-          <div>
-            <label class="label">Quantità</label>
-            <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
+          <div v-if="form.side === 'buy'">
+            <label class="label">Importo versato ({{ holding.currency }})</label>
+            <input v-model="form.amount" type="number" step="0.01" min="0" class="input" placeholder="es. 100" />
           </div>
           <div>
             <label class="label">Prezzo ({{ holding.currency }})</label>
             <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required />
+          </div>
+          <div>
+            <label class="label">Quantità</label>
+            <input
+              v-model="form.quantity"
+              type="number"
+              step="0.00000001"
+              min="0"
+              class="input"
+              :readonly="computedQuantity !== null"
+              :class="{ 'bg-slate-100 text-slate-500': computedQuantity !== null }"
+              :required="computedQuantity === null"
+              :placeholder="computedQuantity !== null ? String(computedQuantity) : ''"
+            />
           </div>
           <div>
             <label class="label">Commissioni</label>
