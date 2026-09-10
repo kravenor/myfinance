@@ -14,6 +14,13 @@ const categories = ref<Category[]>([])
 const tags = ref<Tag[]>([])
 
 const filters = ref({ account_id: '', type: '', from: '', to: '', search: '', tag_id: '' })
+const expandedDescriptions = ref(new Set<number>())
+function toggleDescription(id: number) {
+  const set = expandedDescriptions.value
+  if (set.has(id)) set.delete(id)
+  else set.add(id)
+  expandedDescriptions.value = new Set(set)
+}
 const page = ref(1)
 
 const editing = ref<Transaction | null>(null)
@@ -424,7 +431,12 @@ onMounted(async () => {
               </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
-            <td class="whitespace-normal break-words max-w-xs">{{ tx.description ?? '—' }}</td>
+            <td
+              class="max-w-xs cursor-pointer"
+              :class="expandedDescriptions.has(tx.id) ? '!whitespace-normal break-words' : 'line-clamp-2 break-words'"
+              :title="tx.description ?? ''"
+              @click="toggleDescription(tx.id)"
+            >{{ tx.description ?? '—' }}</td>
             <td>
               <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1">
                 <span
