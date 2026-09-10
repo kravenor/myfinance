@@ -34,6 +34,7 @@ class UpdateRecurringTransactionRequest extends FormRequest
                 'different:account_id',
                 $ownedBy('accounts'),
             ],
+            'investment_holding_id' => ['nullable', 'integer', $ownedBy('investment_holdings')],
             'type' => ['sometimes', 'required', 'in:income,expense,transfer'],
             'amount' => ['sometimes', 'required', 'numeric', 'gt:0', 'between:0,999999999999.99'],
             'currency' => ['sometimes', 'nullable', 'string', 'size:3'],

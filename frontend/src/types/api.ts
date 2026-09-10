@@ -125,6 +125,7 @@ export interface RecurringTransaction {
   account_id: number
   category_id: number | null
   transfer_account_id: number | null
+  investment_holding_id: number | null
   type: TransactionType
   amount: string
   currency: string

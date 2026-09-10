@@ -5,11 +5,12 @@ import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import { formatCurrency } from '@/lib/money'
-import type { Account, Cadence, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
+import type { Account, Cadence, InvestmentHolding, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
 
 const { items, loading, list, create, update, destroy } = useCrud<RecurringTransaction>('recurring-transactions')
 
 const accounts = ref<Account[]>([])
+const holdings = ref<InvestmentHolding[]>([])
 
 const cadences: Cadence[] = ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly', 'yearly']
 
@@ -18,6 +19,7 @@ const showForm = ref(false)
 const form = ref({
   account_id: 0,
   transfer_account_id: null as number | null,
+  investment_holding_id: null as number | null,
   type: 'expense' as TransactionType,
   amount: '',
   cadence: 'monthly' as Cadence,
@@ -33,6 +35,7 @@ function reset() {
   form.value = {
     account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     transfer_account_id: null,
+    investment_holding_id: null,
     type: 'expense',
     amount: '',
     cadence: 'monthly',
@@ -49,6 +52,7 @@ function startEdit(r: RecurringTransaction) {
   form.value = {
     account_id: r.account_id,
     transfer_account_id: r.transfer_account_id,
+    investment_holding_id: r.investment_holding_id,
     type: r.type,
     amount: r.amount,
     cadence: r.cadence,
@@ -83,6 +87,7 @@ async function onSubmit() {
     description: form.value.description,
     is_active: form.value.is_active,
   }
+  payload.investment_holding_id = form.value.type === 'income' ? null : form.value.investment_holding_id
   if (form.value.type === 'transfer') {
     payload.transfer_account_id = form.value.transfer_account_id
   } else {
@@ -103,8 +108,12 @@ async function onDelete(r: RecurringTransaction) {
 }
 
 onMounted(async () => {
-  const a = await api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } })
+  const [a, h] = await Promise.all([
+    api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } }),
+    api.get<Paginated<InvestmentHolding>>('/investment-holdings', { params: { per_page: 100 } }),
+  ])
   accounts.value = a.data.data
+  holdings.value = h.data.data
   form.value.account_id = accounts.value[0]?.id ?? 0
   await list()
 })
@@ -163,6 +172,14 @@ onMounted(async () => {
       <div>
         <label class="label">Importo</label>
         <input v-model="form.amount" type="number" step="0.01" min="0.01" class="input" required />
+      </div>
+      <div v-if="form.type !== 'income'">
+        <label class="label">Investimento PAC (opzionale)</label>
+        <select v-model.number="form.investment_holding_id" class="input">
+          <option :value="null">— nessuno —</option>
+          <option v-for="h in holdings" :key="h.id" :value="h.id">{{ h.name }}</option>
+        </select>
+        <p class="text-xs text-slate-500 mt-1">A ogni scadenza registra l'acquisto: quote = importo / quotazione del giorno.</p>
       </div>
       <div>
         <label class="label">Inizio</label>

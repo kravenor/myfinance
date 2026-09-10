@@ -33,6 +33,7 @@ class StoreRecurringTransactionRequest extends FormRequest
                 Rule::requiredIf(fn () => $this->input('type') === 'transfer'),
                 $ownedBy('accounts'),
             ],
+            'investment_holding_id' => ['nullable', 'integer', $ownedBy('investment_holdings')],
             'type' => ['required', 'in:income,expense,transfer'],
             'amount' => ['required', 'numeric', 'gt:0', 'between:0,999999999999.99'],
             'currency' => ['nullable', 'string', 'size:3'],

@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-09**
-Fase corrente: **Estensione — Registro movimenti investimenti / PAC + serie storica versato vs valore (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-10**
+Fase corrente: **Estensione — Ricorrenti collegate a un holding: rata PAC con quote automatiche (COMPLETATA)**
 
 ---
 
@@ -270,6 +270,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
 - [x] **Estensione** — Registro movimenti investimenti / PAC: `investment_transactions` (buy/sell con data, quantità, prezzo, commissioni) come sola fonte della posizione. `quantity`, `avg_cost`, `realized_pl`, `net_invested` sull'holding sono cache derivate ricalcolate da [HoldingPositionRecalculator](backend/app/Services/HoldingPositionRecalculator.php) a ogni scrittura; pannello movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue). Grafico versato vs valore da [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php): serie mensile **in avanti dal primo movimento**, valore alla quotazione più recente `<= punto` con fallback sul costo medio di quel momento (nessun backfill di quotazioni storiche, `last_price` escluso perché è un prezzo di oggi). Decisioni, alternative scartate e percorsi di upgrade aperti in [ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md)
 - [x] **Estensione** — "Ricordami" al login (checkbox in [LoginView](frontend/src/views/LoginView.vue), flag `remember` → `Auth::attempt` con recaller cookie: la sessione della PWA sopravvive alla scadenza di `SESSION_LIFETIME`)
+- [x] **Estensione** — Rata PAC automatica: una ricorrente può essere collegata a un holding (`recurring_transactions.investment_holding_id`) e a ogni scadenza genera, oltre alla transazione di cassa, l'acquisto sul registro con quote derivate da importo/quotazione — stessa logica del form movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue), lato server in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -285,7 +286,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
 | `tags` | `name`, `color` — unique per `(user_id, name)` |
-| `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
+| `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `investment_holding_id` (nullable, `nullOnDelete`: rata PAC), `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
 | `transactions` | `account_id`, `category_id`, `transfer_account_id`, `recurring_transaction_id`, `type`, `amount`, `currency`, `occurred_at`, `description`, `notes`, `external_id` |
 | `budgets` | `category_id`, `year`, `month`, `amount` — unique per `(user_id, category_id, year, month)` |
 | `tag_transaction` | pivot `transaction_id` + `tag_id` (convenzione Laravel alfabetica) |
@@ -390,6 +391,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 ### Runner ricorrenti
 
 - Service `App\Services\RecurringTransactionRunner::run(?Carbon $until)`: cicla su tutte le ricorrenti attive con `next_run_at <= $until`, materializza Transaction collegate (`recurring_transaction_id` impostato), aggiorna `last_run_at`, calcola `next_run_at` secondo `cadence`/`interval` (`daily/weekly/biweekly/monthly/quarterly/yearly`, `*NoOverflow` per evitare salti di mese). Se `ends_on` superato → `is_active=false`. Itera finché c'è backlog.
+- Se la ricorrente ha `investment_holding_id`, ogni occorrenza registra anche un movimento `buy` sull'holding con `quantity = importo / quotazione della data` (prezzo da [InvestmentPriceResolver](backend/app/Services/InvestmentPriceResolver.php), fallback `effectivePrice()`; importo convertito se la valuta differisce). Prezzo non disponibile o ≤ 0 → solo il movimento di cassa. La posizione è ricalcolata una volta a fine backlog.
 - Command Artisan `php artisan recurring:run [--date=YYYY-MM-DD]`.
 - Schedule giornaliero in [routes/console.php](backend/routes/console.php) alle 02:00 (richiede `php artisan schedule:work` o cron `php artisan schedule:run` ogni minuto in produzione — da pianificare in Fase 9).
 

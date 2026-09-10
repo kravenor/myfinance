@@ -21,6 +21,7 @@ class RecurringTransactionResource extends JsonResource
             'account_id' => $this->account_id,
             'category_id' => $this->category_id,
             'transfer_account_id' => $this->transfer_account_id,
+            'investment_holding_id' => $this->investment_holding_id,
             'type' => $this->type,
             'amount' => $this->amount,
             'currency' => $this->currency,
