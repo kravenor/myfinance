@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $category_id
  * @property int|null $transfer_account_id
  * @property int|null $investment_holding_id
+ * @property string $investment_fees
  * @property string $type
  * @property string $amount
  * @property string $currency
@@ -38,6 +39,7 @@ class RecurringTransaction extends Model
         'category_id',
         'transfer_account_id',
         'investment_holding_id',
+        'investment_fees',
         'type',
         'amount',
         'currency',
@@ -55,6 +57,7 @@ class RecurringTransaction extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'investment_fees' => 'decimal:2',
             'interval' => 'integer',
             'starts_on' => 'date:Y-m-d',
             'ends_on' => 'date:Y-m-d',

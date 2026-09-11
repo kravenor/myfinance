@@ -96,8 +96,8 @@ class RecurringTransactionRunner
 
     /**
      * Rata PAC: registra l'acquisto sull'holding collegato ricavando le quote
-     * dall'importo versato e dalla quotazione del giorno, come nel form dei
-     * movimenti.
+     * dall'importo versato al netto dei costi e dalla quotazione del giorno,
+     * come nel form dei movimenti.
      */
     private function recordInvestmentBuy(RecurringTransaction $recurring, InvestmentHolding $holding, Carbon $occurredAt): void
     {
@@ -109,8 +109,16 @@ class RecurringTransactionRunner
         }
 
         $amount = (float) $recurring->amount;
+        $fees = (float) $recurring->investment_fees;
         if ($recurring->currency !== $holding->currency) {
             $amount = $this->converter->convert($amount, $recurring->currency, $holding->currency, $occurredAt);
+            $fees = $this->converter->convert($fees, $recurring->currency, $holding->currency, $occurredAt);
+        }
+
+        // I costi sono già dentro l'importo della rata: comprano quote solo i soldi che restano.
+        $invested = $amount - $fees;
+        if ($invested <= 0) {
+            return;
         }
 
         InvestmentTransaction::withoutGlobalScopes()->create([
@@ -118,9 +126,9 @@ class RecurringTransactionRunner
             'investment_holding_id' => $holding->id,
             'side' => 'buy',
             'occurred_at' => $occurredAt->toDateString(),
-            'quantity' => number_format($amount / $price, 8, '.', ''),
+            'quantity' => number_format($invested / $price, 8, '.', ''),
             'price' => number_format($price, 8, '.', ''),
-            'fees' => 0,
+            'fees' => number_format($fees, 2, '.', ''),
             'notes' => $recurring->description,
         ]);
     }

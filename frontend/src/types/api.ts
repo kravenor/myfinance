@@ -126,6 +126,7 @@ export interface RecurringTransaction {
   category_id: number | null
   transfer_account_id: number | null
   investment_holding_id: number | null
+  investment_fees: string
   type: TransactionType
   amount: string
   currency: string
@@ -214,7 +215,7 @@ export interface InvestmentHistory {
   points: InvestmentHistoryPoint[]
 }
 
-export type InvestmentSide = 'buy' | 'sell'
+export type InvestmentSide = 'buy' | 'sell' | 'fee'
 
 export interface InvestmentTransaction {
   id: number

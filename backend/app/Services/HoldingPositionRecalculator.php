@@ -16,7 +16,8 @@ use Illuminate\Validation\ValidationException;
  * divergono in silenzio (cfr. docs/adr/0002-registro-movimenti-investimenti.md, D3).
  *
  * Metodo di costo: media ponderata. Una vendita non tocca il costo medio, ma
- * scarica il costo delle quote vendute e realizza la differenza.
+ * scarica il costo delle quote vendute e realizza la differenza. Un movimento
+ * `fee` (bollo, custodia) non muove quote: alza il versato e abbassa il realizzato.
  */
 class HoldingPositionRecalculator
 {
@@ -40,11 +41,22 @@ class HoldingPositionRecalculator
 
         foreach ($movements as $movement) {
             $moved = (float) $movement->quantity;
-            $netInvested += $movement->side === 'buy' ? $movement->cashFlow() : -$movement->cashFlow();
+            $cash = $movement->cashFlow();
+
+            // Costo puro: non tocca quote né costo medio, è cassa immessa che
+            // non compra nulla e come tale erode il realizzato.
+            if ($movement->side === 'fee') {
+                $netInvested += $cash;
+                $realized -= $cash;
+
+                continue;
+            }
+
+            $netInvested += $movement->side === 'buy' ? $cash : -$cash;
 
             if ($movement->side === 'buy') {
                 $quantity += $moved;
-                $costBasis += $movement->cashFlow();
+                $costBasis += $cash;
 
                 continue;
             }
@@ -56,7 +68,7 @@ class HoldingPositionRecalculator
             }
 
             $avgCost = $quantity > 0 ? $costBasis / $quantity : 0.0;
-            $realized += $movement->cashFlow() - ($moved * $avgCost);
+            $realized += $cash - ($moved * $avgCost);
             $quantity -= $moved;
             $costBasis -= $moved * $avgCost;
         }

@@ -34,6 +34,7 @@ class StoreRecurringTransactionRequest extends FormRequest
                 $ownedBy('accounts'),
             ],
             'investment_holding_id' => ['nullable', 'integer', $ownedBy('investment_holdings')],
+            'investment_fees' => ['nullable', 'numeric', 'min:0', 'max:9999999999999.99'],
             'type' => ['required', 'in:income,expense,transfer'],
             'amount' => ['required', 'numeric', 'gt:0', 'between:0,999999999999.99'],
             'currency' => ['nullable', 'string', 'size:3'],

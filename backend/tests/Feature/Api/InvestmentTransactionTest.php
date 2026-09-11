@@ -296,4 +296,38 @@ class InvestmentTransactionTest extends TestCase
             ->assertJsonPath('data.0.occurred_at', '2026-05-02')
             ->assertJsonPath('data.1.occurred_at', '2026-01-02');
     }
+
+    public function test_fee_movement_raises_net_invested_without_touching_quantity(): void
+    {
+        $user = User::factory()->create();
+        $holding = $this->holding($user);
+
+        $this->buy($user, $holding, ['occurred_at' => '2026-01-10', 'quantity' => 10, 'price' => 10])
+            ->assertCreated();
+
+        $this->actingAs($user)->postJson("/api/investment-holdings/{$holding->id}/transactions", [
+            'side' => 'fee',
+            'occurred_at' => '2026-02-01',
+            'fees' => 34.2,
+            'notes' => 'Bollo titoli',
+        ])->assertCreated()->assertJsonPath('data.cash_flow', '34.20');
+
+        $holding->refresh();
+        $this->assertSame('10.00000000', $holding->quantity);
+        $this->assertSame('10.00000000', $holding->avg_cost);
+        $this->assertSame('134.20', $holding->net_invested);
+        $this->assertSame('-34.20', $holding->realized_pl);
+    }
+
+    public function test_fee_movement_requires_a_positive_cost(): void
+    {
+        $user = User::factory()->create();
+        $holding = $this->holding($user);
+
+        $this->actingAs($user)->postJson("/api/investment-holdings/{$holding->id}/transactions", [
+            'side' => 'fee',
+            'occurred_at' => '2026-02-01',
+            'fees' => 0,
+        ])->assertStatus(422)->assertJsonValidationErrors('fees');
+    }
 }

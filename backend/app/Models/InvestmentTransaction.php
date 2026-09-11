@@ -9,8 +9,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Movimento del registro di un holding: acquisto (anche la rata di un PAC) o
- * vendita. La posizione dell'holding — quantity, avg_cost, realized_pl,
+ * Movimento del registro di un holding: acquisto (anche la rata di un PAC),
+ * vendita o costo puro (`fee`: bollo, custodia, gestione — non muove quote).
+ * La posizione dell'holding — quantity, avg_cost, realized_pl,
  * net_invested — è derivata da questi movimenti via HoldingPositionRecalculator.
  *
  * @property int $id
@@ -57,14 +58,16 @@ class InvestmentTransaction extends Model
 
     /**
      * Cassa mossa dal movimento nella valuta dell'holding: quanto è uscito per
-     * un acquisto (commissioni incluse), quanto è rientrato per una vendita
-     * (commissioni escluse).
+     * un acquisto (commissioni incluse) o per un costo, quanto è rientrato per
+     * una vendita (commissioni escluse).
      */
     public function cashFlow(): float
     {
-        return $this->side === 'buy'
-            ? $this->grossAmount() + (float) $this->fees
-            : $this->grossAmount() - (float) $this->fees;
+        return match ($this->side) {
+            'sell' => $this->grossAmount() - (float) $this->fees,
+            'fee' => (float) $this->fees,
+            default => $this->grossAmount() + (float) $this->fees,
+        };
     }
 
     public function holding(): BelongsTo

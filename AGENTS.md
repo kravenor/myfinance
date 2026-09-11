@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-10**
-Fase corrente: **Estensione — Ricorrenti collegate a un holding: rata PAC con quote automatiche (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-11**
+Fase corrente: **Estensione — Costi sugli investimenti: movimento `fee` e commissioni sulla rata PAC (COMPLETATA)**
 
 ---
 
@@ -271,6 +271,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Registro movimenti investimenti / PAC: `investment_transactions` (buy/sell con data, quantità, prezzo, commissioni) come sola fonte della posizione. `quantity`, `avg_cost`, `realized_pl`, `net_invested` sull'holding sono cache derivate ricalcolate da [HoldingPositionRecalculator](backend/app/Services/HoldingPositionRecalculator.php) a ogni scrittura; pannello movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue). Grafico versato vs valore da [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php): serie mensile **in avanti dal primo movimento**, valore alla quotazione più recente `<= punto` con fallback sul costo medio di quel momento (nessun backfill di quotazioni storiche, `last_price` escluso perché è un prezzo di oggi). Decisioni, alternative scartate e percorsi di upgrade aperti in [ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md)
 - [x] **Estensione** — "Ricordami" al login (checkbox in [LoginView](frontend/src/views/LoginView.vue), flag `remember` → `Auth::attempt` con recaller cookie: la sessione della PWA sopravvive alla scadenza di `SESSION_LIFETIME`)
 - [x] **Estensione** — Rata PAC automatica: una ricorrente può essere collegata a un holding (`recurring_transactions.investment_holding_id`) e a ogni scadenza genera, oltre alla transazione di cassa, l'acquisto sul registro con quote derivate da importo/quotazione — stessa logica del form movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue), lato server in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
+- [x] **Estensione** — Costi sugli investimenti: movimento `fee` sul registro (bollo, custodia, gestione: non muove quote, alza `net_invested` e abbassa `realized_pl`) e `recurring_transactions.investment_fees`, commissioni già comprese nella rata PAC e scalate prima di derivare le quote in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -286,7 +287,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
 | `tags` | `name`, `color` — unique per `(user_id, name)` |
-| `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `investment_holding_id` (nullable, `nullOnDelete`: rata PAC), `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
+| `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `investment_holding_id` (nullable, `nullOnDelete`: rata PAC), `investment_fees` (costi della rata, scalati dall'importo prima di derivare le quote), `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
 | `transactions` | `account_id`, `category_id`, `transfer_account_id`, `recurring_transaction_id`, `type`, `amount`, `currency`, `occurred_at`, `description`, `notes`, `external_id` |
 | `budgets` | `category_id`, `year`, `month`, `amount` — unique per `(user_id, category_id, year, month)` |
 | `tag_transaction` | pivot `transaction_id` + `tag_id` (convenzione Laravel alfabetica) |
@@ -294,7 +295,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
 | `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
-| `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`. Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
+| `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell/fee: `fee` è un costo puro, quantità e prezzo a 0), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`. Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
 | `investment_holdings` (agg.) | `realized_pl` e `net_invested` `decimal(15,2)`: cache derivate dal registro (P/L chiuso sulle vendite, cassa netta immessa). **Non si scrivono da API**: `quantity` e `avg_cost` sono usciti da `UpdateInvestmentHoldingRequest` |
 | `notifications` | Tabella standard Laravel (`uuid` id, `type`, `notifiable` morph, `data` json, `read_at`). In-app notifications via canale database |
 

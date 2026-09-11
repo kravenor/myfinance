@@ -75,6 +75,13 @@ class InvestmentHistoryService
                     // non a quello del punto della serie: è cassa già uscita.
                     $inBase = $this->converter->convert($cash, $holding->currency, $base, $movement->occurred_at);
 
+                    // Costo puro: cassa immessa che non compra quote.
+                    if ($movement->side === 'fee') {
+                        $invested += $inBase;
+
+                        continue;
+                    }
+
                     if ($movement->side === 'buy') {
                         $quantity[$id] += $moved;
                         $costBasis[$id] += $cash;

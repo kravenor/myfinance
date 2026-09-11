@@ -20,6 +20,7 @@ const form = ref({
   account_id: 0,
   transfer_account_id: null as number | null,
   investment_holding_id: null as number | null,
+  investment_fees: '',
   type: 'expense' as TransactionType,
   amount: '',
   cadence: 'monthly' as Cadence,
@@ -36,6 +37,7 @@ function reset() {
     account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     transfer_account_id: null,
     investment_holding_id: null,
+    investment_fees: '',
     type: 'expense',
     amount: '',
     cadence: 'monthly',
@@ -53,6 +55,7 @@ function startEdit(r: RecurringTransaction) {
     account_id: r.account_id,
     transfer_account_id: r.transfer_account_id,
     investment_holding_id: r.investment_holding_id,
+    investment_fees: parseFloat(r.investment_fees) > 0 ? r.investment_fees : '',
     type: r.type,
     amount: r.amount,
     cadence: r.cadence,
@@ -88,6 +91,7 @@ async function onSubmit() {
     is_active: form.value.is_active,
   }
   payload.investment_holding_id = form.value.type === 'income' ? null : form.value.investment_holding_id
+  payload.investment_fees = payload.investment_holding_id ? form.value.investment_fees || 0 : 0
   if (form.value.type === 'transfer') {
     payload.transfer_account_id = form.value.transfer_account_id
   } else {
@@ -179,7 +183,12 @@ onMounted(async () => {
           <option :value="null">— nessuno —</option>
           <option v-for="h in holdings" :key="h.id" :value="h.id">{{ h.name }}</option>
         </select>
-        <p class="text-xs text-slate-500 mt-1">A ogni scadenza registra l'acquisto: quote = importo / quotazione del giorno.</p>
+        <p class="text-xs text-slate-500 mt-1">A ogni scadenza registra l'acquisto: quote = (importo − costi) / quotazione del giorno.</p>
+      </div>
+      <div v-if="form.type !== 'income' && form.investment_holding_id">
+        <label class="label">Costi per rata</label>
+        <input v-model="form.investment_fees" type="number" step="0.01" min="0" class="input" placeholder="0,00" />
+        <p class="text-xs text-slate-500 mt-1">Commissioni già comprese nell'importo della rata.</p>
       </div>
       <div>
         <label class="label">Inizio</label>

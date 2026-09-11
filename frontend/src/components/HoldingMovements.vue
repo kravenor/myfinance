@@ -27,12 +27,14 @@ const blank = () => ({
   notes: '',
 })
 const form = ref(blank())
+const isFee = computed(() => form.value.side === 'fee')
 
 const base = computed(() => `/investment-holdings/${props.holding.id}/transactions`)
 
 // Per un acquisto, l'utente pensa in importo versato (es. rata PAC): la quantità
 // è derivata, non serve farla calcolare a mano.
 const computedQuantity = computed(() => {
+  if (isFee.value) return null
   const amount = parseFloat(form.value.amount)
   const price = parseFloat(form.value.price)
   if (!amount || !price) return null
@@ -44,6 +46,11 @@ const computedQuantity = computed(() => {
 const totalPl = computed(
   () => parseFloat(props.holding.unrealized_pl) + parseFloat(props.holding.realized_pl),
 )
+
+const sideLabel = (side: InvestmentSide) =>
+  ({ buy: 'Acquisto', sell: 'Vendita', fee: 'Costo' })[side]
+const sideClass = (side: InvestmentSide) =>
+  ({ buy: 'text-slate-800', sell: 'text-amber-700', fee: 'text-slate-500' })[side]
 
 async function load() {
   loading.value = true
@@ -79,14 +86,21 @@ function cancelEdit() {
 async function onSubmit() {
   error.value = ''
   saving.value = true
-  const payload = {
-    side: form.value.side,
-    occurred_at: form.value.occurred_at,
-    quantity: computedQuantity.value !== null ? String(computedQuantity.value) : form.value.quantity,
-    price: form.value.price,
-    fees: form.value.fees === '' ? 0 : form.value.fees,
-    notes: form.value.notes || null,
-  }
+  const payload = isFee.value
+    ? {
+        side: form.value.side,
+        occurred_at: form.value.occurred_at,
+        fees: form.value.fees,
+        notes: form.value.notes || null,
+      }
+    : {
+        side: form.value.side,
+        occurred_at: form.value.occurred_at,
+        quantity: computedQuantity.value !== null ? String(computedQuantity.value) : form.value.quantity,
+        price: form.value.price,
+        fees: form.value.fees === '' ? 0 : form.value.fees,
+        notes: form.value.notes || null,
+      }
   try {
     if (editingId.value) {
       await api.patch(`${base.value}/${editingId.value}`, payload)
@@ -156,6 +170,7 @@ onMounted(load)
             <select v-model="form.side" class="input">
               <option value="buy">Acquisto</option>
               <option value="sell">Vendita</option>
+              <option value="fee">Costo</option>
             </select>
           </div>
           <div>
@@ -166,11 +181,11 @@ onMounted(load)
             <label class="label">Importo versato ({{ holding.currency }})</label>
             <input v-model="form.amount" type="number" step="0.01" min="0" class="input" placeholder="es. 100" />
           </div>
-          <div>
+          <div v-if="!isFee">
             <label class="label">Prezzo ({{ holding.currency }})</label>
             <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required />
           </div>
-          <div>
+          <div v-if="!isFee">
             <label class="label">Quantità</label>
             <input
               v-model="form.quantity"
@@ -185,12 +200,20 @@ onMounted(load)
             />
           </div>
           <div>
-            <label class="label">Commissioni</label>
-            <input v-model="form.fees" type="number" step="0.01" min="0" class="input" placeholder="0,00" />
+            <label class="label">{{ isFee ? `Costo (${holding.currency})` : 'Commissioni' }}</label>
+            <input
+              v-model="form.fees"
+              type="number"
+              step="0.01"
+              :min="isFee ? 0.01 : 0"
+              class="input"
+              placeholder="0,00"
+              :required="isFee"
+            />
           </div>
           <div>
             <label class="label">Note</label>
-            <input v-model="form.notes" class="input" placeholder="es. rata PAC" />
+            <input v-model="form.notes" class="input" :placeholder="isFee ? 'es. bollo titoli' : 'es. rata PAC'" />
           </div>
         </div>
         <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
@@ -206,10 +229,10 @@ onMounted(load)
       <ul v-else class="divide-y divide-slate-100">
         <li v-for="m in movements" :key="m.id" class="p-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
-            <p class="text-sm font-medium" :class="m.side === 'buy' ? 'text-slate-800' : 'text-amber-700'">
-              {{ m.side === 'buy' ? 'Acquisto' : 'Vendita' }} · {{ formatDate(m.occurred_at) }}
+            <p class="text-sm font-medium" :class="sideClass(m.side)">
+              {{ sideLabel(m.side) }} · {{ formatDate(m.occurred_at) }}
             </p>
-            <p class="text-xs text-slate-500 mt-0.5">
+            <p v-if="m.side !== 'fee'" class="text-xs text-slate-500 mt-0.5">
               {{ m.quantity }} × {{ formatCurrency(m.price, holding.currency) }}
               <template v-if="parseFloat(m.fees) > 0">
                 + {{ formatCurrency(m.fees, holding.currency) }} comm.
@@ -219,7 +242,7 @@ onMounted(load)
           </div>
           <div class="text-right shrink-0">
             <p class="text-sm font-medium whitespace-nowrap">
-              {{ m.side === 'buy' ? '−' : '+' }}{{ formatCurrency(m.cash_flow, holding.currency) }}
+              {{ m.side === 'sell' ? '+' : '−' }}{{ formatCurrency(m.cash_flow, holding.currency) }}
             </p>
             <RowActions class="mt-1 justify-end" @edit="startEdit(m)" @delete="onDelete(m)" />
           </div>
