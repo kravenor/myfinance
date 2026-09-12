@@ -31,7 +31,7 @@ class StoreInvestmentHoldingRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             'symbol' => ['nullable', 'string', 'max:40'],
             'isin' => ['nullable', 'string', 'regex:/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/'],
-            'asset_type' => ['required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'other'])],
+            'asset_type' => ['required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'certificate', 'cash', 'other'])],
             'currency' => ['sometimes', 'string', 'size:3'],
             'quantity' => ['required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
             'avg_cost' => ['required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],

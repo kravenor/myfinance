@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-11**
-Fase corrente: **Estensione — Costi sugli investimenti: movimento `fee` e commissioni sulla rata PAC (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-12**
+Fase corrente: **Estensione — Asset type `certificate` sugli investment holdings (COMPLETATA)**
 
 ---
 
@@ -273,6 +273,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Rata PAC automatica: una ricorrente può essere collegata a un holding (`recurring_transactions.investment_holding_id`) e a ogni scadenza genera, oltre alla transazione di cassa, l'acquisto sul registro con quote derivate da importo/quotazione — stessa logica del form movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue), lato server in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
 - [x] **Estensione** — Costi sugli investimenti: movimento `fee` sul registro (bollo, custodia, gestione: non muove quote, alza `net_invested` e abbassa `realized_pl`) e `recurring_transactions.investment_fees`, commissioni già comprese nella rata PAC e scalate prima di derivare le quote in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
+- [x] **Estensione** — Asset type `certificate` sugli investment holdings (nuovo valore enum accanto a stock/etf/fund/bond/crypto/commodity/cash/other, nessun pricing automatico dedicato: resta a prezzo manuale come `commodity`/`cash`/`other`)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -294,7 +295,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `savings_goals` | `name`, `target_amount`, `currency` (default `EUR`), `account_id` (nullable, `nullOnDelete`), `target_date` (nullable), `recurrence` (none/weekly/monthly/yearly), `start_date` (nullable), `color`, `icon`, `status` (active/completed/archived), `notes` — progresso derivato live dalle transazioni del conto, nessun ledger separato |
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
-| `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
+| `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/certificate/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
 | `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell/fee: `fee` è un costo puro, quantità e prezzo a 0), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`. Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
 | `investment_holdings` (agg.) | `realized_pl` e `net_invested` `decimal(15,2)`: cache derivate dal registro (P/L chiuso sulle vendite, cassa netta immessa). **Non si scrivono da API**: `quantity` e `avg_cost` sono usciti da `UpdateInvestmentHoldingRequest` |
 | `notifications` | Tabella standard Laravel (`uuid` id, `type`, `notifiable` morph, `data` json, `read_at`). In-app notifications via canale database |
