@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-09**
-Fase corrente: **Estensione — "Ricordami" al login (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-11**
+Fase corrente: **Estensione — Costi sugli investimenti: movimento `fee` e commissioni sulla rata PAC (COMPLETATA)**
 
 ---
 
@@ -50,11 +50,11 @@ Finance/
 ├── .gitignore
 │
 ├── backend/               # progetto Laravel 12
-│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, Scenario, ScenarioItem
+│   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, InvestmentTransaction, Scenario, ScenarioItem
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
 │   ├── app/Http/
-│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, Investment (overview), Notification, NotificationPreference, Scenario, ScenarioItem (nested)
+│   │   ├── Controllers/        # Account, Category, Tag, Transaction, Budget, RecurringTransaction, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, InvestmentTransaction (nested su holding), Investment (overview), Notification, NotificationPreference, Scenario, ScenarioItem (nested)
 │   │   ├── Controllers/Auth/   # AuthController (register/login/logout/me, forgot/reset password, updatePassword, updatePreferences)
 │   │   ├── Requests/Auth/      # Register, Login (con throttle), ForgotPassword, ResetPassword, UpdatePassword
 │   │   ├── Requests/Account/   # Store/UpdateAccountRequest
@@ -66,7 +66,7 @@ Finance/
 │   │   ├── Requests/CategorizationRule/    # Store/UpdateCategorizationRuleRequest (validazione regex)
 │   │   ├── Requests/SavingsGoal/  # Store/Update SavingsGoalRequest
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoalResource
-│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, InvestmentPriceFetcher, InvestmentPriceResolver, NotificationScanner, TransactionImportService, TransactionExportService
+│   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, HoldingPositionRecalculator, InvestmentHistoryService, InvestmentPriceFetcher, InvestmentPriceResolver, NotificationScanner, TransactionImportService, TransactionExportService
 │   │   ├── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
 │   │   └── Prices/             # PriceProvider (interfaccia) + Yahoo/CoinGecko/BorsaItalianaProvider + YahooSymbolLookup
 │   ├── app/Notifications/  # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
@@ -268,7 +268,10 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Quotazioni obbligazioni/BTP: `asset_type = 'bond'` instradato a [BorsaItalianaProvider](backend/app/Services/Prices/BorsaItalianaProvider.php) (scheda MOT per ISIN, prezzo in % del nominale diviso per 100)
 - [x] **Estensione** — Entrate negli scenari (`scenario_items.type` income/expense: gli item income alzano le entrate previste invece delle uscite)
 - [x] **Estensione** — Backup DB (`scripts/backup.sh` + `restore.sh`, `make backup`/`make restore`, retention configurabile) e HTTPS dietro reverse proxy (`trustProxies` su reti private + vhost Apache/certbot documentato in §12)
+- [x] **Estensione** — Registro movimenti investimenti / PAC: `investment_transactions` (buy/sell con data, quantità, prezzo, commissioni) come sola fonte della posizione. `quantity`, `avg_cost`, `realized_pl`, `net_invested` sull'holding sono cache derivate ricalcolate da [HoldingPositionRecalculator](backend/app/Services/HoldingPositionRecalculator.php) a ogni scrittura; pannello movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue). Grafico versato vs valore da [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php): serie mensile **in avanti dal primo movimento**, valore alla quotazione più recente `<= punto` con fallback sul costo medio di quel momento (nessun backfill di quotazioni storiche, `last_price` escluso perché è un prezzo di oggi). Decisioni, alternative scartate e percorsi di upgrade aperti in [ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md)
 - [x] **Estensione** — "Ricordami" al login (checkbox in [LoginView](frontend/src/views/LoginView.vue), flag `remember` → `Auth::attempt` con recaller cookie: la sessione della PWA sopravvive alla scadenza di `SESSION_LIFETIME`)
+- [x] **Estensione** — Rata PAC automatica: una ricorrente può essere collegata a un holding (`recurring_transactions.investment_holding_id`) e a ogni scadenza genera, oltre alla transazione di cassa, l'acquisto sul registro con quote derivate da importo/quotazione — stessa logica del form movimenti in [HoldingMovements](frontend/src/components/HoldingMovements.vue), lato server in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
+- [x] **Estensione** — Costi sugli investimenti: movimento `fee` sul registro (bollo, custodia, gestione: non muove quote, alza `net_invested` e abbassa `realized_pl`) e `recurring_transactions.investment_fees`, commissioni già comprese nella rata PAC e scalate prima di derivare le quote in [RecurringTransactionRunner](backend/app/Services/RecurringTransactionRunner.php)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -284,7 +287,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `accounts` | `name`, `type` (cash/bank/card/investment/other), `currency`, `initial_balance`, `color`, `icon`, `is_archived`, `include_in_net_worth`, `notes` |
 | `categories` | `parent_id` (self), `name`, `type` (income/expense), `color`, `icon`, `is_archived`, `sort_order` |
 | `tags` | `name`, `color` — unique per `(user_id, name)` |
-| `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
+| `recurring_transactions` | `account_id`, `category_id`, `transfer_account_id`, `investment_holding_id` (nullable, `nullOnDelete`: rata PAC), `investment_fees` (costi della rata, scalati dall'importo prima di derivare le quote), `type`, `amount`, `currency`, `description`, `cadence` (daily/weekly/biweekly/monthly/quarterly/yearly), `interval`, `starts_on`, `ends_on`, `next_run_at`, `last_run_at`, `is_active` |
 | `transactions` | `account_id`, `category_id`, `transfer_account_id`, `recurring_transaction_id`, `type`, `amount`, `currency`, `occurred_at`, `description`, `notes`, `external_id` |
 | `budgets` | `category_id`, `year`, `month`, `amount` — unique per `(user_id, category_id, year, month)` |
 | `tag_transaction` | pivot `transaction_id` + `tag_id` (convenzione Laravel alfabetica) |
@@ -292,6 +295,8 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
 | `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
+| `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell/fee: `fee` è un costo puro, quantità e prezzo a 0), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`. Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
+| `investment_holdings` (agg.) | `realized_pl` e `net_invested` `decimal(15,2)`: cache derivate dal registro (P/L chiuso sulle vendite, cassa netta immessa). **Non si scrivono da API**: `quantity` e `avg_cost` sono usciti da `UpdateInvestmentHoldingRequest` |
 | `notifications` | Tabella standard Laravel (`uuid` id, `type`, `notifiable` morph, `data` json, `read_at`). In-app notifications via canale database |
 
 ### Eloquent models e relazioni
@@ -387,6 +392,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 ### Runner ricorrenti
 
 - Service `App\Services\RecurringTransactionRunner::run(?Carbon $until)`: cicla su tutte le ricorrenti attive con `next_run_at <= $until`, materializza Transaction collegate (`recurring_transaction_id` impostato), aggiorna `last_run_at`, calcola `next_run_at` secondo `cadence`/`interval` (`daily/weekly/biweekly/monthly/quarterly/yearly`, `*NoOverflow` per evitare salti di mese). Se `ends_on` superato → `is_active=false`. Itera finché c'è backlog.
+- Se la ricorrente ha `investment_holding_id`, ogni occorrenza registra anche un movimento `buy` sull'holding con `quantity = importo / quotazione della data` (prezzo da [InvestmentPriceResolver](backend/app/Services/InvestmentPriceResolver.php), fallback `effectivePrice()`; importo convertito se la valuta differisce). Prezzo non disponibile o ≤ 0 → solo il movimento di cassa. La posizione è ricalcolata una volta a fine backlog.
 - Command Artisan `php artisan recurring:run [--date=YYYY-MM-DD]`.
 - Schedule giornaliero in [routes/console.php](backend/routes/console.php) alle 02:00 (richiede `php artisan schedule:work` o cron `php artisan schedule:run` ogni minuto in produzione — da pianificare in Fase 9).
 
@@ -694,8 +700,14 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 | Metodo | Path | Note |
 |--------|------|------|
 | GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name` |
-| POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `isin?`, `currency?`, `last_price?`, `last_price_at?`, `notes?` |
-| GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard |
+| POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `isin?`, `currency?`, `last_price?`, `last_price_at?`, `notes?`. `quantity`/`avg_cost` diventano il **movimento di apertura** del registro |
+| GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard. In PATCH `quantity` e `avg_cost` **non sono accettati**: sono derivati dal registro |
+| GET | `/api/investments/history` | Serie mensile `{month, as_of, invested, market_value, unrealized_pl}` nella valuta base. Vuota finché il registro è vuoto; l'ultimo punto è oggi, così combacia con `overview` |
+| GET | `/api/investment-holdings/{investment_holding}/transactions` | Registro movimenti, più recenti prima |
+| POST | `/api/investment-holdings/{investment_holding}/transactions` | `side` (buy/sell), `occurred_at`, `quantity` (>0), `price`, `fees?`, `notes?` |
+| PATCH/DELETE | `/api/investment-holdings/{investment_holding}/transactions/{transaction}` | Binding `scoped()`: un movimento non è raggiungibile da un altro holding |
+
+Ogni scrittura sul registro ricalcola la posizione nella stessa transazione DB. Se il registro portasse la quantità sotto zero (vendita superiore alle quote possedute a quella data, anche retrodatata) il ricalcolo solleva `ValidationException` su `quantity` e la scrittura viene annullata. Metodo di costo: **media ponderata** — una vendita non muove `avg_cost`, scarica il costo delle quote vendute e realizza la differenza in `realized_pl`.
 | GET | `/api/investments/overview` | Riepilogo portafoglio convertito in valuta base: `total_market_value`, `total_cost_basis`, `total_unrealized_pl(_pct)`, `by_asset_type[]` (allocation %), `accounts[]` |
 | GET | `/api/investments/lookup?q=&currency=` | Risolve ISIN/ticker/nome nei symbol Yahoo quotabili: `[{symbol, name, exchange, type, currency, price}]`, con la `currency` preferita in cima ([YahooSymbolLookup](backend/app/Services/Prices/YahooSymbolLookup.php), via search + chart Yahoo) |
 

@@ -15,6 +15,8 @@ use Illuminate\Support\Carbon;
  * @property int $account_id
  * @property int|null $category_id
  * @property int|null $transfer_account_id
+ * @property int|null $investment_holding_id
+ * @property string $investment_fees
  * @property string $type
  * @property string $amount
  * @property string $currency
@@ -36,6 +38,8 @@ class RecurringTransaction extends Model
         'account_id',
         'category_id',
         'transfer_account_id',
+        'investment_holding_id',
+        'investment_fees',
         'type',
         'amount',
         'currency',
@@ -53,6 +57,7 @@ class RecurringTransaction extends Model
     {
         return [
             'amount' => 'decimal:2',
+            'investment_fees' => 'decimal:2',
             'interval' => 'integer',
             'starts_on' => 'date:Y-m-d',
             'ends_on' => 'date:Y-m-d',
@@ -75,6 +80,12 @@ class RecurringTransaction extends Model
     public function transferAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'transfer_account_id');
+    }
+
+    /** Holding alimentato da questa ricorrente (rata PAC), se collegato. */
+    public function investmentHolding(): BelongsTo
+    {
+        return $this->belongsTo(InvestmentHolding::class);
     }
 
     public function transactions(): HasMany

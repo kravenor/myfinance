@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Account;
+use App\Models\InvestmentHolding;
+use App\Models\InvestmentTransaction;
 use App\Models\RecurringTransaction;
 use App\Models\Transaction;
 use Illuminate\Support\Carbon;
@@ -10,7 +12,11 @@ use Illuminate\Support\Facades\DB;
 
 class RecurringTransactionRunner
 {
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly InvestmentPriceResolver $prices,
+        private readonly HoldingPositionRecalculator $recalculator,
+    ) {}
 
     /**
      * Materializza tutte le ricorrenti maturate fino a $until (default: oggi).
@@ -40,7 +46,13 @@ class RecurringTransactionRunner
     {
         $count = 0;
 
-        DB::transaction(function () use ($recurring, $until, &$count) {
+        // Holding alimentato dalla ricorrente (rata PAC), risolto una volta sola:
+        // il ricalcolo della posizione va fatto a fine backlog, non per rata.
+        $holding = $recurring->investment_holding_id
+            ? InvestmentHolding::withoutGlobalScopes()->find($recurring->investment_holding_id)
+            : null;
+
+        DB::transaction(function () use ($recurring, $holding, $until, &$count) {
             while ($recurring->is_active && $recurring->next_run_at->lte($until)) {
                 $occurredAt = $recurring->next_run_at->copy();
 
@@ -58,6 +70,10 @@ class RecurringTransactionRunner
                     'description' => $recurring->description,
                 ]);
 
+                if ($holding) {
+                    $this->recordInvestmentBuy($recurring, $holding, $occurredAt);
+                }
+
                 $recurring->last_run_at = $occurredAt;
                 $recurring->next_run_at = $this->advance($occurredAt, $recurring->cadence, max(1, (int) $recurring->interval));
 
@@ -69,9 +85,52 @@ class RecurringTransactionRunner
             }
 
             $recurring->save();
+
+            if ($holding && $count > 0) {
+                $this->recalculator->recalculate($holding);
+            }
         });
 
         return $count;
+    }
+
+    /**
+     * Rata PAC: registra l'acquisto sull'holding collegato ricavando le quote
+     * dall'importo versato al netto dei costi e dalla quotazione del giorno,
+     * come nel form dei movimenti.
+     */
+    private function recordInvestmentBuy(RecurringTransaction $recurring, InvestmentHolding $holding, Carbon $occurredAt): void
+    {
+        $price = $this->prices->priceFor($holding, $occurredAt) ?? $holding->effectivePrice();
+        if ($price <= 0) {
+            // ponytail: senza prezzo le quote non sono calcolabili: resta solo il
+            // movimento di cassa, l'utente registra l'acquisto a mano.
+            return;
+        }
+
+        $amount = (float) $recurring->amount;
+        $fees = (float) $recurring->investment_fees;
+        if ($recurring->currency !== $holding->currency) {
+            $amount = $this->converter->convert($amount, $recurring->currency, $holding->currency, $occurredAt);
+            $fees = $this->converter->convert($fees, $recurring->currency, $holding->currency, $occurredAt);
+        }
+
+        // I costi sono già dentro l'importo della rata: comprano quote solo i soldi che restano.
+        $invested = $amount - $fees;
+        if ($invested <= 0) {
+            return;
+        }
+
+        InvestmentTransaction::withoutGlobalScopes()->create([
+            'user_id' => $recurring->user_id,
+            'investment_holding_id' => $holding->id,
+            'side' => 'buy',
+            'occurred_at' => $occurredAt->toDateString(),
+            'quantity' => number_format($invested / $price, 8, '.', ''),
+            'price' => number_format($price, 8, '.', ''),
+            'fees' => number_format($fees, 2, '.', ''),
+            'notes' => $recurring->description,
+        ]);
     }
 
     /**

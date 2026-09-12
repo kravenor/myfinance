@@ -8,6 +8,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\InvestmentController;
 use App\Http\Controllers\InvestmentHoldingController;
+use App\Http\Controllers\InvestmentTransactionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationPreferenceController;
 use App\Http\Controllers\RecurringTransactionController;
@@ -44,9 +45,15 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('investments/overview', [InvestmentController::class, 'overview'])->name('investments.overview');
     Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->name('investments.lookup');
+    Route::get('investments/history', [InvestmentController::class, 'history'])->name('investments.history');
     Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->name('investments.refresh-prices');
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
+    Route::apiResource('investment-holdings.transactions', InvestmentTransactionController::class)
+        ->parameter('investment-holdings', 'investment_holding')
+        ->parameter('transactions', 'transaction')
+        ->only(['index', 'store', 'update', 'destroy'])
+        ->scoped();
 
     Route::apiResource('accounts', AccountController::class);
     Route::apiResource('categories', CategoryController::class);

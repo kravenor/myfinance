@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\InvestmentHolding;
+use App\Services\InvestmentHistoryService;
 use App\Services\InvestmentPriceFetcher;
 use App\Services\InvestmentService;
 use App\Services\Prices\YahooSymbolLookup;
@@ -43,5 +44,15 @@ class InvestmentController extends Controller
         return response()->json([
             'data' => $lookup->search($validated['q'], $validated['currency'] ?? null),
         ]);
+    }
+
+    /**
+     * Serie storica mensile versato vs valore, dal primo movimento del registro.
+     */
+    public function history(InvestmentHistoryService $history): JsonResponse
+    {
+        $this->authorize('viewAny', InvestmentHolding::class);
+
+        return response()->json($history->monthly());
     }
 }

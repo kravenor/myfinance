@@ -6,14 +6,18 @@ use App\Http\Requests\InvestmentHolding\StoreInvestmentHoldingRequest;
 use App\Http\Requests\InvestmentHolding\UpdateInvestmentHoldingRequest;
 use App\Http\Resources\InvestmentHoldingResource;
 use App\Models\InvestmentHolding;
+use App\Services\HoldingPositionRecalculator;
 use App\Services\InvestmentPriceResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\DB;
 
 class InvestmentHoldingController extends Controller
 {
+    public function __construct(private readonly HoldingPositionRecalculator $recalculator) {}
+
     public function index(Request $request, InvestmentPriceResolver $priceResolver): AnonymousResourceCollection
     {
         $this->authorize('viewAny', InvestmentHolding::class);
@@ -38,7 +42,19 @@ class InvestmentHoldingController extends Controller
     {
         $this->authorize('create', InvestmentHolding::class);
 
-        $holding = InvestmentHolding::create($request->validated());
+        $data = $request->validated();
+
+        $holding = DB::transaction(function () use ($data) {
+            $holding = InvestmentHolding::create($data);
+
+            // La posizione dichiarata alla creazione entra nel registro come
+            // movimento di apertura: da qui in poi la governano i movimenti.
+            if ((float) $data['quantity'] > 0) {
+                $this->recalculator->openingMovement($holding, (float) $data['quantity'], (float) $data['avg_cost']);
+            }
+
+            return $holding;
+        });
 
         return (new InvestmentHoldingResource($holding))
             ->response()

@@ -43,6 +43,9 @@ class InvestmentHoldingResource extends JsonResource
             'market_value' => $this->money($marketValue),
             'unrealized_pl' => $this->money($pl),
             'unrealized_pl_pct' => $costBasis > 0 ? $this->money($pl / $costBasis * 100) : null,
+            // Derivati dal registro movimenti: cassa netta immessa e P/L chiuso sulle vendite.
+            'net_invested' => $this->net_invested,
+            'realized_pl' => $this->realized_pl,
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];
