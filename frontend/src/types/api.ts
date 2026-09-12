@@ -175,7 +175,7 @@ export interface SavingsGoal {
   updated_at: string
 }
 
-export type AssetType = 'stock' | 'etf' | 'fund' | 'bond' | 'crypto' | 'commodity' | 'cash' | 'other'
+export type AssetType = 'stock' | 'etf' | 'fund' | 'bond' | 'crypto' | 'commodity' | 'cash' | 'certificates' |'other'
 export interface InvestmentHolding {
   id: number
   account_id: number

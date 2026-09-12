@@ -65,7 +65,7 @@ const chartOptions = {
   plugins: { legend: { position: 'bottom' as const } },
 }
 
-const assetTypes: AssetType[] = ['etf', 'stock', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'other']
+const assetTypes: AssetType[] = ['etf', 'stock', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'certificates','other']
 
 const editing = ref<InvestmentHolding | null>(null)
 const movementsFor = ref<InvestmentHolding | null>(null)
