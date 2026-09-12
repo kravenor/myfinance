@@ -35,7 +35,7 @@ class UpdateInvestmentHoldingRequest extends FormRequest
             'name' => ['sometimes', 'required', 'string', 'max:120'],
             'symbol' => ['sometimes', 'nullable', 'string', 'max:40'],
             'isin' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/'],
-            'asset_type' => ['sometimes', 'required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'cash', 'other'])],
+            'asset_type' => ['sometimes', 'required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'certificate', 'cash', 'other'])],
             'currency' => ['sometimes', 'string', 'size:3'],
             'last_price' => ['sometimes', 'nullable', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
             'last_price_at' => ['sometimes', 'nullable', 'date'],
