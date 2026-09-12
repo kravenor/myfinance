@@ -67,6 +67,18 @@ const chartOptions = {
 
 const assetTypes: AssetType[] = ['etf', 'stock', 'fund', 'bond', 'crypto', 'commodity', 'certificate', 'cash', 'other']
 
+const assetTypeColors: Record<AssetType, string> = {
+  stock: '#2563eb',
+  etf: '#0891b2',
+  fund: '#7c3aed',
+  bond: '#b45309',
+  crypto: '#ea580c',
+  commodity: '#65a30d',
+  certificate: '#db2777',
+  cash: '#475569',
+  other: '#64748b',
+}
+
 const editing = ref<InvestmentHolding | null>(null)
 const movementsFor = ref<InvestmentHolding | null>(null)
 const showForm = ref(false)
@@ -316,7 +328,7 @@ onMounted(async () => {
             class="flex items-center justify-between text-sm"
           >
             <span class="capitalize">{{ row.asset_type }}</span>
-            <span class="text-slate-500">{{ row.pct }}%</span>
+            <span :class="parseFloat(row.pct) < 0 ? 'text-red-600' : 'text-slate-500'">{{ row.pct }}%</span>
           </li>
         </ul>
       </div>
@@ -448,7 +460,11 @@ onMounted(async () => {
             <div class="min-w-0">
               <p class="font-medium text-slate-800 truncate">{{ h.name }}</p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
-                <span class="capitalize">{{ h.asset_type }}</span> · {{ accountName(h.account_id) }}
+                <span
+                  class="inline-block px-2 py-0.5 rounded-full text-xs text-white capitalize"
+                  :style="{ background: assetTypeColors[h.asset_type] }"
+                >{{ h.asset_type }}</span>
+                · {{ accountName(h.account_id) }}
                 <template v-if="h.symbol"> · {{ h.symbol }}</template>
               </p>
               <p class="text-xs text-slate-400 mt-0.5 truncate">
@@ -501,7 +517,12 @@ onMounted(async () => {
               <span v-if="h.symbol" class="block text-xs text-slate-400">{{ h.symbol }}</span>
               <span v-if="h.isin" class="block text-xs text-slate-300">{{ h.isin }}</span>
             </td>
-            <td class="capitalize">{{ h.asset_type }}</td>
+            <td>
+              <span
+                class="inline-block px-2 py-0.5 rounded-full text-xs text-white capitalize"
+                :style="{ background: assetTypeColors[h.asset_type] }"
+              >{{ h.asset_type }}</span>
+            </td>
             <td>{{ accountName(h.account_id) }}</td>
             <td class="text-right">{{ h.quantity }}</td>
             <td class="text-right">{{ formatCurrency(h.avg_cost, h.currency) }}</td>

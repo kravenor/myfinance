@@ -43,13 +43,13 @@
     @apply bg-white rounded-lg shadow-sm border border-slate-200;
   }
   .table {
-    @apply min-w-full divide-y divide-slate-200;
+    @apply min-w-full divide-y divide-slate-200 text-slate-800;
   }
   .table th {
     @apply px-4 py-2 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide;
   }
   .table td {
-    @apply px-4 py-2 text-sm text-slate-800 whitespace-nowrap;
+    @apply px-4 py-2 text-sm whitespace-nowrap;
   }
   .table tbody tr:hover {
     @apply bg-slate-50;
