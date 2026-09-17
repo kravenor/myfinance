@@ -459,19 +459,19 @@ onMounted(async () => {
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
               <p class="font-medium text-slate-800 truncate">{{ h.name }}</p>
-              <p class="text-xs text-slate-500 mt-0.5 truncate">
+              <p class="text-xs text-slate-500 mt-0.5">
                 <span
                   class="inline-block px-2 py-0.5 rounded-full text-xs text-white capitalize"
                   :style="{ background: assetTypeColors[h.asset_type] }"
                 >{{ h.asset_type }}</span>
-                · {{ accountName(h.account_id) }}
-                <template v-if="h.symbol"> · {{ h.symbol }}</template>
               </p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate">{{ accountName(h.account_id) }}</p>
+              <p v-if="h.symbol" class="text-xs text-slate-400 mt-0.5 truncate">{{ h.symbol }}</p>
               <p class="text-xs text-slate-400 mt-0.5 truncate">
                 {{ h.quantity }} × {{ formatCurrency(h.effective_price, h.currency) }}
-                <span v-if="h.price_source === 'auto'" class="text-green-600">
-                  · auto<template v-if="h.price_as_of"> {{ formatDate(h.price_as_of) }}</template>
-                </span>
+              </p>
+              <p v-if="h.price_source === 'auto'" class="text-xs text-green-600 mt-0.5 truncate">
+                auto<template v-if="h.price_as_of"> · {{ formatDate(h.price_as_of) }}</template>
               </p>
             </div>
             <div class="text-right shrink-0">
