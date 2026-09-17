@@ -251,7 +251,29 @@ onMounted(refresh)
           <option value="income">Entrate</option>
         </select>
       </div>
-      <div class="table-responsive md:overflow-x-auto">
+      <!-- Mobile: card compatta, la lista label/valore generica era illeggibile con 6 colonne. -->
+      <ul class="md:hidden divide-y divide-slate-100">
+        <li v-for="t in top" :key="t.id" class="py-3 flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="font-medium text-slate-800 truncate">{{ t.description ?? '—' }}</p>
+            <p class="text-xs text-slate-500 mt-0.5 truncate">{{ t.category_name ?? '—' }}</p>
+            <p class="text-xs text-slate-400 mt-0.5 truncate">
+              {{ formatDate(t.occurred_at) }} · {{ t.account_name ?? '—' }}
+            </p>
+          </div>
+          <div class="text-right shrink-0">
+            <p class="font-semibold whitespace-nowrap" :class="t.type === 'income' ? 'text-green-600' : 'text-red-600'">
+              {{ formatCurrency(t.amount, t.currency) }}
+            </p>
+            <p v-if="t.currency !== baseCurrency" class="text-xs text-slate-400 whitespace-nowrap mt-0.5">
+              ≈ {{ formatCurrency(t.amount_base, baseCurrency) }}
+            </p>
+          </div>
+        </li>
+        <li v-if="top.length === 0" class="py-6 text-center text-slate-500 text-sm">Nessuna transazione nel periodo.</li>
+      </ul>
+
+      <div class="hidden md:block md:overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>
