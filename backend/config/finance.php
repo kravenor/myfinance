@@ -31,7 +31,9 @@ return [
     | Mappa asset_type → provider. Yahoo Finance (endpoint chart pubblico, no
     | API key) copre stock/etf/fund incluse le borse EU (symbol Yahoo, es.
     | CSSPX.MI, SXR8.DE) e restituisce la valuta; CoinGecko le crypto (symbol =
-    | id CoinGecko, es. "bitcoin"). Sono API non ufficiali/free, per uso
+    | id CoinGecko, es. "bitcoin"); Borsa Italiana le obbligazioni del MOT e
+    | Teleborsa i certificati del SeDeX/Cert-X (per entrambi symbol = ISIN,
+    | via scraping HTML). Sono API non ufficiali/free, per uso
     | personale/non commerciale: rivedere in scenario multi-tenant (ADR 0001).
     */
     'prices' => [
@@ -41,6 +43,7 @@ return [
             'fund' => 'yahoo',
             'crypto' => 'coingecko',
             'bond' => 'borsaitaliana',
+            'certificate' => 'teleborsa',
         ],
         'yahoo' => [
             'url' => env('FINANCE_YAHOO_URL', 'https://query1.finance.yahoo.com'),
@@ -56,6 +59,13 @@ return [
             // Scheda titolo del MOT: il segmento /btp/ vale per ogni tipo di
             // obbligazione (BOT, CCT, corporate). Nessuna API, si legge l'HTML.
             'url' => env('FINANCE_BORSAITALIANA_URL', 'https://www.borsaitaliana.it/borsa/obbligazioni/mot/btp/scheda'),
+            'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
+        ],
+        'teleborsa' => [
+            // Scheda dei certificati SeDeX/Cert-X: la sezione certificati di
+            // Borsa Italiana risponde 502, Teleborsa espone prezzo e data di
+            // riferimento in HTML. Nessuna API, si legge la pagina.
+            'url' => env('FINANCE_TELEBORSA_URL', 'https://www.teleborsa.it/sedex-securitised-derivates'),
             'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
         ],
     ],

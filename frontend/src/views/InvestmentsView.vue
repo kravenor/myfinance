@@ -351,6 +351,10 @@ onMounted(async () => {
           Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
           quotazione sul MOT di Borsa Italiana.
         </p>
+        <p v-else-if="form.asset_type === 'certificate'" class="text-xs text-slate-500 mt-1">
+          Per i certificati lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+          quotazione sul SeDeX/Cert-X.
+        </p>
       </div>
       <div>
         <label class="label">ISIN</label>

@@ -7,6 +7,7 @@ use App\Models\InvestmentHolding;
 use App\Services\Prices\BorsaItalianaProvider;
 use App\Services\Prices\CoinGeckoProvider;
 use App\Services\Prices\PriceProvider;
+use App\Services\Prices\TeleborsaProvider;
 use App\Services\Prices\YahooFinanceProvider;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -80,6 +81,7 @@ class InvestmentPriceFetcher
             'yahoo' => app(YahooFinanceProvider::class),
             'coingecko' => app(CoinGeckoProvider::class),
             'borsaitaliana' => app(BorsaItalianaProvider::class),
+            'teleborsa' => app(TeleborsaProvider::class),
             default => throw new RuntimeException("Provider quotazioni sconosciuto: {$key}"),
         };
     }
