@@ -43,7 +43,7 @@ class InvestmentHistoryService
         $first = $movements->flatten()->first()?->occurred_at;
 
         if ($first === null) {
-            return ['base_currency' => $base, 'points' => []];
+            return ['base_currency' => $base, 'points' => [], 'xirr_pct' => null];
         }
 
         $quotes = $this->quotesBySymbol($holdings);
@@ -54,6 +54,8 @@ class InvestmentHistoryService
         $quantity = [];
         $costBasis = [];
         $invested = 0.0;
+        $flows = [];
+        $marketValue = 0.0;
 
         $points = [];
         $today = Carbon::today();
@@ -74,6 +76,7 @@ class InvestmentHistoryService
                     // Il versato si converte al cambio del giorno del movimento,
                     // non a quello del punto della serie: è cassa già uscita.
                     $inBase = $this->converter->convert($cash, $holding->currency, $base, $movement->occurred_at);
+                    $flows[] = [$movement->occurred_at, $movement->side === 'sell' ? $inBase : -$inBase];
 
                     // Costo puro: cassa immessa che non compra quote.
                     if ($movement->side === 'fee') {
@@ -124,7 +127,53 @@ class InvestmentHistoryService
             ];
         }
 
-        return ['base_currency' => $base, 'points' => $points];
+        $flows[] = [$today, $marketValue];
+
+        return ['base_currency' => $base, 'points' => $points, 'xirr_pct' => $this->xirrPct($flows, $first, $today)];
+    }
+
+    /**
+     * Rendimento annualizzato money-weighted sui flussi del registro più il
+     * valore di oggi come flusso finale. Sotto l'anno è null: annualizzare
+     * poche settimane darebbe percentuali prive di senso.
+     *
+     * @param  list<array{0: Carbon, 1: float}>  $flows
+     */
+    private function xirrPct(array $flows, Carbon $first, Carbon $today): ?string
+    {
+        if ($first->diffInDays($today) < 365) {
+            return null;
+        }
+
+        $npv = function (float $rate) use ($flows, $first): float {
+            $sum = 0.0;
+            foreach ($flows as [$at, $amount]) {
+                $sum += $amount / (1 + $rate) ** ($first->diffInDays($at) / 365);
+            }
+
+            return $sum;
+        };
+
+        // ponytail: bisezione su [-99%, +1000%], lenta ma sempre convergente; Newton se i flussi diventano migliaia.
+        [$low, $high] = [-0.99, 10.0];
+        $fLow = $npv($low);
+
+        if ($fLow * $npv($high) > 0) {
+            return null;
+        }
+
+        for ($i = 0; $i < 100 && $high - $low > 1e-7; $i++) {
+            $mid = ($low + $high) / 2;
+            $fMid = $npv($mid);
+
+            if ($fLow * $fMid <= 0) {
+                $high = $mid;
+            } else {
+                [$low, $fLow] = [$mid, $fMid];
+            }
+        }
+
+        return $this->fmt(($low + $high) / 2 * 100);
     }
 
     /**

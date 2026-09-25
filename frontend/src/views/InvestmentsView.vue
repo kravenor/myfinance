@@ -318,6 +318,10 @@ onMounted(async () => {
         <p v-if="overview.total_unrealized_pl_pct" class="text-xs mt-1" :class="plClass(overview.total_unrealized_pl_pct)">
           {{ parseFloat(overview.total_unrealized_pl_pct) > 0 ? '+' : '' }}{{ overview.total_unrealized_pl_pct }}%
         </p>
+        <p v-if="history?.xirr_pct" class="text-xs text-slate-500 mt-1" title="Rendimento money-weighted (XIRR) dal primo movimento, calcolato da almeno un anno di storico">
+          Annualizzato:
+          <span :class="plClass(history.xirr_pct)">{{ parseFloat(history.xirr_pct) > 0 ? '+' : '' }}{{ history.xirr_pct }}%</span>
+        </p>
       </div>
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Allocazione</p>

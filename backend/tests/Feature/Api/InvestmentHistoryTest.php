@@ -120,4 +120,52 @@ class InvestmentHistoryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('points', []);
     }
+
+    public function test_xirr_annualizes_the_money_weighted_return(): void
+    {
+        $this->travelTo('2026-01-01');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $holding = $this->holding($user);
+
+        // 1000 versati un anno fa, oggi valgono 1100: +10% annuo.
+        $this->movement($user, $holding, ['occurred_at' => '2025-01-01', 'quantity' => 10, 'price' => 100]);
+        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
+
+        $xirr = $this->actingAs($user)->getJson('/api/investments/history')->assertOk()->json('xirr_pct');
+
+        $this->assertEqualsWithDelta(10.0, (float) $xirr, 0.01);
+    }
+
+    public function test_xirr_weights_a_later_contribution_less(): void
+    {
+        $this->travelTo('2026-01-01');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $holding = $this->holding($user);
+
+        // Stesso guadagno assoluto del 10% sul totale, ma metà capitale è entrato a metà anno:
+        // il rendimento money-weighted deve superare il 10%.
+        $this->movement($user, $holding, ['occurred_at' => '2025-01-01', 'quantity' => 5, 'price' => 100]);
+        $this->movement($user, $holding, ['occurred_at' => '2025-07-02', 'quantity' => 5, 'price' => 100]);
+        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
+
+        $xirr = (float) $this->actingAs($user)->getJson('/api/investments/history')->json('xirr_pct');
+
+        $this->assertGreaterThan(10.0, $xirr);
+        $this->assertLessThan(15.0, $xirr);
+    }
+
+    public function test_xirr_is_null_under_one_year(): void
+    {
+        $this->travelTo('2026-03-15');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $holding = $this->holding($user);
+        $this->movement($user, $holding, ['occurred_at' => '2026-01-10', 'quantity' => 10, 'price' => 40]);
+
+        $this->actingAs($user)->getJson('/api/investments/history')
+            ->assertOk()
+            ->assertJsonPath('xirr_pct', null);
+    }
 }
