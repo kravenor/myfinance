@@ -92,6 +92,23 @@ const forecastData = computed(() => ({
       fill: false,
       yAxisID: 'y1',
     },
+    {
+      label: 'Net mensile con storico',
+      data: forecast.value.map((p) => parseFloat(p.net) + parseFloat(p.historical_net)),
+      borderColor: '#f59e0b',
+      borderDash: [6, 4],
+      tension: 0.3,
+      fill: false,
+    },
+    {
+      label: 'Patrimonio con storico',
+      data: forecast.value.map((p) => parseFloat(p.projected_net_worth_with_history)),
+      borderColor: '#a855f7',
+      borderDash: [6, 4],
+      tension: 0.3,
+      fill: false,
+      yAxisID: 'y1',
+    },
   ],
 }))
 
@@ -238,7 +255,7 @@ onMounted(refresh)
         <p v-else class="text-sm text-slate-500">Nessuna ricorrente attiva per la proiezione.</p>
       </div>
       <p class="text-xs text-slate-500 mt-2">
-        Proiezione basata sulle ricorrenti income/expense attive — non include transazioni discrezionali future.
+        Linee piene: solo ricorrenti income/expense attive. Linee tratteggiate: aggiungono ogni mese la mediana di entrate e uscite non ricorrenti degli ultimi 12 mesi.
       </p>
     </section>
 
