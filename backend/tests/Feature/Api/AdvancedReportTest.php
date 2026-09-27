@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\RecurringTransaction;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Support\FinancialMonth;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Tests\TestCase;
@@ -151,5 +152,38 @@ class AdvancedReportTest extends TestCase
             ->assertJsonPath('data.0.net', '1200.00')
             ->assertJsonPath('data.0.projected_net_worth', '2200.00')
             ->assertJsonPath('data.2.projected_net_worth', '4600.00');
+    }
+
+    public function test_cash_flow_forecast_adds_historical_non_recurring_net(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['initial_balance' => 1000]);
+        [$current] = FinancialMonth::range(Carbon::now());
+
+        // Tre mesi chiusi di spese variabili: mediana 300 (la spesa eccezionale non pesa).
+        foreach ([200, 300, 5000] as $i => $amount) {
+            Transaction::factory()->for($user)->for($account, 'account')->create([
+                'type' => 'expense', 'amount' => $amount,
+                'occurred_at' => $current->copy()->subMonthsNoOverflow(3 - $i)->addDays(2)->toDateString(),
+            ]);
+        }
+        // Generata da una ricorrente: esclusa dallo storico.
+        $recurring = RecurringTransaction::factory()->for($user)->for($account, 'account')->create([
+            'type' => 'income', 'amount' => 9999, 'is_active' => false,
+        ]);
+        Transaction::factory()->for($user)->for($account, 'account')->create([
+            'type' => 'income', 'amount' => 9999, 'recurring_transaction_id' => $recurring->id,
+            'occurred_at' => $current->copy()->subMonthNoOverflow()->addDays(5)->toDateString(),
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson('/api/reports/cash-flow-forecast?months=2')
+            ->assertOk();
+
+        // saldo iniziale: 1000 − 5500 + 9999 = 5499
+        $response->assertJsonPath('data.0.historical_net', '-300.00')
+            ->assertJsonPath('data.0.projected_net_worth', '5499.00')
+            ->assertJsonPath('data.0.projected_net_worth_with_history', '5199.00')
+            ->assertJsonPath('data.1.projected_net_worth_with_history', '4899.00');
     }
 }

@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-21**
-Fase corrente: **Estensione — Quotazioni automatiche dei certificati SeDeX/Cert-X (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-25**
+Fase corrente: **Estensione — Asset type `certificate` sugli investment holdings (COMPLETATA)**
 
 ---
 
@@ -581,7 +581,7 @@ Cron host (dump alle 03:15):
 | GET | `/api/reports/period-comparison?unit=month\|year&reference=YYYY-MM-DD` | `{unit, current, previous, delta: {income, income_pct, expense, expense_pct, net}}`. Default `unit=month`, `reference=now`. |
 | GET | `/api/reports/category-trend?from=&to=&type=expense\|income&top=5` | `{periods: ["YYYY-MM",…], categories: [{category_id, category_name, values: [string,…]}]}` per top N categorie. |
 | GET | `/api/reports/top-transactions?from=&to=&type=&limit=10` | `[{id, occurred_at, type, amount, currency, account_name, category_name, description}]` ordinato per amount desc. `type` opzionale (income/expense/transfer). |
-| GET | `/api/reports/cash-flow-forecast?months=6` | `[{period, income, expense, net, projected_net_worth}]` — proiezione mensile basata sulle ricorrenti income/expense attive (ignora transfer). Patrimonio proiettato = patrimonio attuale + Σ net mensili. |
+| GET | `/api/reports/cash-flow-forecast?months=6` | `[{period, income, expense, net, projected_net_worth, historical_net, projected_net_worth_with_history}]` — proiezione mensile basata sulle ricorrenti income/expense attive (ignora transfer). Patrimonio proiettato = patrimonio attuale + Σ net mensili. `historical_net` = mediana mensile entrate − mediana mensile uscite **non ricorrenti** (`recurring_transaction_id IS NULL`) degli ultimi 12 mesi finanziari chiusi (dal primo mese con dati); `projected_net_worth_with_history` la somma ogni mese al net. Investimenti non proiettati (crescita esclusa). |
 
 Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100` (formato `xx.xx`, `0.00` se income = 0).
 
@@ -595,7 +595,7 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
 - [StatsView.vue](frontend/src/views/StatsView.vue) (`/stats` in sidebar):
   1. **Confronto periodi** — 3 KPI card (income/expense/net) con valore corrente, precedente, delta assoluto e %, colore semantico (spese in verde se calano, in rosso se salgono).
   2. **Trend top 5 categorie** — Line chart multi-serie con switch type expense/income.
-  3. **Cash flow forecast** — Line con 2 assi: net mensile previsto (sx) e patrimonio proiettato (dx). Selector 1–24 mesi.
+  3. **Cash flow forecast** — Line con 2 assi: net mensile previsto (sx) e patrimonio proiettato (dx), più le varianti tratteggiate "con storico". Selector 1–24 mesi.
   4. **Top transazioni del mese** — tabella ordinata, filtro type.
 
 ## 14. Auto-categorizzazione import (estensione)
@@ -704,7 +704,7 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 | GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name` |
 | POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `isin?`, `currency?`, `last_price?`, `last_price_at?`, `notes?`. `quantity`/`avg_cost` diventano il **movimento di apertura** del registro |
 | GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard. In PATCH `quantity` e `avg_cost` **non sono accettati**: sono derivati dal registro |
-| GET | `/api/investments/history` | Serie mensile `{month, as_of, invested, market_value, unrealized_pl}` nella valuta base. Vuota finché il registro è vuoto; l'ultimo punto è oggi, così combacia con `overview` |
+| GET | `/api/investments/history` | `{base_currency, points, xirr_pct}`: serie mensile `{month, as_of, invested, market_value, unrealized_pl}` nella valuta base, vuota finché il registro è vuoto; l'ultimo punto è oggi, così combacia con `overview`. `xirr_pct` = rendimento annualizzato money-weighted (buy/fee flussi negativi, sell positivi, valore di mercato di oggi come flusso finale), `null` sotto 365 giorni dal primo movimento o se non risolvibile |
 | GET | `/api/investment-holdings/{investment_holding}/transactions` | Registro movimenti, più recenti prima |
 | POST | `/api/investment-holdings/{investment_holding}/transactions` | `side` (buy/sell), `occurred_at`, `quantity` (>0), `price`, `fees?`, `notes?` |
 | PATCH/DELETE | `/api/investment-holdings/{investment_holding}/transactions/{transaction}` | Binding `scoped()`: un movimento non è raggiungibile da un altro holding |

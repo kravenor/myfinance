@@ -187,6 +187,8 @@ class ReportService
 
     /**
      * Proietta i flussi futuri stimati per N mesi a partire dalle ricorrenti attive.
+     * In parallelo una seconda proiezione aggiunge a ogni mese il net "storico"
+     * delle transazioni non ricorrenti (vedi historicalNonRecurringNet).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -222,19 +224,60 @@ class ReportService
         }
 
         $running = $this->cumulativeBalance($start->copy()->subDay());
+        $runningWithHistory = $running;
+        $historicalNet = $this->historicalNonRecurringNet($start);
         $out = [];
         foreach ($deltas as $key => $d) {
-            $running += $d['income'] - $d['expense'];
+            $net = $d['income'] - $d['expense'];
+            $running += $net;
+            $runningWithHistory += $net + $historicalNet;
             $out[] = [
                 'period' => $key,
                 'income' => $this->fmt($d['income']),
                 'expense' => $this->fmt($d['expense']),
-                'net' => $this->fmt($d['income'] - $d['expense']),
+                'net' => $this->fmt($net),
                 'projected_net_worth' => $this->fmt($running),
+                'historical_net' => $this->fmt($historicalNet),
+                'projected_net_worth_with_history' => $this->fmt($runningWithHistory),
             ];
         }
 
         return $out;
+    }
+
+    /**
+     * Net mensile tipico delle transazioni non generate da ricorrenti (quelle
+     * generate sono già proiettate dalle loro regole), sugli ultimi 12 mesi
+     * finanziari chiusi, a partire dal primo mese con dati.
+     *
+     * ponytail: mediana mensile di entrate e uscite, così una spesa eccezionale
+     * non sposta tutta la proiezione; niente stagionalità né trend, aggiungerli
+     * se la linea si discosta sistematicamente dal reale.
+     */
+    private function historicalNonRecurringNet(Carbon $currentStart): float
+    {
+        [$from] = FinancialMonth::range($currentStart->copy()->subMonthsNoOverflow(12));
+        $to = $currentStart->copy()->subDay()->endOfDay();
+
+        $rows = Transaction::query()
+            ->whereIn('type', ['income', 'expense'])
+            ->whereNull('recurring_transaction_id')
+            ->whereBetween('occurred_at', [$from->toDateString(), $to->toDateString()])
+            ->orderBy('occurred_at')
+            ->get(['type', 'amount', 'currency', 'occurred_at']);
+
+        if ($rows->isEmpty()) {
+            return 0.0;
+        }
+
+        $buckets = $this->monthBuckets($rows->first()->occurred_at, $to);
+        foreach ($rows as $t) {
+            $buckets[FinancialMonth::key($t->occurred_at)][$t->type] += $this->toBase($t);
+        }
+
+        $buckets = collect($buckets);
+
+        return (float) $buckets->median('income') - (float) $buckets->median('expense');
     }
 
     /**

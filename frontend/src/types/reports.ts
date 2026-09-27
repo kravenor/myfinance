@@ -70,6 +70,8 @@ export interface CashFlowPoint {
   expense: string
   net: string
   projected_net_worth: string
+  historical_net: string
+  projected_net_worth_with_history: string
 }
 
 export interface CategoryTotal {
