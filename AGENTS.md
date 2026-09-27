@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-25**
-Fase corrente: **Estensione — Asset type `certificate` sugli investment holdings (COMPLETATA)**
+Ultimo aggiornamento: **2026-09-27**
+Fase corrente: **Estensione — Grafico versato vs valore per singolo holding e periodo (COMPLETATA)**
 
 ---
 
@@ -275,6 +275,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Preferenze di periodo e formato data (`users.date_format` + `users.month_start_day`; helper unici `App\Support\FinancialMonth` lato backend e `lib/date.ts` lato frontend)
 - [x] **Estensione** — Asset type `certificate` sugli investment holdings (nuovo valore enum accanto a stock/etf/fund/bond/crypto/commodity/cash/other, nessun pricing automatico dedicato: resta a prezzo manuale come `commodity`/`cash`/`other`)
 - [x] **Estensione** — Rendimento annualizzato (XIRR, money-weighted) del portafoglio: `xirr_pct` su `/investments/history`, calcolato in [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php) sui flussi del registro nella valuta base + valore di oggi come flusso finale; `null` sotto un anno di storico. Upgrade U2 dell'[ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md) (TWR non implementato)
+- [x] **Estensione** — Grafico versato vs valore per singolo holding: `?holding=` su `/investments/history` restringe la collection di holding in [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php); select nell'header del grafico in [InvestmentsView](frontend/src/views/InvestmentsView.vue), l'XIRR in testata resta di portafoglio. Accanto, select di periodo (6 mesi / 1, 3, 5 anni / tutto) filtrata lato client sui punti già caricati. Upgrade U6 (e U7 lato client) dell'[ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -704,7 +705,7 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 | GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name` |
 | POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `isin?`, `currency?`, `last_price?`, `last_price_at?`, `notes?`. `quantity`/`avg_cost` diventano il **movimento di apertura** del registro |
 | GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard. In PATCH `quantity` e `avg_cost` **non sono accettati**: sono derivati dal registro |
-| GET | `/api/investments/history` | `{base_currency, points, xirr_pct}`: serie mensile `{month, as_of, invested, market_value, unrealized_pl}` nella valuta base, vuota finché il registro è vuoto; l'ultimo punto è oggi, così combacia con `overview`. `xirr_pct` = rendimento annualizzato money-weighted (buy/fee flussi negativi, sell positivi, valore di mercato di oggi come flusso finale), `null` sotto 365 giorni dal primo movimento o se non risolvibile |
+| GET | `/api/investments/history?holding=` | `{base_currency, points, xirr_pct}` (con `holding` opzionale serie e XIRR di quel solo holding; id altrui → serie vuota per il global scope): serie mensile `{month, as_of, invested, market_value, unrealized_pl}` nella valuta base, vuota finché il registro è vuoto; l'ultimo punto è oggi, così combacia con `overview`. `xirr_pct` = rendimento annualizzato money-weighted (buy/fee flussi negativi, sell positivi, valore di mercato di oggi come flusso finale), `null` sotto 365 giorni dal primo movimento o se non risolvibile |
 | GET | `/api/investment-holdings/{investment_holding}/transactions` | Registro movimenti, più recenti prima |
 | POST | `/api/investment-holdings/{investment_holding}/transactions` | `side` (buy/sell), `occurred_at`, `quantity` (>0), `price`, `fees?`, `notes?` |
 | PATCH/DELETE | `/api/investment-holdings/{investment_holding}/transactions/{transaction}` | Binding `scoped()`: un movimento non è raggiungibile da un altro holding |

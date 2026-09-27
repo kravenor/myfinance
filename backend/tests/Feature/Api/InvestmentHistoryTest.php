@@ -168,4 +168,28 @@ class InvestmentHistoryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('xirr_pct', null);
     }
+
+    public function test_holding_filter_restricts_the_series_to_one_holding(): void
+    {
+        $this->travelTo('2026-02-15');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $vwce = $this->holding($user);
+        $btp = $this->holding($user, ['symbol' => null]);
+        $this->movement($user, $vwce, ['occurred_at' => '2026-01-10', 'quantity' => 10, 'price' => 40]);
+        $this->movement($user, $btp, ['occurred_at' => '2026-01-10', 'quantity' => 5, 'price' => 100]);
+
+        $this->actingAs($user)->getJson('/api/investments/history')
+            ->assertJsonPath('points.1.invested', '900.00');
+
+        $this->actingAs($user)->getJson("/api/investments/history?holding={$btp->id}")
+            ->assertOk()
+            ->assertJsonPath('points.1.invested', '500.00');
+
+        // Un holding altrui non filtra i miei: il global scope lo nasconde e la serie è vuota.
+        $theirs = $this->holding(User::factory()->create());
+        $this->actingAs($user)->getJson("/api/investments/history?holding={$theirs->id}")
+            ->assertOk()
+            ->assertJsonPath('points', []);
+    }
 }
