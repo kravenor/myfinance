@@ -48,11 +48,14 @@ class InvestmentController extends Controller
 
     /**
      * Serie storica mensile versato vs valore, dal primo movimento del registro.
+     * `?holding=` la restringe a un solo holding.
      */
-    public function history(InvestmentHistoryService $history): JsonResponse
+    public function history(Request $request, InvestmentHistoryService $history): JsonResponse
     {
         $this->authorize('viewAny', InvestmentHolding::class);
 
-        return response()->json($history->monthly());
+        $validated = $request->validate(['holding' => ['nullable', 'integer']]);
+
+        return response()->json($history->monthly($validated['holding'] ?? null));
     }
 }
