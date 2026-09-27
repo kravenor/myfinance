@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-25**
+Ultimo aggiornamento: **2026-09-27**
 Fase corrente: **Estensione — Asset type `certificate` sugli investment holdings (COMPLETATA)**
 
 ---
@@ -732,7 +732,8 @@ Ogni scrittura sul registro ricalcola la posizione nella stessa transazione DB. 
 #### Certificati SeDeX/Cert-X (TeleborsaProvider)
 `asset_type = 'certificate'` → scraping della scheda Teleborsa (`{url}/x-{isin minuscolo}-{base64(ISIN)}`, default `https://www.teleborsa.it/sedex-securitised-derivates`).
 - **Perché non Borsa Italiana**: tutta la sezione `/borsa/cw-e-certificates/*` risponde **502** (verificato su 3 ISIN × 4 pattern di URL, mentre il MOT dei bond risponde 200). Yahoo non copre il SeDeX.
-- **URL ricostruibile dal solo ISIN**: lo slug descrittivo del path viene ignorato dal sito, conta solo la coda `base64(ISIN)`. Nessun lookup preliminare.
+- **URL ricostruibile dal solo ISIN**: `x-{isin}-{base64(ISIN)}` risponde **301** verso la scheda con lo slug canonico (il client HTTP di Laravel segue il redirect), ISIN inesistente → 301 verso `/Search?q=…`, senza prezzo. Nessun lookup preliminare.
+- Un timeout/errore di connessione su un ISIN (`ConnectionException`) salta solo quell'ISIN, non il resto del provider (stesso comportamento in BorsaItalianaProvider).
 - Legge la riga `Prezzo di riferimento`, che contiene prezzo **e** data nella stessa cella (`0,465 - 18/09/2026`).
 - **Nessuna divisione per 100**: i certificati si quotano in euro per certificato, quindi `quantity` è il numero di certificati e `quantity × price` è già il controvalore.
 - La scheda non espone la valuta: il SeDeX/Cert-X negozia in **EUR**, hardcoded nel provider.

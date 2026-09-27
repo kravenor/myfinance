@@ -2,7 +2,9 @@
 
 namespace App\Services\Prices;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Teleborsa per i certificati quotati sul SeDeX/Cert-X. Il `symbol`
@@ -34,9 +36,18 @@ class TeleborsaProvider implements PriceProvider
             // ponytail: 1 richiesta/ISIN (~130 KB di HTML), nessun rate limit
             // rilevato. Con decine di certificati conviene la lista di mercato.
             $slug = 'x-'.strtolower($isin).'-'.base64_encode($isin);
-            $response = Http::timeout($timeout)
-                ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
-                ->get($base.'/'.$slug);
+            try {
+                $response = Http::timeout($timeout)
+                    ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
+                    // Solo https e al massimo 2 salti (Teleborsa redirige allo slug canonico).
+                    ->withOptions(['allow_redirects' => ['max' => 2, 'protocols' => ['https']]])
+                    ->get($base.'/'.$slug);
+            } catch (ConnectionException $e) {
+                // Timeout su un ISIN: non deve saltare gli altri, ma resta traccia.
+                Log::warning('Quotazione non raggiunta', ['provider' => 'teleborsa', 'isin' => $isin, 'error' => $e->getMessage()]);
+
+                continue;
+            }
 
             if ($response->failed()) {
                 continue;

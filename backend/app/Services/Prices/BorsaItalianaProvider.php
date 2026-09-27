@@ -2,7 +2,9 @@
 
 namespace App\Services\Prices;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Borsa Italiana (MOT) per i titoli quotati in Italia: BTP, BOT, CCT, BTP
@@ -37,9 +39,18 @@ class BorsaItalianaProvider implements PriceProvider
             // ponytail: 1 richiesta/ISIN (~60 KB di HTML), nessun rate limit
             // rilevato. Se i titoli diventassero decine, la lista
             // /mot/btp/lista.html?page=N dà molti prezzi in una richiesta.
-            $response = Http::timeout($timeout)
-                ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
-                ->get($base.'/'.$isin.'.html', ['lang' => 'it']);
+            try {
+                $response = Http::timeout($timeout)
+                    ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
+                    // Solo https e al massimo 2 salti (Teleborsa redirige allo slug canonico).
+                    ->withOptions(['allow_redirects' => ['max' => 2, 'protocols' => ['https']]])
+                    ->get($base.'/'.$isin.'.html', ['lang' => 'it']);
+            } catch (ConnectionException $e) {
+                // Timeout su un ISIN: non deve saltare gli altri, ma resta traccia.
+                Log::warning('Quotazione non raggiunta', ['provider' => 'borsaitaliana', 'isin' => $isin, 'error' => $e->getMessage()]);
+
+                continue;
+            }
 
             if ($response->failed()) {
                 continue;

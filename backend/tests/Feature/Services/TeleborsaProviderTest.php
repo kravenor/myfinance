@@ -3,13 +3,14 @@
 namespace Tests\Feature\Services;
 
 use App\Services\Prices\TeleborsaProvider;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class TeleborsaProviderTest extends TestCase
 {
     /** Frammento reale della scheda: `<label>` e valore in `<span id="…">`. */
-    private function scheda(?string $reference): string
+    private function page(?string $reference): string
     {
         $row = fn (string $label, string $value) => <<<HTML
                 <div class="scheda-panel--body--data--item">
@@ -28,7 +29,7 @@ class TeleborsaProviderTest extends TestCase
 
     public function test_reads_reference_price_and_date(): void
     {
-        Http::fake(['*x-de000vy746g1-REUwMDBWWTc0Nkcx*' => Http::response($this->scheda('0,465 - 18/09/2026'))]);
+        Http::fake(['*x-de000vy746g1-REUwMDBWWTc0Nkcx*' => Http::response($this->page('0,465 - 18/09/2026'))]);
 
         $this->assertSame([[
             'symbol' => 'DE000VY746G1',
@@ -40,7 +41,7 @@ class TeleborsaProviderTest extends TestCase
 
     public function test_parses_italian_thousands_separator(): void
     {
-        Http::fake(['*' => Http::response($this->scheda('1.234,56 - 18/09/2026'))]);
+        Http::fake(['*' => Http::response($this->page('1.234,56 - 18/09/2026'))]);
 
         $this->assertSame(1234.56, app(TeleborsaProvider::class)->fetch(['DE000UR12285'])[0]['price']);
     }
@@ -48,16 +49,29 @@ class TeleborsaProviderTest extends TestCase
     /** Certificato scaduto o senza scambi: la scheda esce senza il prezzo di riferimento. */
     public function test_skips_page_without_reference_price(): void
     {
-        Http::fake(['*' => Http::response($this->scheda(null))]);
+        Http::fake(['*' => Http::response($this->page(null))]);
 
         $this->assertSame([], app(TeleborsaProvider::class)->fetch(['DE000SX1Y9K9']));
     }
 
     public function test_skips_invalid_date(): void
     {
-        Http::fake(['*' => Http::response($this->scheda('0,465 - 31/02/2026'))]);
+        Http::fake(['*' => Http::response($this->page('0,465 - 31/02/2026'))]);
 
         $this->assertSame([], app(TeleborsaProvider::class)->fetch(['DE000SX1Y9K9']));
+    }
+
+    /** Timeout su un ISIN: gli altri vengono comunque letti. */
+    public function test_connection_error_skips_only_that_isin(): void
+    {
+        Http::fake([
+            '*x-de000sx1y9k9-*' => fn () => throw new ConnectionException('timeout'),
+            '*' => Http::response($this->page('0,465 - 18/09/2026')),
+        ]);
+
+        $quotes = app(TeleborsaProvider::class)->fetch(['DE000SX1Y9K9', 'DE000VY746G1']);
+
+        $this->assertSame(['DE000VY746G1'], array_column($quotes, 'symbol'));
     }
 
     public function test_skips_symbols_that_are_not_isin(): void
