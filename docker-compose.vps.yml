@@ -28,6 +28,8 @@ services:
     container_name: finance_vps_php
     restart: unless-stopped
     env_file: .env.production
+    volumes:
+      - laravel_logs:/var/www/html/storage/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -42,6 +44,8 @@ services:
     restart: unless-stopped
     env_file: .env.production
     command: ["php", "artisan", "schedule:work"]
+    volumes:
+      - laravel_logs:/var/www/html/storage/logs
     depends_on:
       php:
         condition: service_started
@@ -54,6 +58,8 @@ services:
     restart: unless-stopped
     env_file: .env.production
     command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
+    volumes:
+      - laravel_logs:/var/www/html/storage/logs
     depends_on:
       php:
         condition: service_started
@@ -102,6 +108,8 @@ services:
 volumes:
   mysql_data:
   redis_data:
+  # Log Laravel condivisi da php, scheduler e queue: sopravvivono ai deploy.
+  laravel_logs:
 
 networks:
   finance:
