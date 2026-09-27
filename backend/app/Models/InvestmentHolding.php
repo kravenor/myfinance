@@ -68,12 +68,13 @@ class InvestmentHolding extends Model
 
     protected static function booted(): void
     {
-        // Le obbligazioni non hanno un ticker: l'auto-fetch (BorsaItalianaProvider)
-        // le cerca per ISIN, che diventa quindi il `symbol` dell'holding. Nel model
-        // e non nelle Form Request perché in update `asset_type` può non essere nel
-        // payload: qui l'attributo è già quello definitivo.
+        // Obbligazioni e certificati non hanno un ticker: l'auto-fetch
+        // (BorsaItalianaProvider, TeleborsaProvider) li cerca per ISIN, che diventa
+        // quindi il `symbol` dell'holding. Nel model e non nelle Form Request perché
+        // in update `asset_type` può non essere nel payload: qui l'attributo è già
+        // quello definitivo.
         static::saving(function (self $holding): void {
-            if ($holding->asset_type === 'bond' && ! $holding->symbol && $holding->isin) {
+            if (in_array($holding->asset_type, ['bond', 'certificate'], true) && ! $holding->symbol && $holding->isin) {
                 $holding->symbol = $holding->isin;
             }
         });

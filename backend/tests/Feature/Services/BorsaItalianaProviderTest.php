@@ -12,7 +12,7 @@ class BorsaItalianaProviderTest extends TestCase
      * Frammento della scheda titolo reale: `<strong>etichetta</strong>` e valore
      * in `<span class="t-text -right">`, con gli a capo e i tab del sito.
      */
-    private function scheda(?string $price, ?string $date, string $currency = 'EUR/EUR'): string
+    private function page(?string $price, ?string $date, string $currency = 'EUR/EUR'): string
     {
         $row = fn (string $label, string $value) => <<<HTML
                 <tr>
@@ -38,7 +38,7 @@ class BorsaItalianaProviderTest extends TestCase
 
     public function test_reads_reference_price_as_fraction_of_nominal(): void
     {
-        Http::fake(['*/IT0005534984.html*' => Http::response($this->scheda('101,51', '02/09/2026'))]);
+        Http::fake(['*/IT0005534984.html*' => Http::response($this->page('101,51', '02/09/2026'))]);
 
         $quotes = app(BorsaItalianaProvider::class)->fetch(['IT0005534984']);
 
@@ -54,14 +54,14 @@ class BorsaItalianaProviderTest extends TestCase
 
     public function test_parses_italian_thousands_separator(): void
     {
-        Http::fake(['*' => Http::response($this->scheda('1.234,56', '02/09/2026'))]);
+        Http::fake(['*' => Http::response($this->page('1.234,56', '02/09/2026'))]);
 
         $this->assertSame(12.3456, app(BorsaItalianaProvider::class)->fetch(['IT0003256820'])[0]['price']);
     }
 
     public function test_reads_currency_from_the_page(): void
     {
-        Http::fake(['*' => Http::response($this->scheda('98,68', '02/09/2026', 'USD/USD'))]);
+        Http::fake(['*' => Http::response($this->page('98,68', '02/09/2026', 'USD/USD'))]);
 
         $this->assertSame('USD', app(BorsaItalianaProvider::class)->fetch(['XS0000000019'])[0]['currency']);
     }
@@ -69,14 +69,14 @@ class BorsaItalianaProviderTest extends TestCase
     /** ISIN inesistente: il sito risponde 200 con la pagina priva dei campi prezzo. */
     public function test_skips_page_without_price(): void
     {
-        Http::fake(['*' => Http::response($this->scheda(null, null))]);
+        Http::fake(['*' => Http::response($this->page(null, null))]);
 
         $this->assertSame([], app(BorsaItalianaProvider::class)->fetch(['IT0009999999']));
     }
 
     public function test_skips_invalid_date(): void
     {
-        Http::fake(['*' => Http::response($this->scheda('101,51', '31/02/2026'))]);
+        Http::fake(['*' => Http::response($this->page('101,51', '31/02/2026'))]);
 
         $this->assertSame([], app(BorsaItalianaProvider::class)->fetch(['IT0005534984']));
     }
