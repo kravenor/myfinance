@@ -26,12 +26,18 @@ class InvestmentHistoryService
     public function __construct(private readonly CurrencyConverter $converter) {}
 
     /**
+     * Con $holdingId la serie (e l'XIRR) è di quel solo holding; lo scope
+     * utente vale comunque, un id altrui dà una serie vuota.
+     *
      * @return array<string, mixed>
      */
-    public function monthly(): array
+    public function monthly(?int $holdingId = null): array
     {
         $base = strtoupper(Auth::user()->currency);
-        $holdings = InvestmentHolding::query()->get()->keyBy('id');
+        $holdings = InvestmentHolding::query()
+            ->when($holdingId, fn ($q) => $q->whereKey($holdingId))
+            ->get()
+            ->keyBy('id');
 
         $movements = InvestmentTransaction::query()
             ->whereIn('investment_holding_id', $holdings->keys())

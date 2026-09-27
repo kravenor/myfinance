@@ -35,14 +35,35 @@ const { items, loading, list, create, update, destroy } = useCrud<InvestmentHold
 const accounts = ref<Account[]>([])
 const overview = ref<InvestmentOverview | null>(null)
 const history = ref<InvestmentHistory | null>(null)
+// Serie del singolo holding scelto nel grafico; null = portafoglio (e l'XIRR in testata resta di portafoglio).
+const chartHolding = ref<number | null>(null)
+const holdingHistory = ref<InvestmentHistory | null>(null)
+// Periodo in mesi (null = tutto). ponytail: filtro client sui punti già caricati (mensili, 10 anni = 120);
+// from/to lato server (U7 dell'ADR 0002) solo se la granularità diventa giornaliera.
+const chartMonths = ref<number | null>(null)
+const chartPoints = computed(() => {
+  const points = (chartHolding.value ? holdingHistory.value : history.value)?.points ?? []
+  if (!chartMonths.value) return points
+  const from = new Date()
+  from.setDate(1)
+  from.setMonth(from.getMonth() - chartMonths.value)
+  const cutoff = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, '0')}`
+  return points.filter((p) => p.month >= cutoff)
+})
+
+async function loadHoldingHistory() {
+  holdingHistory.value = chartHolding.value
+    ? (await api.get<InvestmentHistory>('/investments/history', { params: { holding: chartHolding.value } })).data
+    : null
+}
 
 // Versato vs valore: la serie parte dal primo movimento, non prima.
 const historyData = computed(() => ({
-  labels: (history.value?.points ?? []).map((p) => formatMonth(p.month)),
+  labels: chartPoints.value.map((p) => formatMonth(p.month)),
   datasets: [
     {
       label: 'Versato',
-      data: (history.value?.points ?? []).map((p) => parseFloat(p.invested)),
+      data: chartPoints.value.map((p) => parseFloat(p.invested)),
       borderColor: '#94a3b8',
       backgroundColor: 'rgba(148,163,184,0.12)',
       fill: true,
@@ -50,7 +71,7 @@ const historyData = computed(() => ({
     },
     {
       label: 'Valore',
-      data: (history.value?.points ?? []).map((p) => parseFloat(p.market_value)),
+      data: chartPoints.value.map((p) => parseFloat(p.market_value)),
       borderColor: '#6366f1',
       backgroundColor: 'rgba(99,102,241,0.15)',
       fill: true,
@@ -242,6 +263,8 @@ async function refresh() {
   ])
   overview.value = o.data.data
   history.value = h.data
+  if (!items.value.some((i) => i.id === chartHolding.value)) chartHolding.value = null
+  await loadHoldingHistory()
 }
 
 async function refreshPrices() {
@@ -443,10 +466,23 @@ onMounted(async () => {
 
     <!-- Versato vs valore: nessun punto prima del primo movimento. -->
     <div v-if="(history?.points.length ?? 0) > 1" class="card p-4">
-      <div class="flex items-baseline justify-between gap-3 mb-2">
+      <div class="flex flex-wrap items-baseline justify-between gap-3 mb-2">
         <h2 class="font-semibold text-slate-800">Versato vs valore</h2>
-        <p class="text-xs text-slate-500">dal primo movimento</p>
+        <div class="flex flex-wrap gap-2">
+          <select v-model="chartHolding" class="input w-auto max-w-full" aria-label="Posizione del grafico" @change="loadHoldingHistory">
+            <option :value="null">Tutto il portafoglio</option>
+            <option v-for="h in items" :key="h.id" :value="h.id">{{ h.name }}</option>
+          </select>
+          <select v-model="chartMonths" class="input w-auto" aria-label="Periodo del grafico">
+            <option :value="null">Tutto</option>
+            <option :value="6">6 mesi</option>
+            <option :value="12">1 anno</option>
+            <option :value="36">3 anni</option>
+            <option :value="60">5 anni</option>
+          </select>
+        </div>
       </div>
+      <p class="text-xs text-slate-500 mb-2">dal primo movimento</p>
       <div class="h-64">
         <Line :data="historyData" :options="chartOptions" />
       </div>
