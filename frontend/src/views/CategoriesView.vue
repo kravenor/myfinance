@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Category, CategoryType } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, list, create, update, destroy } = useCrud<Category>('categories')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<Category>('categories')
+const toast = useToastStore()
 
 const editing = ref<Category | null>(null)
 const showForm = ref(false)
@@ -16,27 +21,35 @@ const form = ref({
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = { name: '', type: 'expense', parent_id: null }
 }
 
 function startEdit(cat: Category) {
   editing.value = cat
+  fieldErrors.value = {}
   form.value = { name: cat.name, type: cat.type, parent_id: cat.parent_id }
   showForm.value = true
 }
 
 async function onSubmit() {
-  if (editing.value) {
-    await update(editing.value.id, form.value)
-  } else {
-    await create(form.value)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, form.value)
+    } else {
+      await create(form.value)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Categoria salvata.')
   reset()
   showForm.value = false
 }
 
 async function onDelete(cat: Category) {
-  if (!confirm(`Eliminare la categoria "${cat.name}"?`)) return
+  if (!(await confirmAction(`Eliminare la categoria "${cat.name}"?`))) return
   await destroy(cat.id)
 }
 
@@ -47,8 +60,8 @@ onMounted(() => list({ per_page: 100 }))
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Categorie</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuova categoria' }}
+      <button class="btn-primary" @click="showForm = true; reset()">
+        Nuova categoria
       </button>
     </div>
 
@@ -60,32 +73,39 @@ onMounted(() => list({ per_page: 100 }))
       @click="showForm = true; reset()"
     >+</button>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Nome</label>
-        <input v-model="form.name" class="input" required />
-      </div>
-      <div>
-        <label class="label">Tipo</label>
-        <select v-model="form.type" class="input">
-          <option value="expense">expense</option>
-          <option value="income">income</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Parent</label>
-        <select v-model="form.parent_id" class="input">
-          <option :value="null">— Nessuno —</option>
-          <option v-for="c in items.filter((c) => c.type === form.type && c.id !== editing?.id)" :key="c.id" :value="c.id">
-            {{ c.name }}
-          </option>
-        </select>
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+    <AppModal v-model="showForm" :title="editing ? 'Modifica categoria' : 'Nuova categoria'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <div>
+            <label class="label">Nome</label>
+            <input v-model="form.name" class="input" required />
+          </div>
+          <div>
+            <label class="label">Tipo</label>
+            <select v-model="form.type" class="input">
+              <option value="expense">expense</option>
+              <option value="income">income</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Parent</label>
+            <select v-model="form.parent_id" class="input">
+              <option :value="null">— Nessuno —</option>
+              <option v-for="c in items.filter((c) => c.type === form.type && c.id !== editing?.id)" :key="c.id" :value="c.id">
+                {{ c.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <div class="card table-responsive md:overflow-x-auto">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>

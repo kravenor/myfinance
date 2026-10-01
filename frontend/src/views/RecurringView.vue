@@ -3,11 +3,16 @@ import { formatDate } from '@/lib/date'
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import { formatCurrency } from '@/lib/money'
 import type { Account, Cadence, InvestmentHolding, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, list, create, update, destroy } = useCrud<RecurringTransaction>('recurring-transactions')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<RecurringTransaction>('recurring-transactions')
+const toast = useToastStore()
 
 const accounts = ref<Account[]>([])
 const holdings = ref<InvestmentHolding[]>([])
@@ -33,6 +38,7 @@ const form = ref({
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     transfer_account_id: null,
@@ -51,6 +57,7 @@ function reset() {
 
 function startEdit(r: RecurringTransaction) {
   editing.value = r
+  fieldErrors.value = {}
   form.value = {
     account_id: r.account_id,
     transfer_account_id: r.transfer_account_id,
@@ -97,17 +104,23 @@ async function onSubmit() {
   } else {
     payload.transfer_account_id = null
   }
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Ricorrente salvata.')
   reset()
   showForm.value = false
 }
 
 async function onDelete(r: RecurringTransaction) {
-  if (!confirm('Eliminare la ricorrente?')) return
+  if (!(await confirmAction('Eliminare la ricorrente?'))) return
   await destroy(r.id)
 }
 
@@ -127,8 +140,8 @@ onMounted(async () => {
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Transazioni ricorrenti</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuova ricorrente' }}
+      <button class="btn-primary" @click="showForm = true; reset()">
+        Nuova ricorrente
       </button>
     </div>
 
@@ -140,77 +153,84 @@ onMounted(async () => {
       @click="showForm = true; reset()"
     >+</button>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Tipo</label>
-        <select v-model="form.type" class="input">
-          <option value="expense">expense</option>
-          <option value="income">income</option>
-          <option value="transfer">transfer</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Conto</label>
-        <select v-model.number="form.account_id" class="input" required>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
-        </select>
-      </div>
-      <div v-if="form.type === 'transfer'">
-        <label class="label">Conto destinazione</label>
-        <select v-model.number="form.transfer_account_id" class="input" required>
-          <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
-            {{ a.name }}{{ a.is_primary ? ' ★' : '' }}
-          </option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Cadenza</label>
-        <select v-model="form.cadence" class="input">
-          <option v-for="c in cadences" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Intervallo</label>
-        <input v-model.number="form.interval" type="number" min="1" max="255" class="input" />
-      </div>
-      <div>
-        <label class="label">Importo</label>
-        <input v-model="form.amount" type="number" step="0.01" min="0.01" class="input" required />
-      </div>
-      <div v-if="form.type !== 'income'">
-        <label class="label">Investimento PAC (opzionale)</label>
-        <select v-model.number="form.investment_holding_id" class="input">
-          <option :value="null">— nessuno —</option>
-          <option v-for="h in holdings" :key="h.id" :value="h.id">{{ h.name }}</option>
-        </select>
-        <p class="text-xs text-slate-500 mt-1">A ogni scadenza registra l'acquisto: quote = (importo − costi) / quotazione del giorno.</p>
-      </div>
-      <div v-if="form.type !== 'income' && form.investment_holding_id">
-        <label class="label">Costi per rata</label>
-        <input v-model="form.investment_fees" type="number" step="0.01" min="0" class="input" placeholder="0,00" />
-        <p class="text-xs text-slate-500 mt-1">Commissioni già comprese nell'importo della rata.</p>
-      </div>
-      <div>
-        <label class="label">Inizio</label>
-        <input v-model="form.starts_on" type="date" class="input" required />
-      </div>
-      <div>
-        <label class="label">Fine (opzionale)</label>
-        <input v-model="form.ends_on" type="date" class="input" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Descrizione</label>
-        <input v-model="form.description" class="input" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex items-center gap-2">
-        <input id="is_active" v-model="form.is_active" type="checkbox" />
-        <label for="is_active" class="text-sm">Attiva</label>
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+    <AppModal v-model="showForm" :title="editing ? 'Modifica ricorrente' : 'Nuova ricorrente'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <div>
+            <label class="label">Tipo</label>
+            <select v-model="form.type" class="input">
+              <option value="expense">expense</option>
+              <option value="income">income</option>
+              <option value="transfer">transfer</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Conto</label>
+            <select v-model.number="form.account_id" class="input" required>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
+            </select>
+          </div>
+          <div v-if="form.type === 'transfer'">
+            <label class="label">Conto destinazione</label>
+            <select v-model.number="form.transfer_account_id" class="input" required>
+              <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
+                {{ a.name }}{{ a.is_primary ? ' ★' : '' }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Cadenza</label>
+            <select v-model="form.cadence" class="input">
+              <option v-for="c in cadences" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Intervallo</label>
+            <input v-model.number="form.interval" type="number" min="1" max="255" class="input" />
+          </div>
+          <div>
+            <label class="label">Importo</label>
+            <input v-model="form.amount" type="number" step="0.01" min="0.01" class="input" required />
+          </div>
+          <div v-if="form.type !== 'income'">
+            <label class="label">Investimento PAC (opzionale)</label>
+            <select v-model.number="form.investment_holding_id" class="input">
+              <option :value="null">— nessuno —</option>
+              <option v-for="h in holdings" :key="h.id" :value="h.id">{{ h.name }}</option>
+            </select>
+            <p class="text-xs text-slate-500 mt-1">A ogni scadenza registra l'acquisto: quote = (importo − costi) / quotazione del giorno.</p>
+          </div>
+          <div v-if="form.type !== 'income' && form.investment_holding_id">
+            <label class="label">Costi per rata</label>
+            <input v-model="form.investment_fees" type="number" step="0.01" min="0" class="input" placeholder="0,00" />
+            <p class="text-xs text-slate-500 mt-1">Commissioni già comprese nell'importo della rata.</p>
+          </div>
+          <div>
+            <label class="label">Inizio</label>
+            <input v-model="form.starts_on" type="date" class="input" required />
+          </div>
+          <div>
+            <label class="label">Fine (opzionale)</label>
+            <input v-model="form.ends_on" type="date" class="input" />
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Descrizione</label>
+            <input v-model="form.description" class="input" />
+          </div>
+          <div class="sm:col-span-2 md:col-span-3 flex items-center gap-2">
+            <input id="is_active" v-model="form.is_active" type="checkbox" />
+            <label for="is_active" class="text-sm">Attiva</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>

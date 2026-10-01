@@ -5,6 +5,7 @@ import { formatDate } from '@/lib/date'
 import { formatCurrency } from '@/lib/money'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { InvestmentHolding, InvestmentSide, InvestmentTransaction, Paginated } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 const props = defineProps<{ holding: InvestmentHolding }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>()
@@ -119,7 +120,7 @@ async function onSubmit() {
 }
 
 async function onDelete(m: InvestmentTransaction) {
-  if (!confirm(`Eliminare il movimento del ${formatDate(m.occurred_at)}?`)) return
+  if (!(await confirmAction(`Eliminare il movimento del ${formatDate(m.occurred_at)}?`))) return
   await api.delete(`${base.value}/${m.id}`)
   if (editingId.value === m.id) cancelEdit()
   await load()

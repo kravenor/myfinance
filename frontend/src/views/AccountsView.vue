@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import { CURRENCIES, formatCurrency } from '@/lib/money'
 import type { Account, AccountType } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, list, create, update, destroy } = useCrud<Account>('accounts')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<Account>('accounts')
+const toast = useToastStore()
 
 const types: AccountType[] = ['cash', 'bank', 'card', 'investment', 'other']
 
@@ -22,6 +27,7 @@ const form = ref({
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     name: '',
     type: 'bank' as AccountType,
@@ -34,6 +40,7 @@ function reset() {
 
 function startEdit(acc: Account) {
   editing.value = acc
+  fieldErrors.value = {}
   form.value = {
     name: acc.name,
     type: acc.type,
@@ -46,13 +53,19 @@ function startEdit(acc: Account) {
 }
 
 async function onSubmit() {
-  if (editing.value) {
-    await update(editing.value.id, form.value)
-    await list()
-  } else {
-    await create(form.value)
-    await list()
+  try {
+    if (editing.value) {
+      await update(editing.value.id, form.value)
+      await list()
+    } else {
+      await create(form.value)
+      await list()
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Conto salvato.')
   reset()
   showForm.value = false
 }
@@ -64,7 +77,7 @@ async function setPrimary(acc: Account) {
 }
 
 async function onDelete(acc: Account) {
-  if (!confirm(`Eliminare il conto "${acc.name}"?`)) return
+  if (!(await confirmAction(`Eliminare il conto "${acc.name}"?`))) return
   await destroy(acc.id)
 }
 
@@ -75,8 +88,8 @@ onMounted(() => list())
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Conti</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuovo conto' }}
+      <button class="btn-primary" @click="showForm = true; reset()">
+        Nuovo conto
       </button>
     </div>
 
@@ -88,40 +101,47 @@ onMounted(() => list())
       @click="showForm = true; reset()"
     >+</button>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 md:grid-cols-2 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Nome</label>
-        <input v-model="form.name" class="input" required />
-      </div>
-      <div>
-        <label class="label">Tipo</label>
-        <select v-model="form.type" class="input">
-          <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Valuta</label>
-        <select v-model="form.currency" class="input" required>
-          <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </div>
-      <div class="flex items-center gap-2">
-        <input id="is_primary" type="checkbox" v-model="form.is_primary" class="w-4 h-4" />
-        <label for="is_primary" class="text-sm">Conto principale</label>
-      </div>
-      <div>
-        <label class="label">Saldo iniziale</label>
-        <input v-model="form.initial_balance" type="number" step="0.01" class="input" />
-      </div>
-      <div class="md:col-span-2">
-        <label class="label">Note</label>
-        <textarea v-model="form.notes" class="input" rows="2"></textarea>
-      </div>
-      <div class="md:col-span-2 flex gap-2 justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+    <AppModal v-model="showForm" :title="editing ? 'Modifica conto' : 'Nuovo conto'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <div>
+            <label class="label">Nome</label>
+            <input v-model="form.name" class="input" required />
+          </div>
+          <div>
+            <label class="label">Tipo</label>
+            <select v-model="form.type" class="input">
+              <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Valuta</label>
+            <select v-model="form.currency" class="input" required>
+              <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-2">
+            <input id="is_primary" type="checkbox" v-model="form.is_primary" class="w-4 h-4" />
+            <label for="is_primary" class="text-sm">Conto principale</label>
+          </div>
+          <div>
+            <label class="label">Saldo iniziale</label>
+            <input v-model="form.initial_balance" type="number" step="0.01" class="input" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="label">Note</label>
+            <textarea v-model="form.notes" class="input" rows="2"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>

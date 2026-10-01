@@ -19,6 +19,7 @@ import type {
   ExpenseForecastCell,
   ExpenseForecastCompare,
 } from '@/types/reports'
+import { confirmAction } from '@/composables/useConfirm'
 
 const auth = useAuthStore()
 
@@ -126,7 +127,7 @@ async function submitScenario() {
 }
 
 async function deleteScenario(s: Scenario) {
-  if (!confirm(`Eliminare lo scenario "${s.name}"?`)) return
+  if (!(await confirmAction(`Eliminare lo scenario "${s.name}"?`))) return
   await api.delete(`/scenarios/${s.id}`)
   if (selectedScenarioId.value === s.id) selectedScenarioId.value = ''
   await loadScenarios()
@@ -235,7 +236,7 @@ async function addItem() {
 
 async function deleteItem(it: ScenarioItem) {
   if (!itemsScenario.value) return
-  if (!confirm('Eliminare questa voce simulata?')) return
+  if (!(await confirmAction('Eliminare questa voce simulata?'))) return
   await api.delete(`/scenarios/${itemsScenario.value.id}/items/${it.id}`)
   await loadItems()
   await loadScenarios()

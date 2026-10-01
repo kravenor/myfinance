@@ -3,14 +3,19 @@ import { financialMonthStart, formatMonth } from '@/lib/date'
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Budget, Category, Paginated } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 function budgetPeriod(year: number, month: number): string {
   return formatMonth(`${year}-${String(month).padStart(2, '0')}`)
 }
 
-const { items, loading, list, create, update, destroy } = useCrud<Budget>('budgets')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<Budget>('budgets')
+const toast = useToastStore()
 
 const categories = ref<Category[]>([])
 // Periodo di default: il ciclo finanziario corrente (vedi month_start_day).
@@ -28,6 +33,7 @@ const form = ref({
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     category_id: categories.value[0]?.id ?? 0,
     year: filters.value.year,
@@ -38,6 +44,7 @@ function reset() {
 
 function startEdit(b: Budget) {
   editing.value = b
+  fieldErrors.value = {}
   form.value = { category_id: b.category_id, year: b.year, month: b.month, amount: b.amount }
   showForm.value = true
 }
@@ -47,18 +54,24 @@ async function refresh() {
 }
 
 async function onSubmit() {
-  if (editing.value) {
-    await update(editing.value.id, form.value)
-  } else {
-    await create(form.value)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, form.value)
+    } else {
+      await create(form.value)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Budget salvato.')
   reset()
   showForm.value = false
   await refresh()
 }
 
 async function onDelete(b: Budget) {
-  if (!confirm('Eliminare il budget?')) return
+  if (!(await confirmAction('Eliminare il budget?'))) return
   await destroy(b.id)
 }
 
@@ -100,8 +113,8 @@ onMounted(async () => {
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuovo budget' }}
+      <button class="btn-primary" @click="showForm = true; reset()">
+        Nuovo budget
       </button>
     </div>
 
@@ -130,30 +143,37 @@ onMounted(async () => {
       </form>
     </details>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Categoria</label>
-        <select v-model.number="form.category_id" class="input" required>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Anno</label>
-        <input v-model.number="form.year" type="number" min="2000" max="2100" class="input" required />
-      </div>
-      <div>
-        <label class="label">Mese</label>
-        <input v-model.number="form.month" type="number" min="1" max="12" class="input" required />
-      </div>
-      <div>
-        <label class="label">Importo</label>
-        <input v-model="form.amount" type="number" step="0.01" class="input" required />
-      </div>
-      <div class="sm:col-span-2 md:col-span-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+    <AppModal v-model="showForm" :title="editing ? 'Modifica budget' : 'Nuovo budget'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <div>
+            <label class="label">Categoria</label>
+            <select v-model.number="form.category_id" class="input" required>
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Anno</label>
+            <input v-model.number="form.year" type="number" min="2000" max="2100" class="input" required />
+          </div>
+          <div>
+            <label class="label">Mese</label>
+            <input v-model.number="form.month" type="number" min="1" max="12" class="input" required />
+          </div>
+          <div>
+            <label class="label">Importo</label>
+            <input v-model="form.amount" type="number" step="0.01" class="input" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>

@@ -15,6 +15,9 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import HoldingMovements from '@/components/HoldingMovements.vue'
 import { CURRENCIES, formatCurrency } from '@/lib/money'
@@ -27,10 +30,12 @@ import type {
   InvestmentOverview,
   Paginated,
 } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
 
-const { items, loading, list, create, update, destroy } = useCrud<InvestmentHolding>('investment-holdings')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<InvestmentHolding>('investment-holdings')
+const toast = useToastStore()
 
 const accounts = ref<Account[]>([])
 const overview = ref<InvestmentOverview | null>(null)
@@ -145,6 +150,7 @@ function plBorderClass(value: string | null | undefined): string {
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   lookupResults.value = []
   lookupError.value = ''
   form.value = {
@@ -163,6 +169,7 @@ function reset() {
 
 function startEdit(h: InvestmentHolding) {
   editing.value = h
+  fieldErrors.value = {}
   lookupResults.value = []
   lookupError.value = ''
   form.value = {
@@ -233,18 +240,24 @@ async function onSubmit() {
   }
   if (form.value.last_price !== '') payload.last_price_at = new Date().toISOString()
 
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Posizione salvata.')
   reset()
   showForm.value = false
   await refresh()
 }
 
 async function onDelete(h: InvestmentHolding) {
-  if (!confirm(`Eliminare la posizione "${h.name}"?`)) return
+  if (!(await confirmAction(`Eliminare la posizione "${h.name}"?`))) return
   await destroy(h.id)
   await refresh()
 }
@@ -301,9 +314,9 @@ onMounted(async () => {
         <button
           class="btn-primary"
           :disabled="investmentAccounts.length === 0"
-          @click="showForm = !showForm; reset()"
+          @click="showForm = true; reset()"
         >
-          {{ showForm ? 'Annulla' : 'Nuova posizione' }}
+          Nuova posizione
         </button>
       </div>
     </div>
@@ -362,107 +375,110 @@ onMounted(async () => {
     </section>
 
     <!-- Form -->
-    <form
-      v-if="showForm"
-      class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
-      @submit.prevent="onSubmit"
-    >
-      <div class="sm:col-span-2 md:col-span-1">
-        <label class="label">Nome</label>
-        <input v-model="form.name" class="input" required />
-      </div>
-      <div>
-        <label class="label">Ticker / Symbol</label>
-        <input v-model="form.symbol" class="input" placeholder="es. CSSPX.MI (auto da ISIN)" />
-        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
-          Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
-          quotazione sul MOT di Borsa Italiana.
-        </p>
-        <p v-else-if="form.asset_type === 'certificate'" class="text-xs text-slate-500 mt-1">
-          Per i certificati lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
-          quotazione sul SeDeX/Cert-X.
-        </p>
-      </div>
-      <div>
-        <label class="label">ISIN</label>
-        <div class="flex gap-2">
-          <input v-model="form.isin" class="input uppercase" maxlength="12" placeholder="es. IE00B5BMR087" />
-          <button
-            type="button"
-            class="btn-secondary whitespace-nowrap"
-            :disabled="lookupLoading"
-            @click="lookupSymbol"
-          >
-            {{ lookupLoading ? '…' : 'Cerca' }}
+    <AppModal v-model="showForm" size="lg" :title="editing ? 'Modifica posizione' : 'Nuova posizione'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <div class="sm:col-span-2 md:col-span-1">
+            <label class="label">Nome</label>
+            <input v-model="form.name" class="input" required />
+          </div>
+          <div>
+            <label class="label">Ticker / Symbol</label>
+            <input v-model="form.symbol" class="input" placeholder="es. CSSPX.MI (auto da ISIN)" />
+            <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+              Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+              quotazione sul MOT di Borsa Italiana.
+            </p>
+            <p v-else-if="form.asset_type === 'certificate'" class="text-xs text-slate-500 mt-1">
+              Per i certificati lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+              quotazione sul SeDeX/Cert-X.
+            </p>
+          </div>
+          <div>
+            <label class="label">ISIN</label>
+            <div class="flex gap-2">
+              <input v-model="form.isin" class="input uppercase" maxlength="12" placeholder="es. IE00B5BMR087" />
+              <button
+                type="button"
+                class="btn-secondary whitespace-nowrap"
+                :disabled="lookupLoading"
+                @click="lookupSymbol"
+              >
+                {{ lookupLoading ? '…' : 'Cerca' }}
+              </button>
+            </div>
+          </div>
+          <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
+            <p v-if="lookupError" class="text-sm text-red-600">{{ lookupError }}</p>
+            <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
+              <li
+                v-for="c in lookupResults"
+                :key="c.symbol"
+                class="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                @click="applyCandidate(c)"
+              >
+                <span>
+                  <span class="font-medium">{{ c.symbol }}</span>
+                  <span class="text-slate-400"> · {{ c.exchange }}</span>
+                  <span class="block text-xs text-slate-500">{{ c.name }}</span>
+                </span>
+                <span class="whitespace-nowrap">
+                  <span v-if="c.price !== null">{{ formatCurrency(String(c.price), c.currency ?? form.currency) }}</span>
+                  <span v-else class="text-slate-400">n/d</span>
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <label class="label">Conto</label>
+            <select v-model.number="form.account_id" class="input" required>
+              <option v-for="a in investmentAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Tipo asset</label>
+            <select v-model="form.asset_type" class="input">
+              <option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Valuta</label>
+            <select v-model="form.currency" class="input">
+              <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div v-if="!editing">
+            <label class="label">Quantità iniziale</label>
+            <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
+            <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+              Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
+            </p>
+          </div>
+          <div v-if="!editing">
+            <label class="label">Prezzo di carico ({{ form.currency }})</label>
+            <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" required />
+          </div>
+          <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
+            Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
+          </div>
+          <div>
+            <label class="label">Prezzo corrente ({{ form.currency }})</label>
+            <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" placeholder="= carico se vuoto" />
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Note</label>
+            <input v-model="form.notes" class="input" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
         </div>
-      </div>
-      <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
-        <p v-if="lookupError" class="text-sm text-red-600">{{ lookupError }}</p>
-        <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
-          <li
-            v-for="c in lookupResults"
-            :key="c.symbol"
-            class="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
-            @click="applyCandidate(c)"
-          >
-            <span>
-              <span class="font-medium">{{ c.symbol }}</span>
-              <span class="text-slate-400"> · {{ c.exchange }}</span>
-              <span class="block text-xs text-slate-500">{{ c.name }}</span>
-            </span>
-            <span class="whitespace-nowrap">
-              <span v-if="c.price !== null">{{ formatCurrency(String(c.price), c.currency ?? form.currency) }}</span>
-              <span v-else class="text-slate-400">n/d</span>
-            </span>
-          </li>
-        </ul>
-      </div>
-      <div>
-        <label class="label">Conto</label>
-        <select v-model.number="form.account_id" class="input" required>
-          <option v-for="a in investmentAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Tipo asset</label>
-        <select v-model="form.asset_type" class="input">
-          <option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Valuta</label>
-        <select v-model="form.currency" class="input">
-          <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </div>
-      <div v-if="!editing">
-        <label class="label">Quantità iniziale</label>
-        <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
-        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
-          Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
-        </p>
-      </div>
-      <div v-if="!editing">
-        <label class="label">Prezzo di carico ({{ form.currency }})</label>
-        <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" required />
-      </div>
-      <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
-        Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
-      </div>
-      <div>
-        <label class="label">Prezzo corrente ({{ form.currency }})</label>
-        <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" placeholder="= carico se vuoto" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Note</label>
-        <input v-model="form.notes" class="input" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+      </form>
+    </AppModal>
 
     <!-- Versato vs valore: nessun punto prima del primo movimento. -->
     <div v-if="(history?.points.length ?? 0) > 1" class="card p-4">

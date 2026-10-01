@@ -38,14 +38,17 @@ const toneIconClass = {
           class="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs font-bold"
           :class="toneIconClass[t.tone]"
           aria-hidden="true"
-        >{{ toneIcon[t.tone] }}</span>
+          >{{ toneIcon[t.tone] }}</span
+        >
         <p class="flex-1 text-sm text-slate-800">{{ t.message }}</p>
         <button
           type="button"
           class="-mr-1 inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
           aria-label="Chiudi"
           @click="toast.dismiss(t.id)"
-        >×</button>
+        >
+          ×
+        </button>
       </div>
     </TransitionGroup>
   </div>

@@ -1,19 +1,20 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import Amount from '@/components/ui/Amount.vue'
+import AppModal from '@/components/ui/AppModal.vue'
 import { formatCurrency } from '@/lib/money'
 import { FALLBACK_TAG_COLOR } from '@/lib/chartTheme'
 import { TX_TYPE_LABEL, TX_TYPES } from '@/lib/labels'
 import { useToastStore } from '@/stores/toast'
 import type { Account, Category, Paginated, Tag, Transaction, TransactionType } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 const { items, loading, meta, submitting, fieldErrors, list, create, update, destroy } = useCrud<Transaction>('transactions')
 const toast = useToastStore()
-const formEl = ref<HTMLFormElement | null>(null)
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
@@ -150,11 +151,9 @@ function startEdit(tx: Transaction) {
   openForm()
 }
 
-// Il form sta in cima alla lista: da una riga in fondo o dal FAB va portato in vista.
 function openForm() {
   fieldErrors.value = {}
   showForm.value = true
-  nextTick(() => formEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
 }
 
 function openNew() {
@@ -199,7 +198,7 @@ async function onSubmit() {
 }
 
 async function onDelete(tx: Transaction) {
-  if (!confirm('Eliminare la transazione?')) return
+  if (!(await confirmAction('Eliminare la transazione?'))) return
   await destroy(tx.id)
   toast.success('Transazione eliminata.')
   await applyFilters(false)
@@ -243,9 +242,7 @@ onMounted(async () => {
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
-      <button class="btn-primary" @click="showForm ? ((showForm = false), reset()) : openNew()">
-        {{ showForm ? 'Annulla' : 'Nuova transazione' }}
-      </button>
+      <button class="btn-primary" @click="openNew()">Nuova transazione</button>
     </div>
 
     <button
@@ -303,94 +300,98 @@ onMounted(async () => {
       <span v-if="meta.total > 0"> · {{ meta.from }}–{{ meta.to }}</span>
     </p>
 
-    <form v-if="showForm" ref="formEl" class="card p-4 scroll-mt-20 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Tipo</label>
-        <select v-model="form.type" class="input">
-          <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Conto</label>
-        <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldError('account_id') }" required>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
-        </select>
-        <p v-if="fieldError('account_id')" class="field-error">{{ fieldError('account_id') }}</p>
-      </div>
-      <div v-if="form.type === 'transfer'">
-        <label class="label">Conto destinazione</label>
-        <select v-model.number="form.transfer_account_id" class="input" :class="{ 'input-invalid': fieldError('transfer_account_id') }" required>
-          <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
-            {{ a.name }}
-          </option>
-        </select>
-        <p v-if="fieldError('transfer_account_id')" class="field-error">{{ fieldError('transfer_account_id') }}</p>
-      </div>
-      <div v-else>
-        <label class="label">Categoria</label>
-        <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldError('category_id') }">
-          <option :value="null">— Nessuna —</option>
-          <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
-        </select>
-        <p v-if="fieldError('category_id')" class="field-error">{{ fieldError('category_id') }}</p>
-      </div>
-      <div>
-        <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
-        <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" min="0.01" class="input" :class="{ 'input-invalid': fieldError('amount') }" required />
-        <p v-if="fieldError('amount')" class="field-error">{{ fieldError('amount') }}</p>
-      </div>
-      <div v-if="isCrossCurrencyTransfer">
-        <label class="label">Importo ricevuto ({{ accountCurrency(form.transfer_account_id) }})</label>
-        <input
-          v-model="form.transfer_amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          class="input"
-          :placeholder="`Auto (tasso del ${form.occurred_at})`"
-          :class="{ 'input-invalid': fieldError('transfer_amount') }"
-        />
-        <p v-if="fieldError('transfer_amount')" class="field-error">{{ fieldError('transfer_amount') }}</p>
-      </div>
-      <div>
-        <label class="label">Data</label>
-        <input v-model="form.occurred_at" type="date" class="input" :class="{ 'input-invalid': fieldError('occurred_at') }" required />
-        <p v-if="fieldError('occurred_at')" class="field-error">{{ fieldError('occurred_at') }}</p>
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Descrizione</label>
-        <input v-model="form.description" class="input" :class="{ 'input-invalid': fieldError('description') }" />
-        <p v-if="fieldError('description')" class="field-error">{{ fieldError('description') }}</p>
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Tag</label>
-        <div v-if="tags.length" class="flex flex-wrap gap-2">
-          <button
-            v-for="t in tags"
-            :key="t.id"
-            type="button"
-            class="px-3 py-1 rounded-full text-sm border transition"
-            :class="form.tag_ids.includes(t.id)
-              ? 'text-white border-transparent'
-              : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'"
-            :style="form.tag_ids.includes(t.id) ? { background: t.color || FALLBACK_TAG_COLOR } : {}"
-            @click="toggleTag(t.id)"
-          >
-            {{ t.name }}
+    <AppModal v-model="showForm" :title="editing ? 'Modifica transazione' : 'Nuova transazione'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <div>
+            <label class="label">Tipo</label>
+            <select v-model="form.type" class="input">
+              <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Conto</label>
+            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldError('account_id') }" required>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
+            </select>
+            <p v-if="fieldError('account_id')" class="field-error">{{ fieldError('account_id') }}</p>
+          </div>
+          <div v-if="form.type === 'transfer'">
+            <label class="label">Conto destinazione</label>
+            <select v-model.number="form.transfer_account_id" class="input" :class="{ 'input-invalid': fieldError('transfer_account_id') }" required>
+              <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
+                {{ a.name }}
+              </option>
+            </select>
+            <p v-if="fieldError('transfer_account_id')" class="field-error">{{ fieldError('transfer_account_id') }}</p>
+          </div>
+          <div v-else>
+            <label class="label">Categoria</label>
+            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldError('category_id') }">
+              <option :value="null">— Nessuna —</option>
+              <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
+            </select>
+            <p v-if="fieldError('category_id')" class="field-error">{{ fieldError('category_id') }}</p>
+          </div>
+          <div>
+            <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
+            <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" min="0.01" class="input" :class="{ 'input-invalid': fieldError('amount') }" required />
+            <p v-if="fieldError('amount')" class="field-error">{{ fieldError('amount') }}</p>
+          </div>
+          <div v-if="isCrossCurrencyTransfer">
+            <label class="label">Importo ricevuto ({{ accountCurrency(form.transfer_account_id) }})</label>
+            <input
+              v-model="form.transfer_amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              class="input"
+              :placeholder="`Auto (tasso del ${form.occurred_at})`"
+              :class="{ 'input-invalid': fieldError('transfer_amount') }"
+            />
+            <p v-if="fieldError('transfer_amount')" class="field-error">{{ fieldError('transfer_amount') }}</p>
+          </div>
+          <div>
+            <label class="label">Data</label>
+            <input v-model="form.occurred_at" type="date" class="input" :class="{ 'input-invalid': fieldError('occurred_at') }" required />
+            <p v-if="fieldError('occurred_at')" class="field-error">{{ fieldError('occurred_at') }}</p>
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Descrizione</label>
+            <input v-model="form.description" class="input" :class="{ 'input-invalid': fieldError('description') }" />
+            <p v-if="fieldError('description')" class="field-error">{{ fieldError('description') }}</p>
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Tag</label>
+            <div v-if="tags.length" class="flex flex-wrap gap-2">
+              <button
+                v-for="t in tags"
+                :key="t.id"
+                type="button"
+                class="px-3 py-1 rounded-full text-sm border transition"
+                :class="form.tag_ids.includes(t.id)
+                  ? 'text-white border-transparent'
+                  : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'"
+                :style="form.tag_ids.includes(t.id) ? { background: t.color || FALLBACK_TAG_COLOR } : {}"
+                @click="toggleTag(t.id)"
+              >
+                {{ t.name }}
+              </button>
+            </div>
+            <p v-else class="text-sm text-slate-400">
+              Nessun tag disponibile. Creane in
+              <RouterLink class="underline" to="/tags">Tag</RouterLink>.
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
         </div>
-        <p v-else class="text-sm text-slate-400">
-          Nessun tag disponibile. Creane in
-          <RouterLink class="underline" to="/tags">Tag</RouterLink>.
-        </p>
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary" :disabled="submitting">
-          {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
-        </button>
-      </div>
-    </form>
+      </form>
+    </AppModal>
 
     <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>

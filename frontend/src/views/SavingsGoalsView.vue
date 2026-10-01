@@ -3,6 +3,9 @@ import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useToastStore } from '@/stores/toast'
 import { useAuthStore } from '@/stores/auth'
 import { CURRENCIES, formatCurrency as money } from '@/lib/money'
 import RowActions from '@/components/ui/RowActions.vue'
@@ -16,9 +19,11 @@ import type {
   Transaction,
   TransactionType,
 } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 const auth = useAuthStore()
-const { items, loading, list, create, update, destroy } = useCrud<SavingsGoal>('savings-goals')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<SavingsGoal>('savings-goals')
+const toast = useToastStore()
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
@@ -51,6 +56,7 @@ const form = ref({
 
 function resetForm() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     name: '',
     target_amount: '',
@@ -67,6 +73,7 @@ function resetForm() {
 
 function startEdit(g: SavingsGoal) {
   editing.value = g
+  fieldErrors.value = {}
   form.value = {
     name: g.name,
     target_amount: g.target_amount,
@@ -98,18 +105,24 @@ async function onSubmit() {
     status: form.value.status,
     notes: form.value.notes || null,
   }
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Obiettivo salvato.')
   resetForm()
   showForm.value = false
   await refresh()
 }
 
 async function onDelete(g: SavingsGoal) {
-  if (!confirm(`Eliminare l'obiettivo "${g.name}"? Le transazioni del conto non vengono toccate.`)) return
+  if (!(await confirmAction(`Eliminare l'obiettivo "${g.name}"? Le transazioni del conto non vengono toccate.`))) return
   await destroy(g.id)
 }
 
@@ -221,7 +234,7 @@ async function onAddOperation() {
 }
 
 async function onDeleteOperation(t: Transaction) {
-  if (!confirm('Eliminare questa operazione? Sparirà anche dai movimenti generali.')) return
+  if (!(await confirmAction('Eliminare questa operazione? Sparirà anche dai movimenti generali.'))) return
   await api.delete(`/transactions/${t.id}`)
   await loadOps()
   await refresh()
@@ -320,8 +333,8 @@ onMounted(async () => {
           <option value="archived">Archiviati</option>
           <option value="all">Tutti</option>
         </select>
-        <button class="btn-primary" @click="showForm = !showForm; resetForm()">
-          {{ showForm ? 'Annulla' : 'Nuovo obiettivo' }}
+        <button class="btn-primary" @click="showForm = true; resetForm()">
+          Nuovo obiettivo
         </button>
       </div>
     </div>
@@ -335,70 +348,73 @@ onMounted(async () => {
     >+</button>
 
     <!-- Form creazione / modifica -->
-    <form
-      v-if="showForm"
-      class="card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
-      @submit.prevent="onSubmit"
-    >
-      <div class="sm:col-span-2 lg:col-span-1">
-        <label class="label">Nome</label>
-        <input v-model="form.name" type="text" maxlength="120" class="input" required />
-      </div>
-      <div>
-        <label class="label">Obiettivo</label>
-        <input v-model="form.target_amount" type="number" step="0.01" min="0.01" class="input" required />
-      </div>
-      <div>
-        <label class="label">Valuta</label>
-        <select v-model="form.currency" class="input">
-          <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Conto collegato</label>
-        <select v-model="form.account_id" class="input">
-          <option value="">— (nessuno)</option>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
-        </select>
-        <p class="text-xs text-slate-400 mt-1">Il progresso è il flusso netto su questo conto.</p>
-      </div>
-      <div>
-        <label class="label">Ricorrenza</label>
-        <select v-model="form.recurrence" class="input">
-          <option v-for="(lbl, key) in RECURRENCE_LABEL" :key="key" :value="key">{{ lbl }}</option>
-        </select>
-      </div>
-      <template v-if="form.recurrence === 'none'">
-        <div>
-          <label class="label">Inizio periodo</label>
-          <input v-model="form.start_date" type="date" class="input" />
+    <AppModal v-model="showForm" :title="editing ? 'Modifica obiettivo' : 'Nuovo obiettivo'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <div class="sm:col-span-2 lg:col-span-1">
+            <label class="label">Nome</label>
+            <input v-model="form.name" type="text" maxlength="120" class="input" required />
+          </div>
+          <div>
+            <label class="label">Obiettivo</label>
+            <input v-model="form.target_amount" type="number" step="0.01" min="0.01" class="input" required />
+          </div>
+          <div>
+            <label class="label">Valuta</label>
+            <select v-model="form.currency" class="input">
+              <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Conto collegato</label>
+            <select v-model="form.account_id" class="input">
+              <option value="">— (nessuno)</option>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+            <p class="text-xs text-slate-400 mt-1">Il progresso è il flusso netto su questo conto.</p>
+          </div>
+          <div>
+            <label class="label">Ricorrenza</label>
+            <select v-model="form.recurrence" class="input">
+              <option v-for="(lbl, key) in RECURRENCE_LABEL" :key="key" :value="key">{{ lbl }}</option>
+            </select>
+          </div>
+          <template v-if="form.recurrence === 'none'">
+            <div>
+              <label class="label">Inizio periodo</label>
+              <input v-model="form.start_date" type="date" class="input" />
+            </div>
+            <div>
+              <label class="label">Scadenza</label>
+              <input v-model="form.target_date" type="date" class="input" />
+            </div>
+          </template>
+          <div>
+            <label class="label">Colore</label>
+            <input v-model="form.color" type="color" class="input h-10 p-1" />
+          </div>
+          <div>
+            <label class="label">Stato</label>
+            <select v-model="form.status" class="input">
+              <option value="active">Attivo</option>
+              <option value="completed">Completato</option>
+              <option value="archived">Archiviato</option>
+            </select>
+          </div>
+          <div class="sm:col-span-2 lg:col-span-3">
+            <label class="label">Note</label>
+            <textarea v-model="form.notes" rows="2" maxlength="2000" class="input"></textarea>
+          </div>
         </div>
-        <div>
-          <label class="label">Scadenza</label>
-          <input v-model="form.target_date" type="date" class="input" />
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
         </div>
-      </template>
-      <div>
-        <label class="label">Colore</label>
-        <input v-model="form.color" type="color" class="input h-10 p-1" />
-      </div>
-      <div>
-        <label class="label">Stato</label>
-        <select v-model="form.status" class="input">
-          <option value="active">Attivo</option>
-          <option value="completed">Completato</option>
-          <option value="archived">Archiviato</option>
-        </select>
-      </div>
-      <div class="sm:col-span-2 lg:col-span-3">
-        <label class="label">Note</label>
-        <textarea v-model="form.notes" rows="2" maxlength="2000" class="input"></textarea>
-      </div>
-      <div class="sm:col-span-2 lg:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; resetForm()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+      </form>
+    </AppModal>
 
     <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
 

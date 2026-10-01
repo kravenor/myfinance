@@ -2,6 +2,8 @@
 import { formatDate } from '@/lib/date'
 import { computed, onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import { api, ensureCsrf } from '@/lib/api'
 import type {
@@ -12,10 +14,12 @@ import type {
   RuleAppliesTo,
   RuleMatchType,
 } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, list, create, update, destroy } = useCrud<CategorizationRule>(
+const { items, loading, submitting, list, create, update, destroy } = useCrud<CategorizationRule>(
   'categorization-rules',
 )
+const toast = useToastStore()
 
 const categories = ref<Category[]>([])
 const accounts = ref<Account[]>([])
@@ -204,6 +208,7 @@ async function onSubmit() {
     }
     reset()
     showForm.value = false
+    toast.success('Regola salvata.')
   } catch (e: unknown) {
     const err = e as {
       response?: { data?: { message?: string; errors?: Record<string, string[]> } }
@@ -218,7 +223,7 @@ async function onSubmit() {
 }
 
 async function onDelete(rule: CategorizationRule) {
-  if (!confirm(`Eliminare la regola "${rule.name}"?`)) return
+  if (!(await confirmAction(`Eliminare la regola "${rule.name}"?`))) return
   await destroy(rule.id)
 }
 
@@ -248,8 +253,8 @@ onMounted(async () => {
       </div>
       <div class="flex flex-wrap gap-2">
         <button class="btn-secondary" @click="openApply">Applica alle transazioni esistenti</button>
-        <button class="btn-primary" @click="showForm = !showForm; reset()">
-          {{ showForm ? 'Annulla' : 'Nuova regola' }}
+        <button class="btn-primary" @click="showForm = true; reset()">
+          Nuova regola
         </button>
       </div>
     </div>
@@ -355,68 +360,69 @@ onMounted(async () => {
       </div>
     </div>
 
-    <form
-      v-if="showForm"
-      class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
-      @submit.prevent="onSubmit"
-    >
-      <div class="md:col-span-2">
-        <label class="label">Nome</label>
-        <input v-model="form.name" class="input" required maxlength="120" />
-      </div>
-      <div>
-        <label class="label">Priorità</label>
-        <input v-model.number="form.priority" type="number" min="0" max="9999" class="input" />
-      </div>
+    <AppModal v-model="showForm" :title="editing ? 'Modifica regola' : 'Nuova regola'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <div class="md:col-span-2">
+            <label class="label">Nome</label>
+            <input v-model="form.name" class="input" required maxlength="120" />
+          </div>
+          <div>
+            <label class="label">Priorità</label>
+            <input v-model.number="form.priority" type="number" min="0" max="9999" class="input" />
+          </div>
 
-      <div>
-        <label class="label">Match</label>
-        <select v-model="form.match_type" class="input">
-          <option value="contains">contiene</option>
-          <option value="starts_with">inizia con</option>
-          <option value="equals">uguale a</option>
-          <option value="regex">regex</option>
-        </select>
-      </div>
-      <div class="md:col-span-2">
-        <label class="label">Pattern</label>
-        <input v-model="form.pattern" class="input" required maxlength="255" />
-      </div>
+          <div>
+            <label class="label">Match</label>
+            <select v-model="form.match_type" class="input">
+              <option value="contains">contiene</option>
+              <option value="starts_with">inizia con</option>
+              <option value="equals">uguale a</option>
+              <option value="regex">regex</option>
+            </select>
+          </div>
+          <div class="md:col-span-2">
+            <label class="label">Pattern</label>
+            <input v-model="form.pattern" class="input" required maxlength="255" />
+          </div>
 
-      <div>
-        <label class="label">Si applica a</label>
-        <select v-model="form.applies_to_type" class="input">
-          <option value="any">tutte</option>
-          <option value="income">entrate</option>
-          <option value="expense">spese</option>
-        </select>
-      </div>
-      <div class="md:col-span-2">
-        <label class="label">Categoria</label>
-        <select v-model.number="form.category_id" class="input" required>
-          <option :value="null">— Seleziona —</option>
-          <option v-for="c in filteredCategories" :key="c.id" :value="c.id">
-            {{ c.name }} ({{ c.type }})
-          </option>
-        </select>
-      </div>
+          <div>
+            <label class="label">Si applica a</label>
+            <select v-model="form.applies_to_type" class="input">
+              <option value="any">tutte</option>
+              <option value="income">entrate</option>
+              <option value="expense">spese</option>
+            </select>
+          </div>
+          <div class="md:col-span-2">
+            <label class="label">Categoria</label>
+            <select v-model.number="form.category_id" class="input" required>
+              <option :value="null">— Seleziona —</option>
+              <option v-for="c in filteredCategories" :key="c.id" :value="c.id">
+                {{ c.name }} ({{ c.type }})
+              </option>
+            </select>
+          </div>
 
-      <div class="flex items-center gap-2">
-        <input v-model="form.is_active" type="checkbox" id="rule-active" class="h-4 w-4" />
-        <label for="rule-active" class="text-sm">Attiva</label>
-      </div>
+          <div class="flex items-center gap-2">
+            <input v-model="form.is_active" type="checkbox" id="rule-active" class="h-4 w-4" />
+            <label for="rule-active" class="text-sm">Attiva</label>
+          </div>
 
-      <div v-if="submitError" class="sm:col-span-2 md:col-span-3 text-sm text-red-600">
-        {{ submitError }}
-      </div>
-
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">
-          Annulla
-        </button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+          <div v-if="submitError" class="sm:col-span-2 md:col-span-3 text-sm text-red-600">
+            {{ submitError }}
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="showForm = false">
+            Annulla
+          </button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <div class="card">
       <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
