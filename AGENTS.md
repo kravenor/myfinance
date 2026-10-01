@@ -4,7 +4,7 @@
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
 Ultimo aggiornamento: **2026-10-01**
-Fase corrente: **Estensione — Restyling UI/UX (IN CORSO, step 1-2 di [analisi](docs/analysis/UI-UX-REDESIGN-ANALYSIS.md))**
+Fase corrente: **Estensione — Restyling UI/UX + coerenza dati (COMPLETATA)**
 
 ---
 
@@ -294,6 +294,8 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Quotazioni certificati SeDeX/Cert-X: `asset_type = 'certificate'` instradato a [TeleborsaProvider](backend/app/Services/Prices/TeleborsaProvider.php) (scheda Teleborsa per ISIN, prezzo in euro per certificato; la sezione certificati di Borsa Italiana risponde 502)
 - [x] **Estensione** — Rendimento annualizzato (XIRR, money-weighted) del portafoglio: `xirr_pct` su `/investments/history`, calcolato in [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php) sui flussi del registro nella valuta base + valore di oggi come flusso finale; `null` sotto un anno di storico. Upgrade U2 dell'[ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md) (TWR non implementato)
 - [x] **Estensione** — Grafico versato vs valore per singolo holding: `?holding=` su `/investments/history` restringe la collection di holding in [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php); select nell'header del grafico in [InvestmentsView](frontend/src/views/InvestmentsView.vue), l'XIRR in testata resta di portafoglio. Accanto, select di periodo (6 mesi / 1, 3, 5 anni / tutto) filtrata lato client sui punti già caricati. Upgrade U6 (e U7 lato client) dell'[ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md)
+- [x] **Estensione** — Restyling UI/UX ([analisi](docs/analysis/UI-UX-REDESIGN-ANALYSIS.md)): design token semantici, dark mode, form in modale con errori per campo e avviso modifiche non salvate, menu a gruppi, nuova Dashboard, filtri in URL, aiuto contestuale, nuove pagine Categorie e Report, messaggi backend in italiano (`lang/it`), scorciatoie `N` e `/`
+- [x] **Estensione** — Coerenza dati ([analisi](docs/analysis/DATA-CONSISTENCY-ANALYSIS.md)): risparmiato degli obiettivi convertito nella valuta dell'obiettivo, dedup CSV via `external_id`, regole mai sui giroconti, categoria coerente col tipo (`CategoryTypeCheck`); diagnosi pre-rilascio in `scripts/diagnose-data-consistency.sql`
 
 ## 8. Schema dati (implementato in Fase 2)
 
