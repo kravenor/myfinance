@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
@@ -233,7 +234,7 @@ onMounted(async () => {
     </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per ricorrente, troppi campi per il collasso label/valore generico (sotto md). -->
       <ul v-else class="md:hidden divide-y divide-slate-100">
@@ -242,13 +243,13 @@ onMounted(async () => {
             <div class="min-w-0">
               <p class="font-medium text-slate-800 truncate">
                 {{ r.description ?? '—' }}
-                <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'" class="ml-1">●</span>
+                <span :class="r.is_active ? 'text-green-600' : 'text-slate-500'" class="ml-1">●</span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate capitalize">
                 {{ r.type }} · {{ accountName(r.account_id) }}<span v-if="isPrimaryAccount(r.account_id)" class="text-amber-500">★</span>
                 <template v-if="r.type === 'transfer'"> → {{ accountName(r.transfer_account_id) }}</template>
               </p>
-              <p class="text-xs text-slate-400 mt-0.5">
+              <p class="text-xs text-slate-500 mt-0.5">
                 ogni {{ r.interval }} {{ r.cadence }} · prossima {{ formatDate(r.next_run_at) }}
               </p>
             </div>
@@ -262,7 +263,7 @@ onMounted(async () => {
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Descrizione</th>
@@ -284,13 +285,13 @@ onMounted(async () => {
                 <span>{{ accountName(r.account_id) }}</span>
                 <span v-if="isPrimaryAccount(r.account_id)" class="text-amber-500" title="Conto principale">★</span>
               </span>
-              <span v-if="r.type === 'transfer'" class="text-slate-400"> → {{ accountName(r.transfer_account_id) }}</span>
+              <span v-if="r.type === 'transfer'" class="text-slate-500"> → {{ accountName(r.transfer_account_id) }}</span>
             </td>
             <td>every {{ r.interval }} {{ r.cadence }}</td>
             <td>{{ formatDate(r.next_run_at) }}</td>
             <td class="text-right font-medium">{{ formatCurrency(r.amount, r.currency) }}</td>
             <td>
-              <span :class="r.is_active ? 'text-green-600' : 'text-slate-400'">●</span>
+              <span :class="r.is_active ? 'text-green-600' : 'text-slate-500'">●</span>
             </td>
             <td class="text-right">
               <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />

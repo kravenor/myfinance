@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -275,7 +276,7 @@ onMounted(async () => {
       <div class="card w-full max-w-2xl p-4 space-y-4 mt-10">
         <div class="flex items-center justify-between">
           <h2 class="font-semibold">Applica regole alle transazioni esistenti</h2>
-          <button class="text-slate-400 hover:text-slate-600" @click="showApply = false">✕</button>
+          <button class="text-slate-500 hover:text-slate-600" @click="showApply = false">✕</button>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -425,7 +426,7 @@ onMounted(async () => {
     </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per regola, troppi campi per il collasso label/valore generico (sotto md). -->
       <ul v-else class="md:hidden divide-y divide-slate-100">
@@ -460,7 +461,7 @@ onMounted(async () => {
               >
                 {{ r.is_active ? 'attiva' : 'inattiva' }}
               </button>
-              <span class="text-xs text-slate-400 whitespace-nowrap">{{ r.times_applied }} applicazioni</span>
+              <span class="text-xs text-slate-500 whitespace-nowrap">{{ r.times_applied }} applicazioni</span>
               <RowActions @edit="startEdit(r)" @delete="onDelete(r)" />
             </div>
           </div>
@@ -471,7 +472,7 @@ onMounted(async () => {
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Priorità</th>

@@ -270,7 +270,7 @@ onMounted(refresh)
           <div class="min-w-0">
             <p class="font-medium text-slate-800 truncate">{{ t.description ?? '—' }}</p>
             <p class="text-xs text-slate-500 mt-0.5 truncate">{{ t.category_name ?? '—' }}</p>
-            <p class="text-xs text-slate-400 mt-0.5 truncate">
+            <p class="text-xs text-slate-500 mt-0.5 truncate">
               {{ formatDate(t.occurred_at) }} · {{ t.account_name ?? '—' }}
             </p>
           </div>
@@ -278,7 +278,7 @@ onMounted(refresh)
             <p class="font-semibold whitespace-nowrap" :class="t.type === 'income' ? 'text-green-600' : 'text-red-600'">
               {{ formatCurrency(t.amount, t.currency) }}
             </p>
-            <p v-if="t.currency !== baseCurrency" class="text-xs text-slate-400 whitespace-nowrap mt-0.5">
+            <p v-if="t.currency !== baseCurrency" class="text-xs text-slate-500 whitespace-nowrap mt-0.5">
               ≈ {{ formatCurrency(t.amount_base, baseCurrency) }}
             </p>
           </div>
@@ -307,7 +307,7 @@ onMounted(refresh)
               <td data-label="Descrizione">{{ t.description ?? '—' }}</td>
               <td data-label="Importo" class="md:text-right font-medium">
                 {{ formatCurrency(t.amount, t.currency) }}
-                <span v-if="t.currency !== baseCurrency" class="block text-xs font-normal text-slate-400">
+                <span v-if="t.currency !== baseCurrency" class="block text-xs font-normal text-slate-500">
                   ≈ {{ formatCurrency(t.amount_base, baseCurrency) }}
                 </span>
               </td>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatDate, formatMonth } from '@/lib/date'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -420,12 +421,12 @@ onMounted(async () => {
               >
                 <span>
                   <span class="font-medium">{{ c.symbol }}</span>
-                  <span class="text-slate-400"> · {{ c.exchange }}</span>
+                  <span class="text-slate-500"> · {{ c.exchange }}</span>
                   <span class="block text-xs text-slate-500">{{ c.name }}</span>
                 </span>
                 <span class="whitespace-nowrap">
                   <span v-if="c.price !== null">{{ formatCurrency(String(c.price), c.currency ?? form.currency) }}</span>
-                  <span v-else class="text-slate-400">n/d</span>
+                  <span v-else class="text-slate-500">n/d</span>
                 </span>
               </li>
             </ul>
@@ -506,7 +507,7 @@ onMounted(async () => {
 
     <!-- Posizioni -->
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per posizione, troppi campi per il collasso label/valore generico (sotto md). -->
       <ul v-else class="md:hidden divide-y divide-slate-100">
@@ -526,8 +527,8 @@ onMounted(async () => {
                 >{{ h.asset_type }}</span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">{{ accountName(h.account_id) }}</p>
-              <p v-if="h.symbol" class="text-xs text-slate-400 mt-0.5 truncate">{{ h.symbol }}</p>
-              <p class="text-xs text-slate-400 mt-0.5 truncate">
+              <p v-if="h.symbol" class="text-xs text-slate-500 mt-0.5 truncate">{{ h.symbol }}</p>
+              <p class="text-xs text-slate-500 mt-0.5 truncate">
                 {{ h.quantity }} × {{ formatCurrency(h.effective_price, h.currency) }}
               </p>
               <p v-if="h.price_source === 'auto'" class="text-xs text-green-600 mt-0.5 truncate">
@@ -555,7 +556,7 @@ onMounted(async () => {
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Asset</th>
@@ -574,7 +575,7 @@ onMounted(async () => {
           <tr v-for="h in items" :key="h.id">
             <td class="font-medium">
               {{ h.name }}
-              <span v-if="h.symbol" class="block text-xs text-slate-400">{{ h.symbol }}</span>
+              <span v-if="h.symbol" class="block text-xs text-slate-500">{{ h.symbol }}</span>
               <span v-if="h.isin" class="block text-xs text-slate-300">{{ h.isin }}</span>
             </td>
             <td>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
@@ -144,7 +145,7 @@ onMounted(() => list())
     </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per conto (sotto md). -->
       <ul v-else class="md:hidden divide-y divide-slate-100">
@@ -182,7 +183,7 @@ onMounted(() => list())
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Nome</th>

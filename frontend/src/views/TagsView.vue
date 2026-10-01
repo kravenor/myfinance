@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
@@ -93,7 +94,7 @@ onMounted(() => list())
     </AppModal>
 
     <div class="card table-responsive md:overflow-x-auto">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
       <table v-else class="table">
         <thead class="bg-slate-100">
           <tr>

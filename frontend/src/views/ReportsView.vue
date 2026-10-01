@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import { useQueryFilters } from '@/composables/useQueryFilters'
 import { EXPENSE_COLOR, FALLBACK_TAG_COLOR, INCOME_COLOR, PRIMARY_COLOR, paletteColor } from '@/lib/chartTheme'
 import type { CategoryTotal, NetWorthPoint, TagTotal, TimelinePoint } from '@/types/reports'
 
@@ -27,8 +28,7 @@ function defaultRange() {
   return { from, to }
 }
 
-const filters = ref(defaultRange())
-const categoryType = ref<'expense' | 'income'>('expense')
+const { filters } = useQueryFilters({ ...defaultRange(), type: 'expense' }, () => refresh())
 
 const REPORTS = [
   { key: 'category', label: 'Categorie' },
@@ -127,10 +127,10 @@ async function refresh() {
   try {
     const [c, tg, t, nw] = await Promise.all([
       api.get<{ data: CategoryTotal[] }>('/reports/by-category', {
-        params: { from: filters.value.from, to: filters.value.to, type: categoryType.value },
+        params: { from: filters.value.from, to: filters.value.to, type: filters.value.type },
       }),
       api.get<{ data: TagTotal[] }>('/reports/by-tag', {
-        params: { from: filters.value.from, to: filters.value.to, type: categoryType.value },
+        params: { from: filters.value.from, to: filters.value.to, type: filters.value.type },
       }),
       api.get<{ data: TimelinePoint[] }>('/reports/timeline', {
         params: { from: filters.value.from, to: filters.value.to },
@@ -157,7 +157,7 @@ onMounted(refresh)
 
     <details class="card filter-panel" open>
       <summary>Filtri</summary>
-      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" @submit.prevent="refresh">
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" @submit.prevent>
         <div>
           <label class="label">Da</label>
           <input v-model="filters.from" type="date" class="input" required />
@@ -168,13 +168,10 @@ onMounted(refresh)
         </div>
         <div>
           <label class="label">Categorie</label>
-          <select v-model="categoryType" class="input">
-            <option value="expense">expense</option>
-            <option value="income">income</option>
+          <select v-model="filters.type" class="input">
+            <option value="expense">Uscite</option>
+            <option value="income">Entrate</option>
           </select>
-        </div>
-        <div class="flex items-end">
-          <button class="btn-secondary w-full" type="submit">Aggiorna</button>
         </div>
       </form>
     </details>
@@ -189,14 +186,16 @@ onMounted(refresh)
       </div>
     </div>
 
-    <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
+    <div v-if="loading && !timeline.length" class="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-busy="true" aria-label="Caricamento">
+      <div v-for="i in 4" :key="i" class="card h-72 animate-pulse bg-slate-100" />
+    </div>
     <p v-else-if="!anyVisible" class="text-sm text-slate-500">Nessun report selezionato.</p>
 
-    <section v-else class="space-y-4">
+    <section v-else class="space-y-4 transition-opacity" :class="{ 'opacity-60': loading }">
       <div v-if="visible.category || visible.tag || visible.timeline" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div v-if="visible.category" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Totali per categoria ({{ categoryType }})
+            Totali per categoria ({{ filters.type === 'income' ? 'entrate' : 'uscite' }})
           </h3>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="categories.length" :data="donutData()" :options="chartOptions" />
@@ -205,7 +204,7 @@ onMounted(refresh)
         </div>
         <div v-if="visible.tag" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Totali per tag ({{ categoryType }})
+            Totali per tag ({{ filters.type === 'income' ? 'entrate' : 'uscite' }})
           </h3>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="tags.length" :data="tagDonutData()" :options="chartOptions" />

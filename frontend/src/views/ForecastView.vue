@@ -539,7 +539,7 @@ onMounted(async () => {
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate">
               {{ s.name }}
-              <span v-if="!s.is_active" class="ml-1 text-xs text-slate-400">(inattivo)</span>
+              <span v-if="!s.is_active" class="ml-1 text-xs text-slate-500">(inattivo)</span>
             </p>
             <p v-if="s.description" class="text-xs text-slate-500 truncate">{{ s.description }}</p>
           </div>

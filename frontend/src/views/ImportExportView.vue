@@ -277,7 +277,7 @@ onMounted(async () => {
                 regole di categorizzazione
               </RouterLink>.
             </span>
-            <span v-if="predictionsLoading" class="ml-2 text-slate-400">Calcolo…</span>
+            <span v-if="predictionsLoading" class="ml-2 text-slate-500">Calcolo…</span>
           </div>
         </div>
 
@@ -296,7 +296,7 @@ onMounted(async () => {
                   <span v-if="predictions[idx]?.category_name" class="text-slate-700">
                     {{ predictions[idx].category_name }}
                   </span>
-                  <span v-else class="text-slate-400">—</span>
+                  <span v-else class="text-slate-500">—</span>
                 </td>
               </tr>
             </tbody>

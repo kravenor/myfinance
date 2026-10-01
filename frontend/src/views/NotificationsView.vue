@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useNotificationStore } from '@/stores/notifications'
@@ -48,7 +49,7 @@ onMounted(() => store.fetch())
     </div>
 
     <div class="card divide-y divide-slate-100">
-      <p v-if="store.loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="store.loading && !store.items.length" />
       <template v-else>
         <div
           v-for="n in store.items"
@@ -67,11 +68,11 @@ onMounted(() => store.fetch())
               </span>
             </div>
             <p class="text-sm text-slate-600 mt-0.5">{{ n.message }}</p>
-            <p class="text-xs text-slate-400 mt-1">{{ formatDate(n.created_at) }}</p>
+            <p class="text-xs text-slate-500 mt-1">{{ formatDate(n.created_at) }}</p>
           </div>
           <button
             type="button"
-            class="text-slate-400 hover:text-red-500 text-sm shrink-0"
+            class="text-slate-500 hover:text-red-500 text-sm shrink-0"
             title="Elimina"
             @click.stop="store.remove(n.id)"
           >

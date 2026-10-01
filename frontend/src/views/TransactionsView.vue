@@ -7,6 +7,9 @@ import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import Amount from '@/components/ui/Amount.vue'
 import AppModal from '@/components/ui/AppModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
+import { useQueryFilters } from '@/composables/useQueryFilters'
 import { formatCurrency } from '@/lib/money'
 import { FALLBACK_TAG_COLOR } from '@/lib/chartTheme'
 import { TX_TYPE_LABEL, TX_TYPES } from '@/lib/labels'
@@ -23,7 +26,10 @@ const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
 const tags = ref<Tag[]>([])
 
-const filters = ref({ account_id: '', type: '', from: '', to: '', search: '', tag_id: '' })
+const { filters, isFiltered, reset: resetFilters } = useQueryFilters(
+  { account_id: '', type: '', from: '', to: '', search: '', tag_id: '' },
+  () => applyFilters(),
+)
 const expandedDescriptions = ref(new Set<number>())
 function toggleDescription(id: number) {
   const set = expandedDescriptions.value
@@ -271,7 +277,7 @@ watch(() => route.query.new, () => {
 
     <details class="card filter-panel" open>
       <summary>Filtri</summary>
-      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters()">
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent>
         <div class="sm:col-span-2 md:col-span-5">
           <label class="label">Cerca nella descrizione</label>
           <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave…" />
@@ -280,7 +286,7 @@ watch(() => route.query.new, () => {
           <label class="label">Conto</label>
           <select v-model="filters.account_id" class="input">
             <option value="">Tutti</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
+            <option v-for="a in accounts" :key="a.id" :value="String(a.id)">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
           </select>
         </div>
         <div>
@@ -302,11 +308,8 @@ watch(() => route.query.new, () => {
           <label class="label">Tag</label>
           <select v-model="filters.tag_id" class="input">
             <option value="">Tutti</option>
-            <option v-for="t in tags" :key="t.id" :value="t.id">{{ t.name }}</option>
+            <option v-for="t in tags" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
           </select>
-        </div>
-        <div class="flex items-end sm:col-span-2 md:col-span-1">
-          <button type="submit" class="btn-secondary w-full">Filtra</button>
         </div>
       </form>
     </details>
@@ -394,7 +397,7 @@ watch(() => route.query.new, () => {
                 {{ t.name }}
               </button>
             </div>
-            <p v-else class="text-sm text-slate-400">
+            <p v-else class="text-sm text-slate-500">
               Nessun tag disponibile. Creane in
               <RouterLink class="underline" to="/tags">Tag</RouterLink>.
             </p>
@@ -410,10 +413,10 @@ watch(() => route.query.new, () => {
     </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per transazione, pensata per la lettura rapida (sotto md). -->
-      <ul v-else class="md:hidden divide-y divide-slate-100">
+      <ul v-else class="md:hidden divide-y divide-slate-100" :class="{ 'opacity-60': loading }">
         <li
           v-for="tx in items"
           :key="tx.id"
@@ -444,17 +447,21 @@ watch(() => route.query.new, () => {
               <Amount class="block font-semibold" :value="tx.amount" :currency="tx.currency" :type="tx.type" />
               <p
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
-                class="text-xs font-normal text-slate-400 mt-0.5"
+                class="text-xs font-normal text-slate-500 mt-0.5"
               >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</p>
               <RowActions class="mt-2 justify-end" @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </div>
           </div>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessuna transazione.</li>
+        <li v-if="items.length === 0">
+          <EmptyState title="Non hai ancora registrato transazioni." :filtered="isFiltered" @reset="resetFilters()">
+            <button type="button" class="btn-primary" @click="openNew()">Registra la prima</button>
+          </EmptyState>
+        </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Data</th>
@@ -479,7 +486,7 @@ watch(() => route.query.new, () => {
                 <span>{{ accountName(tx.account_id) }}</span>
                 <span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500" title="Conto principale">★</span>
               </span>
-              <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
+              <span v-if="tx.type === 'transfer'" class="text-slate-500"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
             <td
               class="max-w-xs cursor-pointer"
@@ -496,13 +503,13 @@ watch(() => route.query.new, () => {
                   :style="{ background: t.color || FALLBACK_TAG_COLOR }"
                 >{{ t.name }}</span>
               </span>
-              <span v-else class="text-slate-400">—</span>
+              <span v-else class="text-slate-500">—</span>
             </td>
             <td class="text-right font-medium">
               <Amount :value="tx.amount" :currency="tx.currency" :type="tx.type" />
               <span
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
-                class="block text-xs font-normal text-slate-400"
+                class="block text-xs font-normal text-slate-500"
               >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</span>
             </td>
             <td class="text-right">
@@ -510,7 +517,11 @@ watch(() => route.query.new, () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="7" class="text-center text-slate-500 py-6">Nessuna transazione.</td>
+            <td colspan="7" class="whitespace-normal">
+              <EmptyState title="Non hai ancora registrato transazioni." :filtered="isFiltered" @reset="resetFilters()">
+                <button type="button" class="btn-primary" @click="openNew()">Registra la prima</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

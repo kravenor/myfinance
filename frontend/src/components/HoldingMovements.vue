@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/date'
 import { formatCurrency } from '@/lib/money'
@@ -226,7 +227,7 @@ onMounted(load)
         </div>
       </form>
 
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !movements.length" />
       <ul v-else class="divide-y divide-slate-100">
         <li v-for="m in movements" :key="m.id" class="p-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
@@ -239,7 +240,7 @@ onMounted(load)
                 + {{ formatCurrency(m.fees, holding.currency) }} comm.
               </template>
             </p>
-            <p v-if="m.notes" class="text-xs text-slate-400 mt-0.5 truncate">{{ m.notes }}</p>
+            <p v-if="m.notes" class="text-xs text-slate-500 mt-0.5 truncate">{{ m.notes }}</p>
           </div>
           <div class="text-right shrink-0">
             <p class="text-sm font-medium whitespace-nowrap">

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { financialMonthStart, formatMonth } from '@/lib/date'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
+import { useQueryFilters } from '@/composables/useQueryFilters'
 import FormErrors from '@/components/ui/FormErrors.vue'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
@@ -20,7 +23,23 @@ const toast = useToastStore()
 const categories = ref<Category[]>([])
 // Periodo di default: il ciclo finanziario corrente (vedi month_start_day).
 const currentCycle = financialMonthStart()
-const filters = ref({ year: currentCycle.getFullYear(), month: currentCycle.getMonth() + 1 })
+const periodKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`
+const { filters: query } = useQueryFilters(
+  { period: periodKey(currentCycle.getFullYear(), currentCycle.getMonth() + 1) },
+  () => refresh(),
+  0,
+)
+const filters = computed(() => {
+  const [year, month] = query.value.period.split('-').map(Number)
+  return year && month >= 1 && month <= 12
+    ? { year, month }
+    : { year: currentCycle.getFullYear(), month: currentCycle.getMonth() + 1 }
+})
+
+function shiftPeriod(delta: number) {
+  const d = new Date(filters.value.year, filters.value.month - 1 + delta, 1)
+  query.value.period = periodKey(d.getFullYear(), d.getMonth() + 1)
+}
 
 const editing = ref<Budget | null>(null)
 const showForm = ref(false)
@@ -126,22 +145,11 @@ onMounted(async () => {
       @click="showForm = true; reset()"
     >+</button>
 
-    <details class="card filter-panel" open>
-      <summary>Filtri</summary>
-      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" @submit.prevent="refresh">
-        <div>
-          <label class="label">Anno</label>
-          <input v-model.number="filters.year" type="number" min="2000" max="2100" class="input" />
-        </div>
-        <div>
-          <label class="label">Mese</label>
-          <input v-model.number="filters.month" type="number" min="1" max="12" class="input" />
-        </div>
-        <div class="flex items-end">
-          <button type="submit" class="btn-secondary w-full">Filtra</button>
-        </div>
-      </form>
-    </details>
+    <div class="card flex items-center justify-between gap-2 p-2">
+      <button type="button" class="icon-btn text-2xl leading-none text-slate-600 hover:bg-slate-100 focus:ring-primary-500" aria-label="Mese precedente" @click="shiftPeriod(-1)">‹</button>
+      <p class="text-sm font-semibold text-slate-900" aria-live="polite">{{ budgetPeriod(filters.year, filters.month) }}</p>
+      <button type="button" class="icon-btn text-2xl leading-none text-slate-600 hover:bg-slate-100 focus:ring-primary-500" aria-label="Mese successivo" @click="shiftPeriod(1)">›</button>
+    </div>
 
     <AppModal v-model="showForm" :title="editing ? 'Modifica budget' : 'Nuovo budget'">
       <form @submit.prevent="onSubmit">
@@ -176,10 +184,10 @@ onMounted(async () => {
     </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per budget, la barra di progresso ha bisogno di spazio orizzontale pieno (sotto md). -->
-      <ul v-else class="md:hidden divide-y divide-slate-100">
+      <ul v-else class="md:hidden divide-y divide-slate-100" :class="{ 'opacity-60': loading }">
         <li v-for="b in items" :key="b.id" class="p-4">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -200,11 +208,15 @@ onMounted(async () => {
           </div>
           <p class="text-xs text-slate-500 mt-1.5">{{ b.spent ?? '0.00' }} / {{ b.amount }}</p>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessun budget per il periodo.</li>
+        <li v-if="items.length === 0">
+          <EmptyState :title="`Nessun budget per ${budgetPeriod(filters.year, filters.month)}.`">
+            <button type="button" class="btn-primary" @click="showForm = true; reset()">Nuovo budget</button>
+          </EmptyState>
+        </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Categoria</th>
@@ -240,7 +252,11 @@ onMounted(async () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="6" class="text-center text-slate-500 py-6">Nessun budget per il periodo.</td>
+            <td colspan="6" class="whitespace-normal">
+              <EmptyState :title="`Nessun budget per ${budgetPeriod(filters.year, filters.month)}.`">
+                <button type="button" class="btn-primary" @click="showForm = true; reset()">Nuovo budget</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

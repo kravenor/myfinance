@@ -372,7 +372,7 @@ onMounted(async () => {
               <option value="">— (nessuno)</option>
               <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
-            <p class="text-xs text-slate-400 mt-1">Il progresso è il flusso netto su questo conto.</p>
+            <p class="text-xs text-slate-500 mt-1">Il progresso è il flusso netto su questo conto.</p>
           </div>
           <div>
             <label class="label">Ricorrenza</label>
@@ -478,7 +478,7 @@ onMounted(async () => {
             <template v-else>{{ money(g.pace.required_per_month, g.currency) }} entro la scadenza</template>
           </span>
         </div>
-        <div v-else class="text-xs text-slate-400">Nessuna scadenza</div>
+        <div v-else class="text-xs text-slate-500">Nessuna scadenza</div>
 
         <div class="flex items-center justify-between gap-2 mt-auto pt-2 border-t border-slate-100">
           <button
