@@ -1,6 +1,6 @@
 -- Diagnosi coerenza dati prima del rilascio di fix/data-consistency. Solo lettura (SELECT).
 -- Dalla cartella del progetto sul VPS:
---   docker compose -f docker-compose.vps.yml exec -T mysql sh -c \
+--   docker compose --env-file .env.production -f docker-compose.vps.yml exec -T mysql sh -c \
 --     'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot --table "$MYSQL_DATABASE"' < scripts/diagnose-data-consistency.sql
 -- Riepilogo tutto a 0 = niente da correggere. Dettagli in docs/analysis/DATA-CONSISTENCY-ANALYSIS.md §4.
 
