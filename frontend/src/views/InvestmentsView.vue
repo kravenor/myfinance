@@ -309,7 +309,12 @@ onMounted(async () => {
 <template>
   <div class="space-y-6 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
+        <p class="page-desc">
+          Le tue posizioni a valore di mercato: quote e costo derivano dai movimenti registrati, le quotazioni si aggiornano da sole.
+        </p>
+      </div>
       <div class="flex gap-2">
         <button
           type="button"
@@ -328,6 +333,16 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+
+    <details class="help-panel">
+      <summary>Come funziona</summary>
+      <ul>
+        <li>Quantità, prezzo di carico e versato si ricalcolano dal registro movimenti di ogni posizione: per cambiarli aggiungi o correggi un movimento, non la posizione.</li>
+        <li>Ogni mattina la quotazione arriva da sola in base al tipo (Yahoo Finance per azioni, ETF e fondi, CoinGecko per le crypto, Borsa Italiana o Teleborsa per obbligazioni e certificati); senza quotazione vale il prezzo corrente inserito a mano, altrimenti il carico.</li>
+        <li>Il P/L latente è il valore attuale meno il costo delle quote che hai ancora; il P/L realizzato nasce solo da vendite e costi e lo trovi nel registro movimenti.</li>
+        <li>L'annualizzato (XIRR) è il rendimento medio per anno che tiene conto di quando hai versato ogni importo: compare dopo almeno un anno dal primo movimento.</li>
+      </ul>
+    </details>
 
     <button
       v-if="!showForm"
@@ -371,6 +386,7 @@ onMounted(async () => {
           Annualizzato:
           <span :class="plClass(history.xirr_pct)">{{ parseFloat(history.xirr_pct) > 0 ? '+' : '' }}{{ history.xirr_pct }}%</span>
         </p>
+        <p class="text-xs text-slate-500 mt-1">Valore meno costo delle quote ancora in portafoglio, vendite escluse.</p>
       </div>
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Allocazione</p>
@@ -403,21 +419,30 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Ticker / Symbol</label>
-            <input v-model="form.symbol" class="input" :class="{ 'input-invalid': fieldErrors.symbol }" placeholder="es. CSSPX.MI (auto da ISIN)" />
-            <FieldError :errors="fieldErrors" name="symbol" />
-            <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
+            <input v-model="form.symbol" class="input" :class="{ 'input-invalid': fieldErrors.symbol }" placeholder="es. CSSPX.MI (auto da ISIN)" aria-describedby="hint-symbol" />
+            <p v-if="form.asset_type === 'bond'" id="hint-symbol" class="field-hint">
               Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
               quotazione sul MOT di Borsa Italiana.
             </p>
-            <p v-else-if="form.asset_type === 'certificate'" class="text-xs text-slate-500 mt-1">
+            <p v-else-if="form.asset_type === 'certificate'" id="hint-symbol" class="field-hint">
               Per i certificati lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
               quotazione sul SeDeX/Cert-X.
             </p>
+            <p v-else-if="form.asset_type === 'crypto'" id="hint-symbol" class="field-hint">
+              Per le crypto usa l'identificativo CoinGecko (es. bitcoin, ethereum): è quello che serve per la quotazione.
+            </p>
+            <p v-else-if="['commodity', 'cash', 'other'].includes(form.asset_type)" id="hint-symbol" class="field-hint">
+              Per questo tipo non c'è quotazione automatica: il valore segue il prezzo corrente che inserisci tu.
+            </p>
+            <p v-else id="hint-symbol" class="field-hint">
+              Serve per la quotazione automatica: è il simbolo di Yahoo Finance, che puoi trovare con «Cerca» accanto all'ISIN.
+            </p>
+            <FieldError :errors="fieldErrors" name="symbol" />
           </div>
           <div>
             <label class="label">ISIN</label>
             <div class="flex gap-2">
-              <input v-model="form.isin" class="input uppercase" :class="{ 'input-invalid': fieldErrors.isin }" maxlength="12" placeholder="es. IE00B5BMR087" />
+              <input v-model="form.isin" class="input uppercase" :class="{ 'input-invalid': fieldErrors.isin }" maxlength="12" placeholder="es. IE00B5BMR087" aria-describedby="hint-isin" />
               <button
                 type="button"
                 class="btn-secondary whitespace-nowrap"
@@ -427,6 +452,7 @@ onMounted(async () => {
                 {{ lookupLoading ? '…' : 'Cerca' }}
               </button>
             </div>
+            <p id="hint-isin" class="field-hint">«Cerca» trova il ticker quotabile partendo dall'ISIN o, se è vuoto, da ticker o nome.</p>
             <FieldError :errors="fieldErrors" name="isin" />
           </div>
           <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
@@ -452,16 +478,18 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Conto</label>
-            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" required>
+            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" required aria-describedby="hint-account">
               <option v-for="a in investmentAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+            <p id="hint-account" class="field-hint">Il saldo di questo conto è la somma del valore di mercato delle sue posizioni.</p>
             <FieldError :errors="fieldErrors" name="account_id" />
           </div>
           <div>
             <label class="label">Tipo asset</label>
-            <select v-model="form.asset_type" class="input" :class="{ 'input-invalid': fieldErrors.asset_type }">
+            <select v-model="form.asset_type" class="input" :class="{ 'input-invalid': fieldErrors.asset_type }" aria-describedby="hint-asset-type">
               <option v-for="t in assetTypes" :key="t" :value="t">{{ ASSET_TYPE_LABEL[t] }}</option>
             </select>
+            <p id="hint-asset-type" class="field-hint">Decide da quale fonte arriva la quotazione automatica.</p>
             <FieldError :errors="fieldErrors" name="asset_type" />
           </div>
           <div>
@@ -473,15 +501,17 @@ onMounted(async () => {
           </div>
           <div v-if="!editing">
             <label class="label">Quantità iniziale</label>
-            <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.quantity }" required />
-            <FieldError :errors="fieldErrors" name="quantity" />
-            <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
-              Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
+            <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.quantity }" required aria-describedby="hint-quantity" />
+            <p id="hint-quantity" class="field-hint">
+              <template v-if="form.asset_type === 'bond'">Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti. </template>
+              Con il prezzo di carico diventa il primo acquisto del registro, datato oggi; metti 0 per partire dai movimenti.
             </p>
+            <FieldError :errors="fieldErrors" name="quantity" />
           </div>
           <div v-if="!editing">
             <label class="label">Prezzo di carico ({{ form.currency }})</label>
-            <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.avg_cost }" required />
+            <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.avg_cost }" required aria-describedby="hint-avg-cost" />
+            <p id="hint-avg-cost" class="field-hint">Prezzo medio pagato per quota, commissioni comprese.</p>
             <FieldError :errors="fieldErrors" name="avg_cost" />
           </div>
           <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
@@ -489,7 +519,8 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Prezzo corrente ({{ form.currency }})</label>
-            <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.last_price }" placeholder="= carico se vuoto" />
+            <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.last_price }" placeholder="= carico se vuoto" aria-describedby="hint-last-price" />
+            <p id="hint-last-price" class="field-hint">Prezzo manuale: conta solo finché non c'è una quotazione automatica; se vuoto vale il prezzo di carico.</p>
             <FieldError :errors="fieldErrors" name="last_price" />
           </div>
           <div class="sm:col-span-2 md:col-span-3">
@@ -525,7 +556,9 @@ onMounted(async () => {
           </select>
         </div>
       </div>
-      <p class="text-xs text-slate-500 mb-2">dal primo movimento</p>
+      <p class="text-xs text-slate-500 mb-2">
+        Versato: soldi immessi meno quelli ripresi con le vendite, commissioni comprese. Parte dal primo movimento; nei mesi senza quotazione il valore usa il costo medio.
+      </p>
       <div class="h-64">
         <Line :data="historyData" :options="chartOptions" />
       </div>

@@ -162,14 +162,22 @@ onMounted(load)
           <dd class="font-medium"><Amount :value="totalPl" :currency="holding.currency" signed /></dd>
         </div>
       </dl>
+      <p class="px-4 py-2 border-b border-slate-200 text-xs text-slate-500">
+        Versato netto: acquisti e costi meno l'incasso delle vendite. P/L totale: latente (valore meno costo delle quote rimaste) più realizzato.
+      </p>
 
       <form class="p-4 space-y-3 border-b border-slate-200" @submit.prevent="onSubmit">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Operazione</label>
-            <select v-model="form.side" class="input">
+            <select v-model="form.side" class="input" aria-describedby="hint-mv-side">
               <option v-for="s in SIDES" :key="s" :value="s">{{ INVESTMENT_SIDE_LABEL[s] }}</option>
             </select>
+            <p id="hint-mv-side" class="field-hint">
+              <template v-if="form.side === 'buy'">Aggiunge quote e alza il versato; il prezzo di carico diventa la media ponderata con le quote che avevi.</template>
+              <template v-else-if="form.side === 'sell'">Toglie quote e riduce il versato; la differenza col prezzo di carico va nel P/L realizzato e il carico non cambia.</template>
+              <template v-else>Bollo, custodia e simili: non muove quote, alza il versato e riduce il P/L realizzato.</template>
+            </p>
           </div>
           <div>
             <label class="label">Data</label>
@@ -177,11 +185,13 @@ onMounted(load)
           </div>
           <div v-if="form.side === 'buy'">
             <label class="label">Importo versato ({{ holding.currency }})</label>
-            <input v-model="form.amount" type="number" step="0.01" min="0" class="input" placeholder="es. 100" />
+            <input v-model="form.amount" type="number" step="0.01" min="0" class="input" placeholder="es. 100" aria-describedby="hint-mv-amount" />
+            <p id="hint-mv-amount" class="field-hint">Le quote si calcolano da sole (importo ÷ prezzo); le commissioni si aggiungono a parte.</p>
           </div>
           <div v-if="!isFee">
             <label class="label">Prezzo ({{ holding.currency }})</label>
-            <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required />
+            <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required aria-describedby="hint-mv-price" />
+            <p id="hint-mv-price" class="field-hint">Prezzo per quota a cui è stato eseguito l'ordine; parte dalla quotazione attuale.</p>
           </div>
           <div v-if="!isFee">
             <label class="label">Quantità</label>
@@ -195,7 +205,9 @@ onMounted(load)
               :class="{ 'bg-slate-100 text-slate-500': computedQuantity !== null }"
               :required="computedQuantity === null"
               :placeholder="computedQuantity !== null ? String(computedQuantity) : ''"
+              :aria-describedby="form.side === 'sell' ? 'hint-mv-quantity' : undefined"
             />
+            <p v-if="form.side === 'sell'" id="hint-mv-quantity" class="field-hint">Non puoi vendere più quote di quante ne avevi alla data della vendita.</p>
           </div>
           <div>
             <label class="label">{{ isFee ? `Costo (${holding.currency})` : 'Commissioni' }}</label>
@@ -207,7 +219,9 @@ onMounted(load)
               class="input"
               placeholder="0,00"
               :required="isFee"
+              :aria-describedby="isFee ? undefined : 'hint-mv-fees'"
             />
+            <p v-if="!isFee" id="hint-mv-fees" class="field-hint">In un acquisto si sommano al costo, in una vendita riducono l'incasso.</p>
           </div>
           <div>
             <label class="label">Note</label>

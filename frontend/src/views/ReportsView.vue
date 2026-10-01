@@ -160,7 +160,12 @@ onMounted(refresh)
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
+    <div>
+      <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
+      <p class="page-desc">
+        Dove vanno e da dove arrivano i soldi nel periodo scelto, con importi convertiti nella tua valuta principale.
+      </p>
+    </div>
 
     <details class="card filter-panel" open>
       <summary>Filtri</summary>
@@ -175,10 +180,11 @@ onMounted(refresh)
         </div>
         <div>
           <label class="label">Categorie</label>
-          <select v-model="filters.type" class="input">
+          <select v-model="filters.type" class="input" aria-describedby="hint-report-type">
             <option value="expense">Uscite</option>
             <option value="income">Entrate</option>
           </select>
+          <p id="hint-report-type" class="field-hint">Vale per i totali per categoria e per tag; i giroconti non sono mai inclusi.</p>
         </div>
       </form>
     </details>
@@ -206,6 +212,7 @@ onMounted(refresh)
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Totali per categoria ({{ filters.type === 'income' ? 'entrate' : 'uscite' }})
           </h3>
+          <p class="-mt-2 mb-3 text-xs text-slate-500">Le sottocategorie hanno un totale proprio e non si sommano alla categoria padre.</p>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="categories.length" :data="donutData()" :options="chartOptions" />
             <EmptyState
@@ -218,6 +225,7 @@ onMounted(refresh)
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
             Totali per tag ({{ filters.type === 'income' ? 'entrate' : 'uscite' }})
           </h3>
+          <p class="-mt-2 mb-3 text-xs text-slate-500">Una transazione con più tag conta per intero in ognuno.</p>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="tags.length" :data="tagDonutData()" :options="chartOptions" />
             <EmptyState v-else title="Nessuna transazione con tag nel periodo." />
@@ -238,6 +246,7 @@ onMounted(refresh)
         <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
           Patrimonio netto (cumulato)
         </h3>
+        <p class="-mt-2 mb-3 text-xs text-slate-500">Somma dei saldi di tutti i conti alla fine di ogni mese.</p>
         <div class="h-64 sm:h-80">
           <Line v-if="netWorth.length" :data="lineData()" :options="chartOptions" />
           <EmptyState v-else title="Nessun dato sul patrimonio nel periodo." />

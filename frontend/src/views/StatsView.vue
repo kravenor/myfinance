@@ -161,7 +161,12 @@ onMounted(refresh)
 <template>
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Statistiche</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Statistiche</h1>
+        <p class="page-desc">
+          L'andamento nel tempo: confronto tra periodi, categorie principali e una stima di come evolveranno saldo e patrimonio.
+        </p>
+      </div>
       <button class="btn-secondary" :disabled="loading" @click="refresh">
         {{ loading ? 'Aggiorno…' : 'Aggiorna' }}
       </button>
@@ -169,7 +174,12 @@ onMounted(refresh)
 
     <section class="card p-4 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="font-medium">Confronto periodi</h2>
+        <div>
+          <h2 class="font-medium">Confronto periodi</h2>
+          <p class="text-xs text-slate-500">
+            Il periodo in corso, anche se non è finito, contro il precedente intero. I mesi seguono il giorno di inizio mese delle Impostazioni, gli anni sono solari.
+          </p>
+        </div>
         <select v-model="unit" class="input md:w-40" @change="refresh">
           <option value="month">Mese vs precedente</option>
           <option value="year">Anno vs precedente</option>
@@ -220,8 +230,11 @@ onMounted(refresh)
     </section>
 
     <section class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="font-medium">Trend top categorie (12 mesi)</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-medium">Trend top categorie (12 mesi)</h2>
+          <p class="text-xs text-slate-500">Le 5 categorie con il totale più alto nel periodo; le transazioni senza categoria sono escluse.</p>
+        </div>
         <select v-model="trendType" class="input md:w-40" @change="refresh">
           <option value="expense">Spese</option>
           <option value="income">Entrate</option>
@@ -238,8 +251,13 @@ onMounted(refresh)
     </section>
 
     <section class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="font-medium">Proiezione del flusso di cassa</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-medium">Proiezione del flusso di cassa</h2>
+          <p class="text-xs text-slate-500">
+            Dal mese in corso. Saldo mensile (asse sinistro): entrate meno uscite previste nel mese. Patrimonio (asse destro): quello di fine mese scorso più i saldi previsti, sommati mese dopo mese.
+          </p>
+        </div>
         <div class="flex items-center gap-2">
           <label class="text-sm text-slate-600">Mesi</label>
           <input
@@ -263,7 +281,7 @@ onMounted(refresh)
     </section>
 
     <section class="card p-4">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 class="font-medium">Top transazioni del mese</h2>
         <select v-model="topType" class="input md:w-40" @change="refresh">
           <option value="">Tutti</option>

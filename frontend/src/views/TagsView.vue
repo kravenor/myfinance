@@ -61,7 +61,10 @@ onMounted(() => list())
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Tag</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Tag</h1>
+        <p class="page-desc">Etichette libere da aggiungere alle transazioni, anche più d'una, per raggrupparle oltre la categoria (es. «Vacanze 2026»).</p>
+      </div>
       <button class="btn-primary" @click="showForm = true; reset()">
         Nuovo tag
       </button>
@@ -86,7 +89,14 @@ onMounted(() => list())
           </div>
           <div>
             <label class="label">Colore</label>
-            <input v-model="form.color" class="input" :class="{ 'input-invalid': fieldErrors.color }" placeholder="#aabbcc" />
+            <input
+              v-model="form.color"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.color }"
+              placeholder="#aabbcc"
+              aria-describedby="hint-color"
+            />
+            <p id="hint-color" class="field-hint">Codice esadecimale nel formato #rrggbb; se lo lasci vuoto il tag usa un colore predefinito.</p>
             <FieldError :errors="fieldErrors" name="color" />
           </div>
         </div>

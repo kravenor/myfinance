@@ -24,6 +24,10 @@ const MAPPING_FIELD_LABEL: Record<MappingField, string> = {
   category: 'Categoria',
 }
 const MAPPING_FIELDS = Object.keys(MAPPING_FIELD_LABEL) as MappingField[]
+const MAPPING_FIELD_HINT: Partial<Record<MappingField, string>> = {
+  type: 'Se non la scegli, gli importi positivi diventano entrate e i negativi uscite.',
+  category: 'Usata solo se il valore coincide con il nome di una tua categoria; altrimenti decidono le regole.',
+}
 
 interface ImportResult {
   imported: number
@@ -195,7 +199,21 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-6">
-    <h1 class="text-xl sm:text-2xl font-semibold">Import / Export</h1>
+    <div class="space-y-3">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Import / Export</h1>
+        <p class="page-desc">Scarica le transazioni in CSV o carica un estratto conto (CSV, OFX, QIF) per registrare i movimenti in blocco.</p>
+      </div>
+      <details class="help-panel">
+        <summary>Come funziona</summary>
+        <ul>
+          <li>«Analizza file» mostra le prime righe e la categoria che le regole assegnerebbero: nulla viene salvato finché non premi «Esegui import».</li>
+          <li>Nei CSV scegli tu quale colonna è la data, l'importo e gli altri campi; OFX e QIF hanno campi fissi e vengono letti in automatico.</li>
+          <li>Ogni riga diventa un'entrata o un'uscita sul conto scelto, mai un trasferimento; le righe con data o importo illeggibili vengono saltate ed elencate negli errori.</li>
+          <li>Solo i file OFX hanno un codice univoco per movimento, quindi solo lì le righe già importate vengono ignorate: reimportare lo stesso CSV o QIF crea dei doppioni.</li>
+        </ul>
+      </details>
+    </div>
 
     <section class="card p-4 space-y-4">
       <h2 class="font-medium">Export CSV</h2>
@@ -240,18 +258,20 @@ onMounted(async () => {
             type="file"
             accept=".csv,.ofx,.qfx,.qif,text/csv"
             class="input"
+            :aria-describedby="preview ? 'hint-import-format' : undefined"
             @change="onFileChange"
           />
-          <p v-if="preview" class="mt-1 text-xs text-slate-500">
+          <p v-if="preview" id="hint-import-format" class="field-hint">
             Formato rilevato: <span class="font-medium">{{ FORMAT_LABELS[preview.format] }}</span>
             <span v-if="preview.mapping_locked"> · campi mappati automaticamente</span>
           </p>
         </div>
         <div>
           <label class="label">Conto destinazione</label>
-          <select v-model.number="importAccount" class="input">
+          <select v-model.number="importAccount" class="input" aria-describedby="hint-import-account">
             <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
           </select>
+          <p id="hint-import-account" class="field-hint">Tutte le righe del file vengono registrate su questo conto, nella sua valuta.</p>
         </div>
       </div>
 
@@ -263,18 +283,27 @@ onMounted(async () => {
 
       <div v-if="preview" class="space-y-4">
         <template v-if="!preview.mapping_locked">
+          <p class="text-xs text-slate-500">
+            Per ogni campo scegli la colonna del file da cui leggerlo: Data e Importo sono obbligatori.
+          </p>
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
             <div v-for="field in MAPPING_FIELDS" :key="field">
               <label class="label">{{ MAPPING_FIELD_LABEL[field] }}{{ ['date','amount'].includes(field) ? ' *' : '' }}</label>
-              <select v-model="mapping[field]" class="input">
+              <select
+                v-model="mapping[field]"
+                class="input"
+                :aria-describedby="MAPPING_FIELD_HINT[field] ? `hint-map-${field}` : undefined"
+              >
                 <option value="">— Nessuna —</option>
                 <option v-for="h in preview.headers" :key="h" :value="h">{{ h }}</option>
               </select>
+              <p v-if="MAPPING_FIELD_HINT[field]" :id="`hint-map-${field}`" class="field-hint">{{ MAPPING_FIELD_HINT[field] }}</p>
             </div>
           </div>
           <div>
-            <label class="label">Formato data (sintassi PHP, es. d/m/Y)</label>
-            <input v-model="dateFormat" class="input md:w-48" placeholder="Y-m-d" />
+            <label class="label">Formato data</label>
+            <input v-model="dateFormat" class="input md:w-48" placeholder="Y-m-d" aria-describedby="hint-date-format" />
+            <p id="hint-date-format" class="field-hint">Come sono scritte le date nel file: d giorno, m mese, Y anno a 4 cifre (es. 31/12/2026 → d/m/Y).</p>
           </div>
         </template>
 

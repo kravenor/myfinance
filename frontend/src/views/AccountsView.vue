@@ -84,7 +84,14 @@ async function setPrimary(acc: Account) {
 }
 
 async function onDelete(acc: Account) {
-  if (!(await confirmAction(`Eliminare il conto "${acc.name}"?`))) return
+  if (
+    !(await confirmAction(`Eliminare il conto "${acc.name}"?`, {
+      detail:
+        'Verranno eliminate anche tutte le sue transazioni e le ricorrenti collegate. L\'operazione non può essere annullata.',
+      confirmLabel: 'Elimina conto e transazioni',
+    }))
+  )
+    return
   await destroy(acc.id)
 }
 
@@ -94,7 +101,10 @@ onMounted(() => list())
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Conti</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Conti</h1>
+        <p class="page-desc">I conti in cui tieni il denaro: il saldo di ognuno parte dal saldo iniziale e si aggiorna con le transazioni.</p>
+      </div>
       <button class="btn-primary" @click="showForm = true; reset()">
         Nuovo conto
       </button>
@@ -135,9 +145,12 @@ onMounted(() => list())
             </select>
             <FieldError :errors="fieldErrors" name="currency" />
           </div>
-          <div class="flex items-center gap-2">
-            <input id="is_primary" type="checkbox" v-model="form.is_primary" class="w-4 h-4" />
-            <label for="is_primary" class="text-sm">Conto principale</label>
+          <div>
+            <div class="flex items-center gap-2">
+              <input id="is_primary" type="checkbox" v-model="form.is_primary" class="w-4 h-4" aria-describedby="hint-is-primary" />
+              <label for="is_primary" class="text-sm">Conto principale</label>
+            </div>
+            <p id="hint-is-primary" class="field-hint">È il conto proposto in automatico per nuove transazioni, ricorrenti e import; ne puoi avere uno solo.</p>
           </div>
           <div>
             <label class="label">Saldo iniziale</label>
@@ -147,7 +160,9 @@ onMounted(() => list())
               step="0.01"
               class="input"
               :class="{ 'input-invalid': fieldErrors.initial_balance }"
+              aria-describedby="hint-initial-balance"
             />
+            <p id="hint-initial-balance" class="field-hint">Quanto c'era sul conto prima della prima transazione che registri; può essere negativo, es. per una carta.</p>
             <FieldError :errors="fieldErrors" name="initial_balance" />
           </div>
           <div class="md:col-span-2">

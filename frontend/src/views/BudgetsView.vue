@@ -146,7 +146,10 @@ onMounted(async () => {
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
+        <p class="page-desc">Fissa quanto vuoi spendere al massimo per una categoria in un mese e controlla quanto hai già speso.</p>
+      </div>
       <button class="btn-primary" @click="openNew()">
         Nuovo budget
       </button>
@@ -172,9 +175,10 @@ onMounted(async () => {
           <FormErrors class="col-span-full" :errors="fieldErrors" :shown="['category_id', 'year', 'month', 'amount']" />
           <div>
             <label class="label">Categoria</label>
-            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldErrors.category_id }" required>
+            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldErrors.category_id }" aria-describedby="hint-category" required>
               <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
+            <p id="hint-category" class="field-hint">Conta solo le uscite registrate su questa categoria, non quelle delle sue sottocategorie.</p>
             <FieldError :errors="fieldErrors" name="category_id" />
           </div>
           <div>
@@ -184,12 +188,14 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Mese</label>
-            <input v-model.number="form.month" type="number" min="1" max="12" class="input" :class="{ 'input-invalid': fieldErrors.month }" required />
+            <input v-model.number="form.month" type="number" min="1" max="12" class="input" :class="{ 'input-invalid': fieldErrors.month }" aria-describedby="hint-month" required />
+            <p id="hint-month" class="field-hint">Segue il giorno di inizio mese delle Impostazioni: con inizio il 27, giugno va dal 27/06 al 26/07.</p>
             <FieldError :errors="fieldErrors" name="month" />
           </div>
           <div>
             <label class="label">Importo</label>
-            <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" class="input" :class="{ 'input-invalid': fieldErrors.amount }" required />
+            <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" class="input" :class="{ 'input-invalid': fieldErrors.amount }" aria-describedby="hint-amount" required />
+            <p id="hint-amount" class="field-hint">Il tetto di spesa del mese: dall'80% la barra diventa ambra, dal 100% rossa.</p>
             <FieldError :errors="fieldErrors" name="amount" />
           </div>
         </div>

@@ -35,12 +35,17 @@ onMounted(() => store.fetch())
 <template>
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">
-        Notifiche
-        <span v-if="store.unreadCount > 0" class="text-sm font-normal text-slate-500">
-          ({{ store.unreadCount }} non lette)
-        </span>
-      </h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">
+          Notifiche
+          <span v-if="store.unreadCount > 0" class="text-sm font-normal text-slate-500">
+            ({{ store.unreadCount }} non lette)
+          </span>
+        </h1>
+        <p class="page-desc">
+          Avvisi su budget in allerta e obiettivi in ritardo o scaduti, controllati ogni mattina: lo stesso avviso non si ripete nel mese.
+        </p>
+      </div>
       <button
         class="btn-secondary"
         :disabled="store.unreadCount === 0"

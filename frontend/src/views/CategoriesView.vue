@@ -65,7 +65,10 @@ onMounted(() => list({ per_page: 100 }))
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Categorie</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Categorie</h1>
+        <p class="page-desc">Le categorie classificano entrate e uscite e sono la base di report e budget.</p>
+      </div>
       <button class="btn-primary" @click="showForm = true; reset()">
         Nuova categoria
       </button>
@@ -98,12 +101,18 @@ onMounted(() => list({ per_page: 100 }))
           </div>
           <div>
             <label class="label">Categoria padre</label>
-            <select v-model="form.parent_id" class="input" :class="{ 'input-invalid': fieldErrors.parent_id }">
+            <select
+              v-model="form.parent_id"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.parent_id }"
+              aria-describedby="hint-parent"
+            >
               <option :value="null">— Nessuno —</option>
               <option v-for="c in items.filter((c) => c.type === form.type && c.id !== editing?.id)" :key="c.id" :value="c.id">
                 {{ c.name }}
               </option>
             </select>
+            <p id="hint-parent" class="field-hint">Serve solo a raggruppare nella scelta della categoria: report e budget contano comunque ogni sottocategoria a sé.</p>
             <FieldError :errors="fieldErrors" name="parent_id" />
           </div>
         </div>

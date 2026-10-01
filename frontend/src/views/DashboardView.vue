@@ -123,8 +123,9 @@ onMounted(async () => {
   <div class="space-y-6">
     <div>
       <h1 class="text-xl sm:text-2xl font-semibold">Dashboard</h1>
-      <p v-if="summary" class="mt-1 text-sm text-slate-500">
-        Periodo {{ formatDate(summary.from) }} – {{ formatDate(summary.to) }}
+      <p class="page-desc">
+        Il mese in corso a colpo d'occhio, confrontato con quello precedente.
+        <template v-if="summary">Periodo {{ formatDate(summary.from) }} – {{ formatDate(summary.to) }}</template>
       </p>
     </div>
 
@@ -160,6 +161,7 @@ onMounted(async () => {
               · {{ summary.saving_rate }}% delle entrate
             </span>
           </p>
+          <p v-if="kpi.key === 'net'" class="mt-1 text-xs text-slate-500">Entrate meno uscite; i giroconti tra i tuoi conti non contano.</p>
         </div>
       </section>
 
@@ -223,7 +225,10 @@ onMounted(async () => {
         <div class="space-y-4">
           <section class="card">
             <header class="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
-              <h2 class="font-semibold text-slate-900">Budget del mese</h2>
+              <div>
+                <h2 class="font-semibold text-slate-900">Budget del mese</h2>
+                <p class="text-xs text-slate-500">Solo quelli oltre la soglia di allerta delle Impostazioni.</p>
+              </div>
               <RouterLink :to="{ name: 'budgets' }" class="text-sm font-medium text-primary-600 hover:text-primary-700">
                 Gestisci
               </RouterLink>

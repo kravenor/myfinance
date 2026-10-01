@@ -266,7 +266,10 @@ watch(() => route.query.new, () => {
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
+        <p class="page-desc">Tutti i movimenti dei tuoi conti: entrate, uscite e trasferimenti tra conti, da filtrare, cercare e correggere.</p>
+      </div>
       <button class="btn-primary" @click="openNew()">Nuova transazione</button>
     </div>
 
@@ -283,7 +286,15 @@ watch(() => route.query.new, () => {
       <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent>
         <div class="sm:col-span-2 md:col-span-5">
           <label class="label">Cerca nella descrizione</label>
-          <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave… (premi / per cercare)" aria-keyshortcuts="/" />
+          <input
+            v-model="filters.search"
+            type="search"
+            class="input"
+            placeholder="Parole chiave… (premi / per cercare)"
+            aria-keyshortcuts="/"
+            aria-describedby="hint-search"
+          />
+          <p id="hint-search" class="field-hint">Trova le transazioni la cui descrizione contiene tutte le parole che scrivi, in qualsiasi ordine.</p>
         </div>
         <div>
           <label class="label">Conto</label>
@@ -345,11 +356,18 @@ watch(() => route.query.new, () => {
           </div>
           <div v-if="form.type === 'transfer'">
             <label class="label">Conto destinazione</label>
-            <select v-model.number="form.transfer_account_id" class="input" :class="{ 'input-invalid': fieldError('transfer_account_id') }" required>
+            <select
+              v-model.number="form.transfer_account_id"
+              class="input"
+              :class="{ 'input-invalid': fieldError('transfer_account_id') }"
+              required
+              aria-describedby="hint-transfer-account"
+            >
               <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
                 {{ a.name }}
               </option>
             </select>
+            <p id="hint-transfer-account" class="field-hint">Il trasferimento sposta denaro tra due tuoi conti: non conta né come entrata né come uscita.</p>
             <p v-if="fieldError('transfer_account_id')" class="field-error">{{ fieldError('transfer_account_id') }}</p>
           </div>
           <div v-else>
@@ -362,7 +380,18 @@ watch(() => route.query.new, () => {
           </div>
           <div>
             <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
-            <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" min="0.01" class="input" :class="{ 'input-invalid': fieldError('amount') }" required />
+            <input
+              v-model="form.amount"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0.01"
+              class="input"
+              :class="{ 'input-invalid': fieldError('amount') }"
+              required
+              aria-describedby="hint-amount"
+            />
+            <p id="hint-amount" class="field-hint">Inseriscilo sempre positivo: se il denaro entra o esce lo decide il tipo.</p>
             <p v-if="fieldError('amount')" class="field-error">{{ fieldError('amount') }}</p>
           </div>
           <div v-if="isCrossCurrencyTransfer">
@@ -375,7 +404,9 @@ watch(() => route.query.new, () => {
               class="input"
               :placeholder="`Auto (tasso del ${form.occurred_at})`"
               :class="{ 'input-invalid': fieldError('transfer_amount') }"
+              aria-describedby="hint-transfer-amount"
             />
+            <p id="hint-transfer-amount" class="field-hint">Quanto arriva sul conto destinazione nella sua valuta; se lo lasci vuoto viene calcolato con il tasso di cambio della data.</p>
             <p v-if="fieldError('transfer_amount')" class="field-error">{{ fieldError('transfer_amount') }}</p>
           </div>
           <div>

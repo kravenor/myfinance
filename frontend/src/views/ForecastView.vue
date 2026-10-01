@@ -380,7 +380,7 @@ onMounted(async () => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl sm:text-2xl font-semibold">Previsioni</h1>
-        <p class="text-sm text-slate-500">
+        <p class="page-desc">
           Quanto ti resta a fine mese per vivere, baseline e con ogni scenario applicato.
         </p>
       </div>
@@ -395,10 +395,23 @@ onMounted(async () => {
       </div>
     </div>
 
+    <details class="help-panel">
+      <summary>Come funziona</summary>
+      <ul>
+        <li>La baseline usa solo ciò che è pianificato: le entrate ricorrenti attive e, per ogni categoria di spesa, il budget del mese se c'è, altrimenti le uscite ricorrenti.</li>
+        <li>Transazioni singole, giroconti e uscite ricorrenti senza categoria non entrano nella previsione.</li>
+        <li>Uno scenario raccoglie voci ipotetiche, una tantum o con cadenza, che si sommano alla baseline; il confronto mostra tutti gli scenari attivi.</li>
+        <li>«Resta a fine mese» è entrate meno uscite previste nel mese, senza il saldo attuale dei conti; gli scenari non creano transazioni vere.</li>
+      </ul>
+    </details>
+
     <!-- KPI residuo + selettore scenario -->
     <section v-if="forecast" class="card p-4 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="font-medium">Scenario applicato</h2>
+        <div>
+          <h2 class="font-medium">Scenario applicato</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Scegli uno scenario per aggiungere le sue voci alla baseline; puoi applicare anche quelli inattivi.</p>
+        </div>
         <div class="flex flex-wrap items-center gap-2">
           <select v-model.number="selectedScenarioId" class="input w-auto">
             <option value="">— Baseline (nessuno scenario) —</option>
@@ -457,9 +470,10 @@ onMounted(async () => {
           </div>
           <div class="flex flex-col justify-end">
             <label class="inline-flex items-center gap-2 text-sm">
-              <input v-model="scenarioForm.is_active" type="checkbox" />
+              <input v-model="scenarioForm.is_active" type="checkbox" aria-describedby="hint-scenario-active" />
               Attivo
             </label>
+            <p id="hint-scenario-active" class="field-hint">Solo gli scenari attivi compaiono nel confronto.</p>
             <FieldError :errors="scenarioErrors" name="is_active" />
           </div>
           <div class="sm:col-span-4">
@@ -480,7 +494,10 @@ onMounted(async () => {
     <!-- Tabella mese per mese: residuo in evidenza -->
     <section v-if="forecast" class="card p-4">
       <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 class="font-medium">Mese per mese</h2>
+        <div>
+          <h2 class="font-medium">Mese per mese</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Resta a fine mese = entrate previste meno uscite previste, senza contare il saldo attuale dei conti.</p>
+        </div>
         <p v-if="loading" class="text-xs text-slate-500">Aggiornamento…</p>
       </div>
       <div class="table-responsive md:overflow-x-auto">
@@ -518,7 +535,8 @@ onMounted(async () => {
 
     <!-- Confronto scenari -->
     <section v-if="compareRows.length > 1" class="card p-4">
-      <h2 class="font-medium mb-3">Confronto scenari — Resta a fine mese</h2>
+      <h2 class="font-medium">Confronto scenari — Resta a fine mese</h2>
+      <p class="text-xs text-slate-500 mt-0.5 mb-3">La baseline e, sotto, ogni scenario attivo applicato da solo.</p>
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
           <thead>
@@ -598,6 +616,9 @@ onMounted(async () => {
         <h2 class="font-medium">Dettaglio uscite per categoria</h2>
         <span class="text-sm text-slate-500">{{ showCategoryBreakdown ? 'Nascondi ▴' : 'Mostra ▾' }}</span>
       </button>
+      <p v-if="showCategoryBreakdown" class="text-xs text-slate-500 mt-2">
+        Per ogni categoria conta il budget del mese se c'è, altrimenti le uscite ricorrenti; in rosso i mesi che sforano il budget, evidenziati quelli con voci dello scenario.
+      </p>
       <div v-if="showCategoryBreakdown" class="overflow-x-auto mt-3">
         <table class="min-w-full text-sm">
           <thead>
@@ -674,7 +695,7 @@ onMounted(async () => {
           </button>
         </div>
 
-        <form class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end" @submit.prevent="addItem">
+        <form class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-start" @submit.prevent="addItem">
           <div>
             <label class="label">Tipo</label>
             <select v-model="itemForm.type" class="input">
@@ -692,10 +713,11 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Conto</label>
-            <select v-model="itemForm.account_id" class="input">
+            <select v-model="itemForm.account_id" class="input" aria-describedby="hint-item-account">
               <option value="">—</option>
               <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+            <p id="hint-item-account" class="field-hint">Facoltativo: imposta la valuta del conto. La previsione somma tutti i conti.</p>
           </div>
           <div>
             <label class="label">Valuta</label>
@@ -705,16 +727,18 @@ onMounted(async () => {
           </div>
           <div v-if="itemForm.type === 'expense'">
             <label class="label">Categoria</label>
-            <select v-model="itemForm.category_id" class="input">
+            <select v-model="itemForm.category_id" class="input" aria-describedby="hint-item-category">
               <option value="">—</option>
               <option v-for="c in expenseCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
+            <p id="hint-item-category" class="field-hint">Se la categoria ha un budget nel mese, la voce si somma al budget e lo segna come sforato.</p>
           </div>
           <div>
             <label class="label">Cadenza</label>
-            <select v-model="itemForm.cadence" class="input">
+            <select v-model="itemForm.cadence" class="input" aria-describedby="hint-item-cadence">
               <option v-for="c in scenarioCadences" :key="c" :value="c">{{ SCENARIO_CADENCE_LABEL[c] }}</option>
             </select>
+            <p id="hint-item-cadence" class="field-hint">Una tantum conta una volta nel mese di «Dal»; le altre si ripetono fino a «Fino al» o alla fine dell'orizzonte.</p>
           </div>
           <div>
             <label class="label">Dal</label>

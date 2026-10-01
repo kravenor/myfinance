@@ -137,6 +137,7 @@ onMounted(async () => {
 
 <template>
   <h1 class="text-xl sm:text-2xl font-semibold">Impostazioni</h1>
+  <p class="page-desc">Avvisi, password, formato delle date, inizio del mese e aspetto dell'app.</p>
   <div class="space-y-6 w-full grid grid-cols-1 lg:grid-cols-2 gap-4">
     <div class="card p-4 sm:p-6 mt-6">
       <form class="space-y-5" @submit.prevent="onSubmit">
@@ -168,8 +169,9 @@ onMounted(async () => {
               type="email"
               class="input"
               :placeholder="auth.user?.email ?? 'email dell\'account'"
+              aria-describedby="hint-email-address"
             />
-            <p class="text-xs text-slate-500 mt-1">Lascia vuoto per usare l'email dell'account.</p>
+            <p id="hint-email-address" class="field-hint">Lascia vuoto per usare l'email dell'account.</p>
           </div>
 
           <hr class="border-slate-100" />
@@ -201,9 +203,10 @@ onMounted(async () => {
               max="100"
               step="1"
               class="input w-32"
+              aria-describedby="hint-budget-threshold"
             />
-            <p class="text-xs text-slate-500 mt-1">
-              Percentuale oltre la quale un budget è «in allerta» (sotto il 100% = sforato).
+            <p id="hint-budget-threshold" class="field-hint">
+              Un budget va «in allerta» quando la spesa raggiunge questa percentuale ed è «sforato» dal 100%. Vale anche per i budget mostrati in Dashboard.
             </p>
           </div>
 
@@ -276,19 +279,21 @@ onMounted(async () => {
 
         <div>
           <label class="label">Formato</label>
-          <select v-model="dateFormat" class="input w-48">
+          <select v-model="dateFormat" class="input w-48" aria-describedby="hint-date-format">
             <option v-for="f in DATE_FORMATS" :key="f" :value="f">{{ f }}</option>
           </select>
-          <p class="text-xs text-slate-500 mt-1">Anteprima: {{ dateSample }}</p>
+          <p id="hint-date-format" class="field-hint">
+            Anteprima: {{ dateSample }}. Cambia solo come vedi le date; l'import da file ha un suo formato data.
+          </p>
         </div>
 
         <div>
           <label class="label">Giorno di inizio del mese</label>
-          <select v-model.number="monthStartDay" class="input w-48">
+          <select v-model.number="monthStartDay" class="input w-48" aria-describedby="hint-month-start">
             <option v-for="d in monthStartDays" :key="d" :value="d">{{ d }}</option>
           </select>
-          <p class="text-xs text-slate-500 mt-1">
-            Utile se il tuo mese parte dallo stipendio. Periodo corrente: {{ cycleSample }}.
+          <p id="hint-month-start" class="field-hint">
+            Utile se il tuo mese parte dallo stipendio: con 27, il mese di giugno va dal 27/06 al 26/07. Periodo corrente: {{ cycleSample }}.
             Cambiarlo non rinumera i budget già inseriti, ma ricalcola quanto risulta speso.
           </p>
         </div>

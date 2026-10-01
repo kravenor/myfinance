@@ -328,7 +328,10 @@ onMounted(async () => {
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Obiettivi di risparmio</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Obiettivi di risparmio</h1>
+        <p class="page-desc">Metti da parte soldi per un traguardo: il progresso si calcola dai movimenti del conto collegato.</p>
+      </div>
       <div class="flex items-center gap-2">
         <select
           v-model="statusFilter"
@@ -346,6 +349,16 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+
+    <details class="help-panel">
+      <summary>Come funziona</summary>
+      <ul>
+        <li>Il progresso non si registra a parte: è quanto entra meno quanto esce dal conto collegato nel periodo, giroconti compresi, ricalcolato ogni volta che apri la pagina.</li>
+        <li>Un obiettivo una tantum conta i movimenti tra inizio e scadenza; uno settimanale, mensile o annuale guarda solo il periodo in corso e riparte da zero al successivo.</li>
+        <li>Con una scadenza vedi il ritmo: «In linea» se hai accumulato almeno la quota di tempo già trascorsa, altrimenti «In ritardo», con quanto mettere da parte al mese.</li>
+        <li>Le operazioni sono transazioni vere sul conto: le ritrovi in Transazioni e cambiano il saldo; eliminare l'obiettivo invece non tocca nessuna transazione.</li>
+      </ul>
+    </details>
 
     <button
       v-if="!showForm"
@@ -383,29 +396,32 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Conto collegato</label>
-            <select v-model="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }">
+            <select v-model="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" aria-describedby="hint-account">
               <option value="">— (nessuno)</option>
               <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+            <p id="hint-account" class="field-hint">Il progresso è quanto entra meno quanto esce da questo conto nel periodo. Senza conto resta a zero.</p>
             <FieldError :errors="fieldErrors" name="account_id" />
-            <p class="text-xs text-slate-500 mt-1">Il progresso è il flusso netto su questo conto.</p>
           </div>
           <div>
             <label class="label">Ricorrenza</label>
-            <select v-model="form.recurrence" class="input" :class="{ 'input-invalid': fieldErrors.recurrence }">
+            <select v-model="form.recurrence" class="input" :class="{ 'input-invalid': fieldErrors.recurrence }" aria-describedby="hint-recurrence">
               <option v-for="(lbl, key) in RECURRENCE_LABEL" :key="key" :value="key">{{ lbl }}</option>
             </select>
+            <p id="hint-recurrence" class="field-hint">Settimanale, mensile o annuale contano solo il periodo in corso e ripartono da zero; una tantum usa le date che scegli.</p>
             <FieldError :errors="fieldErrors" name="recurrence" />
           </div>
           <template v-if="form.recurrence === 'none'">
             <div>
               <label class="label">Inizio periodo</label>
-              <input v-model="form.start_date" type="date" class="input" :class="{ 'input-invalid': fieldErrors.start_date }" />
+              <input v-model="form.start_date" type="date" class="input" :class="{ 'input-invalid': fieldErrors.start_date }" aria-describedby="hint-start-date" />
+              <p id="hint-start-date" class="field-hint">Conta i movimenti da questa data; vuota, da sempre.</p>
               <FieldError :errors="fieldErrors" name="start_date" />
             </div>
             <div>
               <label class="label">Scadenza</label>
-              <input v-model="form.target_date" type="date" class="input" :class="{ 'input-invalid': fieldErrors.target_date }" />
+              <input v-model="form.target_date" type="date" class="input" :class="{ 'input-invalid': fieldErrors.target_date }" aria-describedby="hint-target-date" />
+              <p id="hint-target-date" class="field-hint">Serve a calcolare il ritmo e quanto mettere da parte al mese; senza scadenza il ritmo non compare.</p>
               <FieldError :errors="fieldErrors" name="target_date" />
             </div>
           </template>
@@ -416,11 +432,12 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Stato</label>
-            <select v-model="form.status" class="input" :class="{ 'input-invalid': fieldErrors.status }">
+            <select v-model="form.status" class="input" :class="{ 'input-invalid': fieldErrors.status }" aria-describedby="hint-status">
               <option value="active">Attivo</option>
               <option value="completed">Completato</option>
               <option value="archived">Archiviato</option>
             </select>
+            <p id="hint-status" class="field-hint">Lo cambi tu: raggiungere l'importo non segna l'obiettivo come completato.</p>
             <FieldError :errors="fieldErrors" name="status" />
           </div>
           <div class="sm:col-span-2 lg:col-span-3">
@@ -542,6 +559,9 @@ onMounted(async () => {
                 Periodo: {{ opsGoal.period_start ? formatDate(opsGoal.period_start) : '…' }} →
                 {{ opsGoal.period_end ? formatDate(opsGoal.period_end) : '…' }}
               </span>
+            </p>
+            <p class="text-xs text-slate-500 mt-1">
+              Ogni operazione è una transazione vera: un trasferimento sposta soldi da un altro conto a questo, entrate e uscite agiscono solo su questo conto.
             </p>
           </div>
           <button

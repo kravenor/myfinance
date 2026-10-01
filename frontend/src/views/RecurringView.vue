@@ -151,7 +151,10 @@ onMounted(async () => {
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Transazioni ricorrenti</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Transazioni ricorrenti</h1>
+        <p class="page-desc">Movimenti che si ripetono da soli: ogni notte l'app registra come transazioni quelli arrivati a scadenza.</p>
+      </div>
       <button class="btn-primary" @click="openNew()">
         Nuova ricorrente
       </button>
@@ -182,18 +185,20 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Conto</label>
-            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" required>
+            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" aria-describedby="hint-account" required>
               <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
             </select>
+            <p id="hint-account" class="field-hint">L'importo è nella valuta di questo conto.</p>
             <FieldError :errors="fieldErrors" name="account_id" />
           </div>
           <div v-if="form.type === 'transfer'">
             <label class="label">Conto destinazione</label>
-            <select v-model.number="form.transfer_account_id" class="input" :class="{ 'input-invalid': fieldErrors.transfer_account_id }" required>
+            <select v-model.number="form.transfer_account_id" class="input" :class="{ 'input-invalid': fieldErrors.transfer_account_id }" aria-describedby="hint-transfer-account" required>
               <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
                 {{ a.name }}{{ a.is_primary ? ' ★' : '' }}
               </option>
             </select>
+            <p id="hint-transfer-account" class="field-hint">Se ha un'altra valuta, l'importo viene convertito al cambio del giorno di ogni esecuzione.</p>
             <FieldError :errors="fieldErrors" name="transfer_account_id" />
           </div>
           <div>
@@ -205,7 +210,8 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Intervallo</label>
-            <input v-model.number="form.interval" type="number" min="1" max="255" class="input" :class="{ 'input-invalid': fieldErrors.interval }" />
+            <input v-model.number="form.interval" type="number" min="1" max="255" class="input" :class="{ 'input-invalid': fieldErrors.interval }" aria-describedby="hint-interval" />
+            <p id="hint-interval" class="field-hint">Ogni quante cadenze si ripete: 2 con cadenza mensile vuol dire ogni 2 mesi.</p>
             <FieldError :errors="fieldErrors" name="interval" />
           </div>
           <div>
@@ -215,27 +221,29 @@ onMounted(async () => {
           </div>
           <div v-if="form.type !== 'income'">
             <label class="label">Investimento PAC (opzionale)</label>
-            <select v-model.number="form.investment_holding_id" class="input" :class="{ 'input-invalid': fieldErrors.investment_holding_id }">
+            <select v-model.number="form.investment_holding_id" class="input" :class="{ 'input-invalid': fieldErrors.investment_holding_id }" aria-describedby="hint-holding">
               <option :value="null">— nessuno —</option>
               <option v-for="h in holdings" :key="h.id" :value="h.id">{{ h.name }}</option>
             </select>
+            <p id="hint-holding" class="field-hint">A ogni scadenza, oltre al movimento sul conto, registra l'acquisto: quote = (importo − costi) / quotazione del giorno. Senza quotazione registra solo il movimento.</p>
             <FieldError :errors="fieldErrors" name="investment_holding_id" />
-            <p class="text-xs text-slate-500 mt-1">A ogni scadenza registra l'acquisto: quote = (importo − costi) / quotazione del giorno.</p>
           </div>
           <div v-if="form.type !== 'income' && form.investment_holding_id">
             <label class="label">Costi per rata</label>
-            <input v-model="form.investment_fees" type="number" step="0.01" min="0" class="input" :class="{ 'input-invalid': fieldErrors.investment_fees }" placeholder="0,00" />
+            <input v-model="form.investment_fees" type="number" step="0.01" min="0" class="input" :class="{ 'input-invalid': fieldErrors.investment_fees }" placeholder="0,00" aria-describedby="hint-fees" />
+            <p id="hint-fees" class="field-hint">Commissioni già comprese nell'importo della rata: comprano quote solo importo meno costi.</p>
             <FieldError :errors="fieldErrors" name="investment_fees" />
-            <p class="text-xs text-slate-500 mt-1">Commissioni già comprese nell'importo della rata.</p>
           </div>
           <div>
             <label class="label">Inizio</label>
-            <input v-model="form.starts_on" type="date" class="input" :class="{ 'input-invalid': fieldErrors.starts_on }" required />
+            <input v-model="form.starts_on" type="date" class="input" :class="{ 'input-invalid': fieldErrors.starts_on }" aria-describedby="hint-starts-on" required />
+            <p id="hint-starts-on" class="field-hint">Data della prima scadenza: se è già passata, nella notte vengono registrate anche le scadenze arretrate. In modifica non sposta la prossima scadenza.</p>
             <FieldError :errors="fieldErrors" name="starts_on" />
           </div>
           <div>
             <label class="label">Fine (opzionale)</label>
-            <input v-model="form.ends_on" type="date" class="input" :class="{ 'input-invalid': fieldErrors.ends_on }" />
+            <input v-model="form.ends_on" type="date" class="input" :class="{ 'input-invalid': fieldErrors.ends_on }" aria-describedby="hint-ends-on" />
+            <p id="hint-ends-on" class="field-hint">Dopo l'ultima scadenza entro questa data la ricorrente si disattiva da sola.</p>
             <FieldError :errors="fieldErrors" name="ends_on" />
           </div>
           <div class="sm:col-span-2 md:col-span-3">
@@ -245,9 +253,10 @@ onMounted(async () => {
           </div>
           <div class="sm:col-span-2 md:col-span-3">
             <div class="flex items-center gap-2">
-              <input id="is_active" v-model="form.is_active" type="checkbox" />
+              <input id="is_active" v-model="form.is_active" type="checkbox" aria-describedby="hint-is-active" />
               <label for="is_active" class="text-sm">Attiva</label>
             </div>
+            <p id="hint-is-active" class="field-hint">Se la disattivi non vengono create nuove transazioni; quando la riattivi vengono registrate anche le scadenze saltate nel frattempo.</p>
             <FieldError :errors="fieldErrors" name="is_active" />
           </div>
         </div>

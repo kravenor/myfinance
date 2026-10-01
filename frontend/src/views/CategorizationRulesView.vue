@@ -233,7 +233,7 @@ onMounted(async () => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl sm:text-2xl font-semibold">Regole di categorizzazione</h1>
-        <p class="text-sm text-slate-500 mt-1">
+        <p class="page-desc">
           Assegna automaticamente la categoria durante l'import quando la descrizione corrisponde a un pattern.
         </p>
       </div>
@@ -244,6 +244,16 @@ onMounted(async () => {
         </button>
       </div>
     </div>
+
+    <details class="help-panel">
+      <summary>Come funziona</summary>
+      <ul>
+        <li>Le regole entrano in gioco solo all'import e quando premi «Applica alle transazioni esistenti»: le transazioni inserite a mano non vengono categorizzate.</li>
+        <li>Le regole attive vengono provate dalla priorità più bassa alla più alta: vince la prima che corrisponde, le altre vengono ignorate.</li>
+        <li>Il confronto avviene sulla descrizione senza distinguere maiuscole e minuscole; all'import la regola interviene solo se il file non indica già una categoria esistente.</li>
+        <li>Creare, modificare o eliminare una regola non cambia le transazioni già registrate finché non la applichi a quelle esistenti.</li>
+      </ul>
+    </details>
 
     <button
       v-if="!showForm"
@@ -263,16 +273,23 @@ onMounted(async () => {
           <h2 class="font-semibold">Applica regole alle transazioni esistenti</h2>
           <button class="text-slate-500 hover:text-slate-700" aria-label="Chiudi" @click="showApply = false">✕</button>
         </div>
+        <p class="text-xs text-slate-500">
+          «Anteprima» mostra quali transazioni cambierebbero senza modificare nulla; solo «Conferma e applica» aggiorna la categoria.
+        </p>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div class="flex items-center gap-2">
-            <input
-              id="apply-uncat"
-              v-model="applyForm.only_uncategorized"
-              type="checkbox"
-              class="h-4 w-4"
-            />
-            <label for="apply-uncat" class="text-sm">Solo transazioni senza categoria</label>
+          <div>
+            <div class="flex items-center gap-2">
+              <input
+                id="apply-uncat"
+                v-model="applyForm.only_uncategorized"
+                type="checkbox"
+                class="h-4 w-4"
+                aria-describedby="hint-apply-uncat"
+              />
+              <label for="apply-uncat" class="text-sm">Solo transazioni senza categoria</label>
+            </div>
+            <p id="hint-apply-uncat" class="field-hint">Se lo togli, anche le transazioni già categorizzate possono ricevere la categoria della regola.</p>
           </div>
           <div>
             <label class="label">Conto</label>
@@ -368,28 +385,50 @@ onMounted(async () => {
               max="9999"
               class="input"
               :class="{ 'input-invalid': fieldErrors.priority }"
+              aria-describedby="hint-priority"
             />
+            <p id="hint-priority" class="field-hint">Le regole con priorità più bassa vengono provate per prime: vince la prima che corrisponde.</p>
             <FieldError :errors="fieldErrors" name="priority" />
           </div>
 
           <div>
             <label class="label">Condizione</label>
-            <select v-model="form.match_type" class="input" :class="{ 'input-invalid': fieldErrors.match_type }">
+            <select
+              v-model="form.match_type"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.match_type }"
+              aria-describedby="hint-match-type"
+            >
               <option v-for="(label, key) in RULE_MATCH_LABEL" :key="key" :value="key">{{ label }}</option>
             </select>
+            <p id="hint-match-type" class="field-hint">Come il pattern viene confrontato con la descrizione della transazione.</p>
             <FieldError :errors="fieldErrors" name="match_type" />
           </div>
           <div class="md:col-span-2">
             <label class="label">Pattern</label>
-            <input v-model="form.pattern" class="input" :class="{ 'input-invalid': fieldErrors.pattern }" required maxlength="255" />
+            <input
+              v-model="form.pattern"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.pattern }"
+              required
+              maxlength="255"
+              aria-describedby="hint-pattern"
+            />
+            <p id="hint-pattern" class="field-hint">Il testo da cercare nella descrizione; con «espressione regolare» puoi indicare alternative, es. esselunga|coop.</p>
             <FieldError :errors="fieldErrors" name="pattern" />
           </div>
 
           <div>
             <label class="label">Si applica a</label>
-            <select v-model="form.applies_to_type" class="input" :class="{ 'input-invalid': fieldErrors.applies_to_type }">
+            <select
+              v-model="form.applies_to_type"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.applies_to_type }"
+              aria-describedby="hint-applies-to"
+            >
               <option v-for="(label, key) in RULE_APPLIES_LABEL" :key="key" :value="key">{{ label }}</option>
             </select>
+            <p id="hint-applies-to" class="field-hint">Limita la regola alle sole entrate o alle sole uscite e filtra le categorie proposte; «Tutte» vale per ogni transazione.</p>
             <FieldError :errors="fieldErrors" name="applies_to_type" />
           </div>
           <div class="md:col-span-2">
@@ -409,9 +448,12 @@ onMounted(async () => {
             <FieldError v-else :errors="fieldErrors" name="category_id" />
           </div>
 
-          <div class="flex items-center gap-2">
-            <input v-model="form.is_active" type="checkbox" id="rule-active" class="h-4 w-4" />
-            <label for="rule-active" class="text-sm">Attiva</label>
+          <div>
+            <div class="flex items-center gap-2">
+              <input v-model="form.is_active" type="checkbox" id="rule-active" class="h-4 w-4" aria-describedby="hint-rule-active" />
+              <label for="rule-active" class="text-sm">Attiva</label>
+            </div>
+            <p id="hint-rule-active" class="field-hint">Una regola disattivata resta salvata ma non viene applicata.</p>
           </div>
         </div>
         <div class="modal-footer">
