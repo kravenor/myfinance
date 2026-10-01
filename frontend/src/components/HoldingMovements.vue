@@ -134,9 +134,9 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 flex justify-end bg-slate-900/40" @click.self="emit('close')">
-    <div class="w-full max-w-xl h-full overflow-y-auto bg-white shadow-xl">
-      <header class="sticky top-0 bg-white border-b border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
+  <div class="fixed inset-0 z-40 flex justify-end bg-black/40" @click.self="emit('close')">
+    <div class="w-full max-w-xl h-full overflow-y-auto bg-surface shadow-xl">
+      <header class="sticky top-0 bg-surface border-b border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h2 class="font-semibold text-slate-800 truncate">{{ holding.name }}</h2>
           <p class="text-xs text-slate-500">Registro movimenti</p>
@@ -145,19 +145,19 @@ onMounted(load)
       </header>
 
       <dl class="grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 border-b border-slate-200 text-sm">
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">Versato netto</dt>
           <dd class="font-medium"><Amount :value="holding.net_invested" :currency="holding.currency" /></dd>
         </div>
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">Valore attuale</dt>
           <dd class="font-medium"><Amount :value="holding.market_value" :currency="holding.currency" /></dd>
         </div>
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">P/L realizzato</dt>
           <dd class="font-medium"><Amount :value="holding.realized_pl" :currency="holding.currency" signed /></dd>
         </div>
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">P/L totale</dt>
           <dd class="font-medium"><Amount :value="totalPl" :currency="holding.currency" signed /></dd>
         </div>

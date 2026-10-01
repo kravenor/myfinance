@@ -31,7 +31,7 @@ const toneIconClass = {
       <div
         v-for="t in toast.items"
         :key="t.id"
-        class="pointer-events-auto flex items-start gap-3 rounded-lg border-l-4 bg-white px-4 py-3 shadow-lg ring-1 ring-slate-200"
+        class="pointer-events-auto flex items-start gap-3 rounded-lg border-l-4 bg-surface px-4 py-3 shadow-lg ring-1 ring-slate-200"
         :class="toneClass[t.tone]"
       >
         <span

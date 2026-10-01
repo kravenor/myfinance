@@ -1,3 +1,5 @@
+import { Chart as ChartJS } from 'chart.js'
+
 // Colori dei grafici Chart.js, allineati ai token di tailwind.config.js
 // (income = emerald-500, expense = rose-500, primary = indigo-500).
 export const INCOME_COLOR = '#10b981'
@@ -13,4 +15,11 @@ export const CATEGORY_PALETTE = [
 
 export function paletteColor(i: number): string {
   return CATEGORY_PALETTE[i % CATEGORY_PALETTE.length]
+}
+
+// Testo e griglia di Chart.js leggibili sul tema corrente (i grafici già disegnati
+// si aggiornano al prossimo render).
+export function syncChartTheme(dark: boolean): void {
+  ChartJS.defaults.color = dark ? '#94a3b8' : '#64748b'
+  ChartJS.defaults.borderColor = dark ? 'rgba(148, 163, 184, 0.15)' : 'rgba(0, 0, 0, 0.1)'
 }

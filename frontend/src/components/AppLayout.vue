@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
@@ -36,9 +36,28 @@ async function onLogout() {
   router.push({ name: 'login' })
 }
 
+// Scorciatoie: N nuova transazione, / ricerca della pagina. Mai mentre si scrive o con una modale aperta.
+function onKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest('input, textarea, select, [contenteditable]') || document.querySelector('dialog[open]')) return
+  if (e.key === 'n' || e.key === 'N') {
+    e.preventDefault()
+    router.push({ name: 'transactions', query: { new: '1' } })
+  } else if (e.key === '/') {
+    const search = document.querySelector<HTMLInputElement>('main input[type="search"]')
+    if (search) {
+      e.preventDefault()
+      search.focus()
+    }
+  }
+}
+
 onMounted(() => {
   notifications.fetch().catch(() => {})
+  window.addEventListener('keydown', onKeydown)
 })
+onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 const currentLabel = computed(() => NAV_ITEMS.find((n) => n.name === route.name)?.label ?? 'Finance')
 const initial = computed(() => (auth.user?.name || auth.user?.email || '?').charAt(0).toUpperCase())
@@ -48,13 +67,13 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
   <div class="min-h-screen lg:flex">
     <div
       v-if="mobileOpen"
-      class="lg:hidden fixed inset-0 z-40 bg-slate-900/50"
+      class="lg:hidden fixed inset-0 z-40 bg-black/50"
       aria-hidden="true"
       @click="mobileOpen = false"
     />
 
     <aside
-      class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:translate-x-0"
+      class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-surface transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:translate-x-0"
       :class="mobileOpen ? 'translate-x-0' : '-translate-x-full'"
     >
       <div class="flex h-14 items-center justify-between gap-2 px-5">
@@ -107,7 +126,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header
-        class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur sm:px-6"
+        class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-surface/90 px-4 backdrop-blur sm:px-6"
       >
         <button
           type="button"
@@ -124,9 +143,12 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
           <RouterLink
             :to="{ name: 'transactions', query: { new: '1' } }"
             class="btn-primary hidden gap-1.5 lg:inline-flex"
+            title="Nuova transazione (N)"
+            aria-keyshortcuts="n"
           >
             <AppIcon name="plus" class="h-4 w-4" />
             Transazione
+            <kbd class="ml-1 rounded border border-white/40 px-1.5 text-xs font-normal leading-5">N</kbd>
           </RouterLink>
 
           <RouterLink
@@ -137,7 +159,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
             <AppIcon name="bell" class="h-5 w-5" />
             <span
               v-if="notifications.unreadCount > 0"
-              class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger-500 ring-2 ring-white"
+              class="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-danger-500 ring-2 ring-surface"
               aria-hidden="true"
             />
           </RouterLink>
@@ -149,7 +171,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
             >
               {{ initial }}
             </summary>
-            <div class="absolute right-0 mt-2 w-60 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+            <div class="absolute right-0 mt-2 w-60 rounded-lg border border-slate-200 bg-surface py-1 shadow-lg">
               <p class="truncate px-4 py-2 text-xs text-slate-500">{{ auth.user?.email }}</p>
               <RouterLink :to="{ name: 'settings' }" class="menu-item">
                 <AppIcon name="cog-6-tooth" class="h-4 w-4" />

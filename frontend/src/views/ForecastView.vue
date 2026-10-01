@@ -523,7 +523,7 @@ onMounted(async () => {
         <table class="min-w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200">
-              <th class="text-left p-2 sticky left-0 bg-white">Scenario</th>
+              <th class="text-left p-2 sticky left-0 bg-surface">Scenario</th>
               <th v-for="m in comparison?.months ?? []" :key="m" class="text-right p-2 whitespace-nowrap">
                 {{ periodLabel(m) }}
               </th>
@@ -602,7 +602,7 @@ onMounted(async () => {
         <table class="min-w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200">
-              <th class="text-left p-2 sticky left-0 bg-white">Categoria</th>
+              <th class="text-left p-2 sticky left-0 bg-surface">Categoria</th>
               <th v-for="m in forecast.months" :key="m" class="text-right p-2 whitespace-nowrap">
                 {{ periodLabel(m) }}
               </th>
@@ -611,7 +611,7 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="row in forecast.categories" :key="(row.category_id ?? 'u') + ''" class="border-b border-slate-100">
-              <td class="p-2 sticky left-0 bg-white">
+              <td class="p-2 sticky left-0 bg-surface">
                 <span class="inline-flex items-center gap-2">
                   <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
                   <span class="font-medium">{{ row.category_name }}</span>

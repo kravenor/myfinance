@@ -4,11 +4,18 @@ import { api } from '@/lib/api'
 import { DATE_FORMATS, DEFAULT_DATE_FORMAT, formatDateWith, financialMonthRange } from '@/lib/date'
 import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
+import { useThemeStore, type ThemePreference } from '@/stores/theme'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import type { NotificationPreferences, User } from '@/types/api'
 
 const auth = useAuthStore()
 const menu = useMenuStore()
+const theme = useThemeStore()
+const THEME_OPTIONS: { value: ThemePreference; label: string; hint: string }[] = [
+  { value: 'system', label: 'Automatico', hint: 'Segue il sistema operativo' },
+  { value: 'light', label: 'Chiaro', hint: 'Sempre chiaro' },
+  { value: 'dark', label: 'Scuro', hint: 'Sempre scuro' },
+]
 
 const menuItems = NAV_ITEMS.map((item) => ({
   ...item,
@@ -295,6 +302,28 @@ onMounted(async () => {
         </div>
       </form>
     </div>
+
+    <section class="card p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 class="font-medium">Aspetto</h2>
+        <p class="text-sm text-slate-500 mt-1">Tema dell'interfaccia, salvato su questo dispositivo.</p>
+      </div>
+      <fieldset class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <legend class="sr-only">Tema</legend>
+        <label
+          v-for="opt in THEME_OPTIONS"
+          :key="opt.value"
+          class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition"
+          :class="theme.preference === opt.value ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'"
+        >
+          <input v-model="theme.preference" type="radio" name="theme" :value="opt.value" class="mt-0.5 h-4 w-4" />
+          <span>
+            <span class="block text-sm font-medium text-slate-900">{{ opt.label }}</span>
+            <span class="block text-xs text-slate-500">{{ opt.hint }}</span>
+          </span>
+        </label>
+      </fieldset>
+    </section>
 
     <section class="card p-4 sm:p-6 space-y-5">
       <div>

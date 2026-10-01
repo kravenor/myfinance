@@ -283,7 +283,7 @@ watch(() => route.query.new, () => {
       <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent>
         <div class="sm:col-span-2 md:col-span-5">
           <label class="label">Cerca nella descrizione</label>
-          <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave…" />
+          <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave… (premi / per cercare)" aria-keyshortcuts="/" />
         </div>
         <div>
           <label class="label">Conto</label>
@@ -398,7 +398,7 @@ watch(() => route.query.new, () => {
                 class="px-3 py-1 rounded-full text-sm border transition"
                 :class="form.tag_ids.includes(t.id)
                   ? 'text-white border-transparent'
-                  : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'"
+                  : 'bg-surface text-slate-600 border-slate-300 hover:border-slate-400'"
                 :style="form.tag_ids.includes(t.id) ? { background: t.color || FALLBACK_TAG_COLOR } : {}"
                 @click="toggleTag(t.id)"
               >

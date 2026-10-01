@@ -25,19 +25,19 @@
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-primary {
     @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
   .btn-secondary {
-    @apply btn bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-400;
+    @apply btn bg-surface text-slate-700 border border-slate-300 hover:bg-slate-50 focus:ring-slate-400;
   }
   .btn-danger {
-    @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500;
+    @apply btn bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
   }
   .input {
-    @apply block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500;
+    @apply block w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500;
   }
   .input-invalid {
     @apply border-danger-500 focus:border-danger-500 focus:ring-danger-500;
@@ -61,19 +61,19 @@
 
   /* AppModal: a tutto schermo sotto sm, finestra centrata da sm in su. */
   .modal {
-    @apply m-0 h-[100dvh] max-h-[100dvh] w-full max-w-none overflow-hidden bg-white p-0 text-slate-900 shadow-xl sm:m-auto sm:h-fit sm:max-h-[90vh] sm:rounded-xl;
+    @apply m-0 h-[100dvh] max-h-[100dvh] w-full max-w-none overflow-hidden bg-surface p-0 text-slate-900 shadow-xl sm:m-auto sm:h-fit sm:max-h-[90vh] sm:rounded-xl;
   }
   .modal::backdrop {
-    @apply bg-slate-900/50;
+    @apply bg-black/50;
   }
   .modal-footer {
-    @apply sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6;
+    @apply sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-200 bg-surface px-4 py-3 sm:flex-row sm:justify-end sm:px-6;
   }
   .label {
     @apply block text-sm font-medium text-slate-700 mb-1;
   }
   .card {
-    @apply bg-white rounded-lg shadow-sm border border-slate-200;
+    @apply bg-surface rounded-lg shadow-sm border border-slate-200;
   }
   .table {
     @apply min-w-full divide-y divide-slate-200 text-slate-800;
@@ -88,7 +88,7 @@
     @apply bg-slate-50;
   }
   .icon-btn {
-    @apply inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 rounded-md transition focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 rounded-md transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .icon-btn-edit {
     @apply text-slate-500 hover:bg-primary-50 hover:text-primary-600 focus:ring-primary-500;
@@ -165,4 +165,20 @@
       @apply hidden;
     }
   }
+}
+
+/* Dark mode: i token 600/700 diventano chiari perché servono al testo; i pulsanti pieni
+   con testo bianco tengono i toni scuri originali (indigo-600/700, red-600/700). */
+:root.dark .btn-primary,
+:root.dark .bg-primary-600 {
+  background-color: rgb(79 70 229);
+}
+:root.dark .btn-primary:hover:not(:disabled) {
+  background-color: rgb(67 56 202);
+}
+:root.dark .btn-danger {
+  background-color: rgb(220 38 38);
+}
+:root.dark .btn-danger:hover:not(:disabled) {
+  background-color: rgb(185 28 28);
 }
