@@ -428,7 +428,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 |------|------|------|
 | `/login` | LoginView | precompila `demo@finance.local` / `password` per il seed locale |
 | `/register` | RegisterView | conferma password obbligatoria |
-| `/` | DashboardView | cards conti + ultime 5 transazioni |
+| `/` | DashboardView | KPI del mese con confronto, ultime 5 transazioni, budget in allerta, conti, grafici |
 | `/accounts` | AccountsView | CRUD inline |
 | `/categories` | CategoriesView | CRUD + parent select filtrato per type |
 | `/tags` | TagsView | CRUD + swatch colore |
@@ -471,7 +471,7 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 
 ### Frontend
 - Libreria: `chart.js` + `vue-chartjs`.
-- [DashboardView](frontend/src/views/DashboardView.vue): 4 KPI cards (income/expense/net mese + patrimonio netto), saldi conti, donut categorie del mese, bar income vs expense 12 mesi.
+- [DashboardView](frontend/src/views/DashboardView.vue): KPI patrimonio netto + entrate/uscite/risparmio del mese con delta % vs mese precedente (penultimo punto di `/reports/timeline`, che termina sul mese finanziario corrente: nessuna query extra; colore del delta per significato, uscite in aumento = rosso) e `saving_rate`. Colonna principale: ultime 5 transazioni (`/transactions?per_page=5`, in `Promise.all`) e bar entrate/uscite 12 mesi; laterale: budget in allerta con barra di progresso (`/budgets/alerts`), conti, donut spese per categoria. Stati vuoti con CTA, skeleton al caricamento.
 - [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, donut by-tag (usa il `color` del tag), bar timeline, line net-worth, tabella categorie + tabella tag. Il selettore type (`expense`/`income`) filtra sia by-category sia by-tag. Toggle "Report visibili" (4 gruppi: Categorie/Tag/Income vs Expense/Patrimonio netto) per mostrare/nascondere ogni report; scelta persistita in `localStorage` (`reports.visible`). I dati vengono comunque caricati: i toggle agiscono solo sulla visualizzazione.
 
 ## 11. Import / Export CSV (Fase 8)
