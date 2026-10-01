@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Transaction;
 
+use App\Support\CategoryTypeCheck;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -53,6 +54,13 @@ class StoreTransactionRequest extends FormRequest
         $validator->after(function ($validator) {
             if ($this->input('type') !== 'transfer' && $this->filled('transfer_account_id')) {
                 $validator->errors()->add('transfer_account_id', 'Consentito solo per transazioni di tipo transfer.');
+            }
+
+            if (! $validator->errors()->hasAny(['type', 'category_id'])) {
+                $error = CategoryTypeCheck::error($this->input('category_id'), $this->input('type'));
+                if ($error !== null) {
+                    $validator->errors()->add('category_id', $error);
+                }
             }
         });
     }

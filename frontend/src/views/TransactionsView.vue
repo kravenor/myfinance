@@ -100,6 +100,13 @@ const categoryOptions = computed<{ id: number; label: string }[]>(() => {
   return out
 })
 
+// Cambiando tipo, una categoria del tipo precedente non è più valida: meglio azzerarla che lasciarla nascosta.
+watch(categoryOptions, (opts) => {
+  if (form.value.category_id !== null && !opts.some((o) => o.id === form.value.category_id)) {
+    form.value.category_id = null
+  }
+})
+
 function accountName(id: number | null | undefined): string {
   if (!id) return '—'
   return accounts.value.find((a) => a.id === id)?.name ?? `#${id}`

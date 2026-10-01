@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $icon
  * @property string $status
  * @property string|null $notes
+ * @property-read Account|null $account
  */
 class SavingsGoal extends Model
 {

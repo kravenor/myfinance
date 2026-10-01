@@ -3,6 +3,7 @@
 namespace App\Http\Requests\RecurringTransaction;
 
 use App\Models\RecurringTransaction;
+use App\Support\CategoryTypeCheck;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -73,6 +74,14 @@ class UpdateRecurringTransactionRequest extends FormRequest
             $endsOn = $this->has('ends_on') ? $this->input('ends_on') : $recurring->ends_on?->toDateString();
             if ($startsOn && $endsOn && $endsOn < $startsOn) {
                 $validator->errors()->add('ends_on', 'ends_on deve essere uguale o successivo a starts_on.');
+            }
+
+            if (! $validator->errors()->hasAny(['type', 'category_id'])) {
+                $categoryId = $this->has('category_id') ? $this->input('category_id') : $recurring->category_id;
+                $error = CategoryTypeCheck::error($categoryId, $type);
+                if ($error !== null) {
+                    $validator->errors()->add('category_id', $error);
+                }
             }
         });
     }
