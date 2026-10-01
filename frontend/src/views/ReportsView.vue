@@ -15,6 +15,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import { EXPENSE_COLOR, FALLBACK_TAG_COLOR, INCOME_COLOR, PRIMARY_COLOR, paletteColor } from '@/lib/chartTheme'
 import type { CategoryTotal, NetWorthPoint, TagTotal, TimelinePoint } from '@/types/reports'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
@@ -32,7 +33,7 @@ const categoryType = ref<'expense' | 'income'>('expense')
 const REPORTS = [
   { key: 'category', label: 'Categorie' },
   { key: 'tag', label: 'Tag' },
-  { key: 'timeline', label: 'Income vs Expense' },
+  { key: 'timeline', label: 'Entrate vs uscite' },
   { key: 'netWorth', label: 'Patrimonio netto' },
 ] as const
 type ReportKey = (typeof REPORTS)[number]['key']
@@ -71,18 +72,12 @@ const timeline = ref<TimelinePoint[]>([])
 const netWorth = ref<NetWorthPoint[]>([])
 const loading = ref(false)
 
-const palette = [
-  '#6366f1', '#ec4899', '#22c55e', '#f59e0b', '#0ea5e9',
-  '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#eab308',
-  '#06b6d4', '#f97316',
-]
-
 const donutData = () => ({
   labels: categories.value.map((c) => c.category_name),
   datasets: [
     {
       data: categories.value.map((c) => parseFloat(c.total)),
-      backgroundColor: categories.value.map((_, i) => palette[i % palette.length]),
+      backgroundColor: categories.value.map((_, i) => paletteColor(i)),
       borderWidth: 0,
     },
   ],
@@ -93,7 +88,7 @@ const tagDonutData = () => ({
   datasets: [
     {
       data: tags.value.map((t) => parseFloat(t.total)),
-      backgroundColor: tags.value.map((t, i) => t.tag_color || palette[i % palette.length]),
+      backgroundColor: tags.value.map((t, i) => t.tag_color || paletteColor(i)),
       borderWidth: 0,
     },
   ],
@@ -102,8 +97,8 @@ const tagDonutData = () => ({
 const barData = () => ({
   labels: timeline.value.map((t) => formatMonth(t.period)),
   datasets: [
-    { label: 'Income', data: timeline.value.map((t) => parseFloat(t.income)), backgroundColor: '#22c55e' },
-    { label: 'Expense', data: timeline.value.map((t) => parseFloat(t.expense)), backgroundColor: '#ef4444' },
+    { label: 'Entrate', data: timeline.value.map((t) => parseFloat(t.income)), backgroundColor: INCOME_COLOR },
+    { label: 'Uscite', data: timeline.value.map((t) => parseFloat(t.expense)), backgroundColor: EXPENSE_COLOR },
   ],
 })
 
@@ -113,7 +108,7 @@ const lineData = () => ({
     {
       label: 'Patrimonio netto',
       data: netWorth.value.map((p) => parseFloat(p.net_worth)),
-      borderColor: '#6366f1',
+      borderColor: PRIMARY_COLOR,
       backgroundColor: 'rgba(99,102,241,0.15)',
       fill: true,
       tension: 0.3,
@@ -219,7 +214,7 @@ onMounted(refresh)
         </div>
         <div v-if="visible.timeline" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Income vs Expense (mensile)
+            Entrate vs uscite (mensile)
           </h3>
           <div class="h-64 sm:h-80">
             <Bar :data="barData()" :options="chartOptions" />
@@ -270,7 +265,7 @@ onMounted(refresh)
                 <span class="inline-flex items-center gap-2">
                   <span
                     class="inline-block w-3 h-3 rounded-full"
-                    :style="{ background: t.tag_color || '#475569' }"
+                    :style="{ background: t.tag_color || FALLBACK_TAG_COLOR }"
                   />
                   {{ t.tag_name }}
                 </span>

@@ -13,6 +13,7 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import { INCOME_COLOR, paletteColor } from '@/lib/chartTheme'
 import { formatCurrency } from '@/lib/money'
 import type {
   CashFlowPoint,
@@ -22,11 +23,6 @@ import type {
 } from '@/types/reports'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
-
-const palette = [
-  '#6366f1', '#ec4899', '#22c55e', '#f59e0b', '#0ea5e9',
-  '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#eab308',
-]
 
 const unit = ref<'month' | 'year'>('month')
 const forecastMonths = ref(6)
@@ -64,8 +60,8 @@ const trendData = computed(() => {
     datasets: trend.value.categories.map((c, i) => ({
       label: c.category_name,
       data: c.values.map((v) => parseFloat(v)),
-      borderColor: palette[i % palette.length],
-      backgroundColor: palette[i % palette.length],
+      borderColor: paletteColor(i),
+      backgroundColor: paletteColor(i),
       tension: 0.3,
       fill: false,
     })),
@@ -76,9 +72,9 @@ const forecastData = computed(() => ({
   labels: forecast.value.map((p) => formatMonth(p.period)),
   datasets: [
     {
-      label: 'Net mensile previsto',
+      label: 'Saldo mensile previsto',
       data: forecast.value.map((p) => parseFloat(p.net)),
-      borderColor: '#22c55e',
+      borderColor: INCOME_COLOR,
       backgroundColor: 'rgba(34,197,94,0.15)',
       tension: 0.3,
       fill: true,
@@ -93,7 +89,7 @@ const forecastData = computed(() => ({
       yAxisID: 'y1',
     },
     {
-      label: 'Net mensile con storico',
+      label: 'Saldo mensile con storico',
       data: forecast.value.map((p) => parseFloat(p.net) + parseFloat(p.historical_net)),
       borderColor: '#f59e0b',
       borderDash: [6, 4],
@@ -121,7 +117,7 @@ const chartOptions = {
 const forecastOptions = {
   ...chartOptions,
   scales: {
-    y: { position: 'left' as const, title: { display: true, text: 'Net mensile' } },
+    y: { position: 'left' as const, title: { display: true, text: 'Saldo mensile' } },
     y1: {
       position: 'right' as const,
       grid: { drawOnChartArea: false },
@@ -178,7 +174,7 @@ onMounted(refresh)
 
       <div v-if="comparison" class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Income {{ formatMonth(comparison.current.label) }}</p>
+          <p class="text-xs uppercase text-slate-500">Entrate {{ formatMonth(comparison.current.label) }}</p>
           <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.income, baseCurrency) }}</p>
           <p class="text-xs text-slate-500 mt-2">
             vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.income, baseCurrency) }}
@@ -191,7 +187,7 @@ onMounted(refresh)
           </p>
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Expense {{ formatMonth(comparison.current.label) }}</p>
+          <p class="text-xs uppercase text-slate-500">Uscite {{ formatMonth(comparison.current.label) }}</p>
           <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.expense, baseCurrency) }}</p>
           <p class="text-xs text-slate-500 mt-2">
             vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.expense, baseCurrency) }}
@@ -204,7 +200,7 @@ onMounted(refresh)
           </p>
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Net {{ formatMonth(comparison.current.label) }}</p>
+          <p class="text-xs uppercase text-slate-500">Saldo {{ formatMonth(comparison.current.label) }}</p>
           <p
             class="text-2xl font-semibold mt-1"
             :class="parseFloat(comparison.current.net) >= 0 ? 'text-green-600' : 'text-red-600'"

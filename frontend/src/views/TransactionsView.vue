@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
+import Amount from '@/components/ui/Amount.vue'
 import { formatCurrency } from '@/lib/money'
+import { FALLBACK_TAG_COLOR } from '@/lib/chartTheme'
+import { TX_TYPE_LABEL, TX_TYPES } from '@/lib/labels'
+import { useToastStore } from '@/stores/toast'
 import type { Account, Category, Paginated, Tag, Transaction, TransactionType } from '@/types/api'
 
-const { items, loading, meta, list, create, update, destroy } = useCrud<Transaction>('transactions')
+const { items, loading, meta, submitting, fieldErrors, list, create, update, destroy } = useCrud<Transaction>('transactions')
+const toast = useToastStore()
+const formEl = ref<HTMLFormElement | null>(null)
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
@@ -96,26 +102,25 @@ function categoryName(id: number | null | undefined): string {
   return categories.value.find((c) => c.id === id)?.name ?? ''
 }
 
-function txBorderClass(type: TransactionType): string {
-  if (type === 'income') return 'border-green-500'
-  if (type === 'expense') return 'border-red-400'
-  return 'border-slate-300'
+const TX_BORDER_CLASS: Record<TransactionType, string> = {
+  income: 'border-income-500',
+  expense: 'border-expense-400',
+  transfer: 'border-transfer-300',
 }
 
-function txAmountClass(type: TransactionType): string {
-  if (type === 'income') return 'text-green-600'
-  if (type === 'expense') return 'text-red-600'
-  return 'text-slate-700'
+const TX_BADGE_CLASS: Record<TransactionType, string> = {
+  income: 'bg-income-50 text-income-700',
+  expense: 'bg-expense-50 text-expense-700',
+  transfer: 'bg-transfer-50 text-transfer-700',
 }
 
-function txAmountSign(type: TransactionType): string {
-  if (type === 'income') return '+'
-  if (type === 'expense') return '−'
-  return ''
+function fieldError(name: string): string | undefined {
+  return fieldErrors.value[name]?.[0]
 }
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     category_id: null,
@@ -142,7 +147,19 @@ function startEdit(tx: Transaction) {
     description: tx.description ?? '',
     tag_ids: (tx.tags ?? []).map((t) => t.id),
   }
+  openForm()
+}
+
+// Il form sta in cima alla lista: da una riga in fondo o dal FAB va portato in vista.
+function openForm() {
+  fieldErrors.value = {}
   showForm.value = true
+  nextTick(() => formEl.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+}
+
+function openNew() {
+  reset()
+  openForm()
 }
 
 async function onSubmit() {
@@ -164,11 +181,18 @@ async function onSubmit() {
     }
   }
   const wasEditing = editing.value !== null
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: errori sotto i campi, il form resta aperto con i dati inseriti.
+    if (Object.keys(fieldErrors.value).length) toast.error('Controlla i campi evidenziati.')
+    return
   }
+  toast.success(wasEditing ? 'Transazione aggiornata.' : 'Transazione registrata.')
   reset()
   showForm.value = false
   await applyFilters(!wasEditing)
@@ -177,6 +201,7 @@ async function onSubmit() {
 async function onDelete(tx: Transaction) {
   if (!confirm('Eliminare la transazione?')) return
   await destroy(tx.id)
+  toast.success('Transazione eliminata.')
   await applyFilters(false)
 }
 
@@ -218,7 +243,7 @@ onMounted(async () => {
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
+      <button class="btn-primary" @click="showForm ? ((showForm = false), reset()) : openNew()">
         {{ showForm ? 'Annulla' : 'Nuova transazione' }}
       </button>
     </div>
@@ -228,7 +253,7 @@ onMounted(async () => {
       type="button"
       class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
       aria-label="Nuova transazione"
-      @click="showForm = true; reset()"
+      @click="openNew()"
     >+</button>
 
     <details class="card filter-panel" open>
@@ -249,9 +274,7 @@ onMounted(async () => {
           <label class="label">Tipo</label>
           <select v-model="filters.type" class="input">
             <option value="">Tutti</option>
-            <option value="income">income</option>
-            <option value="expense">expense</option>
-            <option value="transfer">transfer</option>
+            <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
           </select>
         </div>
         <div>
@@ -280,39 +303,41 @@ onMounted(async () => {
       <span v-if="meta.total > 0"> · {{ meta.from }}–{{ meta.to }}</span>
     </p>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
+    <form v-if="showForm" ref="formEl" class="card p-4 scroll-mt-20 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
       <div>
         <label class="label">Tipo</label>
         <select v-model="form.type" class="input">
-          <option value="expense">expense</option>
-          <option value="income">income</option>
-          <option value="transfer">transfer</option>
+          <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
         </select>
       </div>
       <div>
         <label class="label">Conto</label>
-        <select v-model.number="form.account_id" class="input" required>
+        <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldError('account_id') }" required>
           <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
         </select>
+        <p v-if="fieldError('account_id')" class="field-error">{{ fieldError('account_id') }}</p>
       </div>
       <div v-if="form.type === 'transfer'">
         <label class="label">Conto destinazione</label>
-        <select v-model.number="form.transfer_account_id" class="input" required>
+        <select v-model.number="form.transfer_account_id" class="input" :class="{ 'input-invalid': fieldError('transfer_account_id') }" required>
           <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
             {{ a.name }}
           </option>
         </select>
+        <p v-if="fieldError('transfer_account_id')" class="field-error">{{ fieldError('transfer_account_id') }}</p>
       </div>
       <div v-else>
         <label class="label">Categoria</label>
-        <select v-model.number="form.category_id" class="input">
+        <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldError('category_id') }">
           <option :value="null">— Nessuna —</option>
           <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
         </select>
+        <p v-if="fieldError('category_id')" class="field-error">{{ fieldError('category_id') }}</p>
       </div>
       <div>
         <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
-        <input v-model="form.amount" type="number" step="0.01" min="0.01" class="input" required />
+        <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" min="0.01" class="input" :class="{ 'input-invalid': fieldError('amount') }" required />
+        <p v-if="fieldError('amount')" class="field-error">{{ fieldError('amount') }}</p>
       </div>
       <div v-if="isCrossCurrencyTransfer">
         <label class="label">Importo ricevuto ({{ accountCurrency(form.transfer_account_id) }})</label>
@@ -323,15 +348,19 @@ onMounted(async () => {
           min="0.01"
           class="input"
           :placeholder="`Auto (tasso del ${form.occurred_at})`"
+          :class="{ 'input-invalid': fieldError('transfer_amount') }"
         />
+        <p v-if="fieldError('transfer_amount')" class="field-error">{{ fieldError('transfer_amount') }}</p>
       </div>
       <div>
         <label class="label">Data</label>
-        <input v-model="form.occurred_at" type="date" class="input" required />
+        <input v-model="form.occurred_at" type="date" class="input" :class="{ 'input-invalid': fieldError('occurred_at') }" required />
+        <p v-if="fieldError('occurred_at')" class="field-error">{{ fieldError('occurred_at') }}</p>
       </div>
       <div class="sm:col-span-2 md:col-span-3">
         <label class="label">Descrizione</label>
-        <input v-model="form.description" class="input" />
+        <input v-model="form.description" class="input" :class="{ 'input-invalid': fieldError('description') }" />
+        <p v-if="fieldError('description')" class="field-error">{{ fieldError('description') }}</p>
       </div>
       <div class="sm:col-span-2 md:col-span-3">
         <label class="label">Tag</label>
@@ -344,7 +373,7 @@ onMounted(async () => {
             :class="form.tag_ids.includes(t.id)
               ? 'text-white border-transparent'
               : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'"
-            :style="form.tag_ids.includes(t.id) ? { background: t.color || '#475569' } : {}"
+            :style="form.tag_ids.includes(t.id) ? { background: t.color || FALLBACK_TAG_COLOR } : {}"
             @click="toggleTag(t.id)"
           >
             {{ t.name }}
@@ -357,7 +386,9 @@ onMounted(async () => {
       </div>
       <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
         <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
+        <button type="submit" class="btn-primary" :disabled="submitting">
+          {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+        </button>
       </div>
     </form>
 
@@ -370,7 +401,7 @@ onMounted(async () => {
           v-for="tx in items"
           :key="tx.id"
           class="p-4 border-l-4"
-          :class="txBorderClass(tx.type)"
+          :class="TX_BORDER_CLASS[tx.type]"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -387,15 +418,13 @@ onMounted(async () => {
                 <span
                   v-for="t in tx.tags"
                   :key="t.id"
-                  class="inline-block px-2 py-0.5 rounded-full text-[10px] text-white"
-                  :style="{ background: t.color || '#475569' }"
+                  class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
+                  :style="{ background: t.color || FALLBACK_TAG_COLOR }"
                 >{{ t.name }}</span>
               </div>
             </div>
             <div class="text-right shrink-0">
-              <p class="font-semibold whitespace-nowrap" :class="txAmountClass(tx.type)">
-                {{ txAmountSign(tx.type) }}{{ formatCurrency(tx.amount, tx.currency) }}
-              </p>
+              <Amount class="block font-semibold" :value="tx.amount" :currency="tx.currency" :type="tx.type" />
               <p
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
                 class="text-xs font-normal text-slate-400 mt-0.5"
@@ -423,7 +452,11 @@ onMounted(async () => {
         <tbody class="divide-y divide-slate-100">
           <tr v-for="tx in items" :key="tx.id">
             <td>{{ formatDate(tx.occurred_at) }}</td>
-            <td class="capitalize">{{ tx.type }}</td>
+            <td>
+              <span class="inline-block rounded px-2 py-0.5 text-xs font-medium" :class="TX_BADGE_CLASS[tx.type]">
+                {{ TX_TYPE_LABEL[tx.type] }}
+              </span>
+            </td>
             <td>
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(tx.account_id) }}</span>
@@ -443,13 +476,13 @@ onMounted(async () => {
                   v-for="t in tx.tags"
                   :key="t.id"
                   class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
-                  :style="{ background: t.color || '#475569' }"
+                  :style="{ background: t.color || FALLBACK_TAG_COLOR }"
                 >{{ t.name }}</span>
               </span>
               <span v-else class="text-slate-400">—</span>
             </td>
             <td class="text-right font-medium">
-              {{ formatCurrency(tx.amount, tx.currency) }}
+              <Amount :value="tx.amount" :currency="tx.currency" :type="tx.type" />
               <span
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
                 class="block text-xs font-normal text-slate-400"

@@ -13,7 +13,10 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import { EXPENSE_COLOR, INCOME_COLOR, paletteColor } from '@/lib/chartTheme'
+import { TX_TYPE_LABEL } from '@/lib/labels'
 import { formatCurrency } from '@/lib/money'
+import Amount from '@/components/ui/Amount.vue'
 import type { BudgetAlert, CategoryTotal, ReportSummary, TimelinePoint } from '@/types/reports'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Legend, Tooltip)
@@ -24,18 +27,12 @@ const timeline = ref<TimelinePoint[]>([])
 const alerts = ref<BudgetAlert[]>([])
 const loading = ref(true)
 
-const palette = [
-  '#6366f1', '#ec4899', '#22c55e', '#f59e0b', '#0ea5e9',
-  '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#eab308',
-  '#06b6d4', '#f97316',
-]
-
 const donutData = () => ({
   labels: categories.value.map((c) => c.category_name),
   datasets: [
     {
       data: categories.value.map((c) => parseFloat(c.total)),
-      backgroundColor: categories.value.map((_, i) => palette[i % palette.length]),
+      backgroundColor: categories.value.map((_, i) => paletteColor(i)),
       borderWidth: 0,
     },
   ],
@@ -45,14 +42,14 @@ const barData = () => ({
   labels: timeline.value.map((t) => formatMonth(t.period)),
   datasets: [
     {
-      label: 'Income',
+      label: TX_TYPE_LABEL.income,
       data: timeline.value.map((t) => parseFloat(t.income)),
-      backgroundColor: '#22c55e',
+      backgroundColor: INCOME_COLOR,
     },
     {
-      label: 'Expense',
+      label: TX_TYPE_LABEL.expense,
       data: timeline.value.map((t) => parseFloat(t.expense)),
-      backgroundColor: '#ef4444',
+      backgroundColor: EXPENSE_COLOR,
     },
   ],
 })
@@ -87,12 +84,12 @@ onMounted(async () => {
     <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
 
     <template v-else-if="summary">
-      <section v-if="alerts.length" class="card border-l-4 border-amber-400 p-4">
+      <section v-if="alerts.length" class="card border-l-4 border-warning-400 p-4">
         <div class="flex items-center justify-between gap-3 mb-3">
           <h2 class="text-sm font-medium text-slate-600 uppercase tracking-wide">
             Alert budget ({{ alerts.length }})
           </h2>
-          <RouterLink :to="{ name: 'budgets' }" class="text-sm text-indigo-600 underline">
+          <RouterLink :to="{ name: 'budgets' }" class="text-sm text-primary-600 underline">
             Vai ai budget →
           </RouterLink>
         </div>
@@ -112,15 +109,15 @@ onMounted(async () => {
               <span
                 class="text-xs px-2 py-0.5 rounded"
                 :class="al.status === 'exceeded'
-                  ? 'bg-red-100 text-red-700'
-                  : 'bg-amber-100 text-amber-700'"
+                  ? 'bg-danger-100 text-danger-700'
+                  : 'bg-warning-100 text-warning-700'"
               >
                 {{ al.status === 'exceeded' ? 'sforato' : 'in allerta' }}
               </span>
             </span>
-            <span class="text-slate-500">
+            <span class="num text-slate-500">
               {{ formatCurrency(al.spent, summary.base_currency) }} / {{ formatCurrency(al.amount, summary.base_currency) }} ·
-              <span :class="al.status === 'exceeded' ? 'text-red-600 font-semibold' : 'text-amber-600 font-semibold'">
+              <span :class="al.status === 'exceeded' ? 'text-danger-600 font-semibold' : 'text-warning-700 font-semibold'">
                 {{ al.percent }}%
               </span>
             </span>
@@ -130,25 +127,20 @@ onMounted(async () => {
 
       <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Income mese</p>
-          <p class="text-2xl font-semibold text-green-600 mt-1">{{ formatCurrency(summary.income, summary.base_currency) }}</p>
+          <p class="text-xs uppercase text-slate-500">Entrate del mese</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="summary.income" :currency="summary.base_currency" type="income" />
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Expense mese</p>
-          <p class="text-2xl font-semibold text-red-600 mt-1">{{ formatCurrency(summary.expense, summary.base_currency) }}</p>
+          <p class="text-xs uppercase text-slate-500">Uscite del mese</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="summary.expense" :currency="summary.base_currency" type="expense" />
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Net mese</p>
-          <p
-            class="text-2xl font-semibold mt-1"
-            :class="parseFloat(summary.net) >= 0 ? 'text-green-600' : 'text-red-600'"
-          >
-            {{ formatCurrency(summary.net, summary.base_currency) }}
-          </p>
+          <p class="text-xs uppercase text-slate-500">Risparmio del mese</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="summary.net" :currency="summary.base_currency" signed />
         </div>
         <div class="card p-4">
           <p class="text-xs uppercase text-slate-500">Patrimonio netto</p>
-          <p class="text-2xl font-semibold mt-1">{{ formatCurrency(summary.net_worth, summary.base_currency) }}</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="summary.net_worth" :currency="summary.base_currency" />
         </div>
       </section>
 
@@ -160,7 +152,7 @@ onMounted(async () => {
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div v-for="acc in summary.accounts" :key="acc.id" class="card p-4">
             <p class="text-sm text-slate-600">{{ acc.name }}</p>
-            <p class="text-xl font-semibold mt-1">{{ formatCurrency(acc.balance, acc.currency) }}</p>
+            <Amount class="block text-xl font-semibold mt-1" :value="acc.balance" :currency="acc.currency" />
             <p v-if="acc.currency !== summary.base_currency" class="text-xs text-slate-400 mt-0.5">
               ≈ {{ formatCurrency(acc.balance_base, summary.base_currency) }}
             </p>
@@ -183,7 +175,7 @@ onMounted(async () => {
         </div>
         <div class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Income vs Expense (ultimi 12 mesi)
+            Entrate vs uscite (ultimi 12 mesi)
           </h3>
           <div class="h-60 sm:h-72">
             <Bar :data="barData()" :options="chartOptions" />

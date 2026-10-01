@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-27**
-Fase corrente: **Estensione — Asset type `certificate` sugli investment holdings (COMPLETATA)**
+Ultimo aggiornamento: **2026-10-01**
+Fase corrente: **Estensione — Restyling UI/UX (IN CORSO, step 1-2 di [analisi](docs/analysis/UI-UX-REDESIGN-ANALYSIS.md))**
 
 ---
 
@@ -97,14 +97,17 @@ Finance/
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── lib/date.ts        # formatDate/formatDateWith/formatMonth + financialMonthStart/Range (vedi §6)
+│       ├── lib/labels.ts      # TX_TYPE_LABEL / TX_TYPES (etichette italiane dei tipi transazione)
+│       ├── lib/chartTheme.ts  # palette e colori unici dei grafici Chart.js
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
 │       ├── stores/auth.ts     # Pinia: user, login, register, logout, fetchMe
 │       ├── stores/menu.ts     # Pinia: NAV_ITEMS + visibilità sezioni menu (localStorage `menu.hidden`)
 │       ├── stores/notifications.ts # Pinia: lista notifiche + unreadCount
+│       ├── stores/toast.ts    # Pinia: messaggi di feedback (success/error/info), mostrati da ToastHost
 │       ├── composables/useCrud.ts  # list/create/update/destroy generico
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga tabella/card)
+│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga), Amount.vue (importo con segno/colore/cifre tabulari), ToastHost.vue (montato in App.vue)
 │       └── views/             # Login, Register, ForgotPassword, ResetPassword, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
 │
 ├── scripts/               # backup.sh / restore.sh (dump MySQL, vedi §12)
@@ -231,7 +234,9 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **HTTP**: client axios centralizzato in `src/lib/api.ts` con interceptor CSRF e gestione errori
 - **Formattazione**: punto di verità unico per valuta (`src/lib/money.ts` → `formatCurrency`) e date (`src/lib/date.ts` → `formatDate`, che applica la preferenza `auth.user.date_format`; `formatDateWith` per un formato esplicito; `formatMonth` per i periodi mensili `YYYY-MM` dei report, che deriva il formato mese da quello utente togliendo il giorno). Nessuna view deve formattare date a mano (`toLocaleDateString`, `slice(0, 10)`): l'unica eccezione è `ForecastView.periodLabel` (etichetta mese/anno breve). Gli `<input type="date">` restano nativi (valore ISO): la preferenza agisce solo sul display in lettura. Il "mese corrente" lato frontend si costruisce con `financialMonthStart`/`financialMonthRange` (stesso `lib/date.ts`), mai con `getMonth()` a mano.
 - **Routing**: lazy import per ogni route
-- **Stile**: Tailwind utility-first, componenti riusabili in `src/components/ui/`
+- **Stile**: Tailwind utility-first, componenti riusabili in `src/components/ui/`. Colori **semantici** da [tailwind.config.js](frontend/tailwind.config.js): `primary` (accento/azioni), `income`, `expense`, `transfer`, `warning`, `danger` — niente `green-600`/`red-600`/`indigo-600` grezzi nel codice nuovo. Grafici: colori e palette solo da [chartTheme.ts](frontend/src/lib/chartTheme.ts) (`paletteColor(i)`, `INCOME_COLOR`, …), mai esadecimali nelle view. Importi in lettura con `<Amount>` (`type` per colore/segno da tipo transazione, `signed` per saldi/P/L): il colore non è mai l'unico segnale, c'è sempre il segno `+`/`−`. Classi `.num` (cifre tabulari), `.input-invalid` + `.field-error` per gli errori di campo.
+- **Etichette**: i tipi transazione si mostrano con `TX_TYPE_LABEL` ([labels.ts](frontend/src/lib/labels.ts)), mai il valore API (`income`/`expense`/`transfer`) in UI.
+- **Feedback ed errori**: `useCrud` espone `submitting` (disabilitare il submit, testo "Salvataggio…") e `fieldErrors` (422, per campo); `create`/`update` rilanciano l'errore, la view lo intercetta lasciando il form aperto con i dati. Esito delle azioni con `useToastStore().success/error/info`. [api.ts](frontend/src/lib/api.ts) ha un interceptor di risposta: 419 → nuovo cookie CSRF e un retry, 401 su rotta protetta → logout lato client + redirect a login, rete/5xx → toast generico (nessun dettaglio tecnico). Le view non devono duplicare questi toast.
 - **Responsive / mobile**: layout mobile-first. Sidebar di `AppLayout` diventa drawer < `lg` con topbar + hamburger; le griglie usano breakpoint `sm/md/lg`. Le tabelle dati sono wrappate in `.table-responsive` (utility in `style.css`) che sotto `md` collassa le righe in card stack: ogni `<td>` deve avere `data-label="…"`, la cella delle azioni la classe `actions-cell`. Gli `input/select/textarea` partono da 16px (no zoom iOS), si riducono da `sm` in su. I pulsanti icona (`.icon-btn`, es. `RowActions.vue`) sono 44×44px sotto `sm` (touch target) e tornano 32×32px da `sm` in su. Le view con un form filtri separato (Transazioni, Budget, Report) lo wrappano in `<details class="card filter-panel"><summary>Filtri</summary>…` — collassato di default sotto `md`, sempre visibile da `md` in su (nessun JS, solo CSS in `style.css`). Le view con un'azione di creazione primaria in cima pagina replicano il bottone anche come FAB (`fixed bottom-5 right-5 lg:hidden`, nascosto con `v-if="!showForm"` quando il form è aperto); il contenitore radice della view aggiunge `pb-20 lg:pb-0` per evitare che il FAB copra le azioni dell'ultima riga della lista. **Eccezione**: `TransactionsView`, `InvestmentsView`, `CategorizationRulesView`, `BudgetsView`, `RecurringView` e `AccountsView` non usano `.table-responsive` — hanno un doppio markup (`<ul class="md:hidden">` con card per riga sotto `md`, `<table class="hidden md:table">` invariata da `md` in su) perché hanno troppi campi (o widget grafici come la barra di progresso) per il collasso label/valore generico. `TransactionsView`: card con descrizione/categoria come titolo, importo colorato per tipo (verde income, rosso expense) con segno `+`/`−`, bordo laterale colorato. `InvestmentsView`: card con nome/tipo/conto come titolo, valore di mercato in evidenza e P/L colorato (verde/rosso) sotto, bordo laterale colorato in base al segno del P/L. `CategorizationRulesView`: card con nome regola come titolo, condizione/pattern e categoria/priorità come meta, toggle attiva/inattiva e contatore applicazioni a destra, riga in `opacity-60` se la regola è inattiva. `BudgetsView`: card con categoria/periodo come titolo, barra di progresso a piena larghezza sotto (stessa logica colore di `barClass`), speso/budget in piccolo. `RecurringView`: card con descrizione come titolo (pallino verde/grigio per attiva/inattiva), tipo/conto/cadenza/prossima esecuzione come meta, importo in evidenza a destra. `AccountsView`: card con stella "conto principale" + nome come titolo, tipo/valuta come meta, saldo iniziale in evidenza a destra. Estendere lo stesso pattern ad altre view con tabelle molto dense (molte colonne o widget grafici) invece del collasso generico.
 
 ### Git
