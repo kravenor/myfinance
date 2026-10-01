@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
@@ -15,6 +16,8 @@ import { confirmAction } from '@/composables/useConfirm'
 
 const { items, loading, meta, submitting, fieldErrors, list, create, update, destroy } = useCrud<Transaction>('transactions')
 const toast = useToastStore()
+const route = useRoute()
+const router = useRouter()
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
@@ -234,7 +237,20 @@ onMounted(async () => {
   categories.value = c.data.data
   tags.value = t.data.data
   form.value.account_id = accounts.value[0]?.id ?? 0
+  openNewFromQuery()
   await applyFilters()
+})
+
+// "+ Transazione" della topbar arriva con ?new=1, anche quando si è già su questa pagina.
+function openNewFromQuery() {
+  if (route.query.new !== '1') return
+  openNew()
+  const query = { ...route.query }
+  delete query.new
+  router.replace({ query })
+}
+watch(() => route.query.new, () => {
+  if (accounts.value.length) openNewFromQuery()
 })
 </script>
 

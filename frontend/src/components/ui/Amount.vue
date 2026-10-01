@@ -12,9 +12,10 @@ const props = defineProps<{
 }>()
 
 const tone = computed(() => {
-  if (props.type) return props.type
   const n = Number(props.value)
-  if (!props.signed || n === 0) return 'neutral'
+  if (n === 0) return 'neutral'
+  if (props.type) return props.type
+  if (!props.signed) return 'neutral'
   return n > 0 ? 'income' : 'expense'
 })
 

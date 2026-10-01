@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { DATE_FORMATS, DEFAULT_DATE_FORMAT, formatDateWith, financialMonthRange } from '@/lib/date'
 import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
+import AppIcon from '@/components/ui/AppIcon.vue'
 import type { NotificationPreferences, User } from '@/types/api'
 
 const auth = useAuthStore()
@@ -316,6 +317,7 @@ onMounted(async () => {
             :disabled="item.locked"
             @change="menu.setVisible(item.name, ($event.target as HTMLInputElement).checked)"
           />
+          <AppIcon :name="item.icon" class="h-4 w-4 text-slate-500" />
           <span class="text-sm">{{ item.label }}</span>
         </label>
       </div>

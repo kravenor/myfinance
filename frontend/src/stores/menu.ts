@@ -1,31 +1,38 @@
 import { defineStore } from 'pinia'
 import { ref, watch } from 'vue'
+import type { IconName } from '@/components/ui/icons'
 
 const STORAGE_KEY = 'menu.hidden'
+
+export const NAV_GROUPS = ['Panoramica', 'Movimenti', 'Pianificazione', 'Patrimonio', 'Analisi', 'Configurazione'] as const
+export type NavGroup = (typeof NAV_GROUPS)[number]
 
 export interface NavItem {
   name: string
   label: string
+  group: NavGroup
+  icon: IconName
 }
 
 // Fonte unica delle voci del menu, condivisa tra AppLayout e Impostazioni.
+// I name sono le rotte e le chiavi di `menu.hidden`: non rinominarli.
 export const NAV_ITEMS: NavItem[] = [
-  { name: 'dashboard', label: 'Dashboard' },
-  { name: 'accounts', label: 'Conti' },
-  { name: 'transactions', label: 'Transazioni' },
-  { name: 'categories', label: 'Categorie' },
-  { name: 'tags', label: 'Tag' },
-  { name: 'categorization-rules', label: 'Regole categoria' },
-  { name: 'budgets', label: 'Budget' },
-  { name: 'savings-goals', label: 'Obiettivi' },
-  { name: 'investments', label: 'Investimenti' },
-  { name: 'recurring', label: 'Ricorrenti' },
-  { name: 'notifications', label: 'Notifiche' },
-  { name: 'reports', label: 'Report' },
-  { name: 'stats', label: 'Statistiche' },
-  { name: 'forecast', label: 'Previsioni' },
-  { name: 'import-export', label: 'Import / Export' },
-  { name: 'settings', label: 'Impostazioni' },
+  { name: 'dashboard', label: 'Dashboard', group: 'Panoramica', icon: 'home' },
+  { name: 'notifications', label: 'Notifiche', group: 'Panoramica', icon: 'bell' },
+  { name: 'transactions', label: 'Transazioni', group: 'Movimenti', icon: 'arrows-right-left' },
+  { name: 'recurring', label: 'Ricorrenti', group: 'Movimenti', icon: 'arrow-path' },
+  { name: 'import-export', label: 'Import / Export', group: 'Movimenti', icon: 'arrows-up-down' },
+  { name: 'budgets', label: 'Budget', group: 'Pianificazione', icon: 'chart-pie' },
+  { name: 'savings-goals', label: 'Obiettivi', group: 'Pianificazione', icon: 'flag' },
+  { name: 'forecast', label: 'Previsioni', group: 'Pianificazione', icon: 'presentation-chart-line' },
+  { name: 'accounts', label: 'Conti', group: 'Patrimonio', icon: 'building-library' },
+  { name: 'investments', label: 'Investimenti', group: 'Patrimonio', icon: 'arrow-trending-up' },
+  { name: 'reports', label: 'Report', group: 'Analisi', icon: 'document-chart-bar' },
+  { name: 'stats', label: 'Statistiche', group: 'Analisi', icon: 'chart-bar' },
+  { name: 'categories', label: 'Categorie', group: 'Configurazione', icon: 'folder' },
+  { name: 'tags', label: 'Tag', group: 'Configurazione', icon: 'tag' },
+  { name: 'categorization-rules', label: 'Regole categoria', group: 'Configurazione', icon: 'adjustments-horizontal' },
+  { name: 'settings', label: 'Impostazioni', group: 'Configurazione', icon: 'cog-6-tooth' },
 ]
 
 // Voci sempre visibili: non possono essere disabilitate, così non ci si

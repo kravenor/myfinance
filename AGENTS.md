@@ -108,7 +108,7 @@ Finance/
 │       ├── composables/useConfirm.ts # confirmAction(): conferma modale al posto di window.confirm
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga), Amount.vue (importo con segno/colore/cifre tabulari), AppModal.vue (`<dialog>` nativo), FormErrors.vue (riepilogo 422), ToastHost.vue e ConfirmHost.vue (montati in App.vue)
+│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga), Amount.vue (importo con segno/colore/cifre tabulari), AppModal.vue (`<dialog>` nativo), AppIcon.vue + icons.ts (path Heroicons outline inline, MIT), FormErrors.vue (riepilogo 422), ToastHost.vue e ConfirmHost.vue (montati in App.vue)
 │       └── views/             # Login, Register, ForgotPassword, ResetPassword, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
 │
 ├── scripts/               # backup.sh / restore.sh (dump MySQL, vedi §12)
@@ -225,6 +225,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Response**: API Resources, niente array grezzi
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
 - **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
+- **Messaggi in italiano**: `APP_LOCALE=it` con traduzioni in `backend/lang/it/` (`validation.php`, `auth.php`, `passwords.php`). `validation.php` contiene solo le regole usate dalle Form Request (le chiavi mancanti ricadono sull'inglese del framework) e la mappa `attributes` campo → nome leggibile: un nuovo campo in una Form Request va aggiunto lì, una nuova regola pure.
 - **Code style**: Laravel Pint (preset `laravel`)
 - **Test**: PHPUnit / Pest, feature test per ogni endpoint. Test DB su SQLite in-memory (vedi `phpunit.xml`).
 
@@ -436,7 +437,8 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
 
 ### Menu / sidebar (AppLayout)
-- Le voci del menu hanno fonte unica in [stores/menu.ts](frontend/src/stores/menu.ts) (`NAV_ITEMS`): non più hardcoded in [AppLayout](frontend/src/components/AppLayout.vue).
+- Le voci del menu hanno fonte unica in [stores/menu.ts](frontend/src/stores/menu.ts) (`NAV_ITEMS`, con `group` e `icon`; ordine dei gruppi in `NAV_GROUPS`: Panoramica, Movimenti, Pianificazione, Patrimonio, Analisi, Configurazione). Un gruppo senza voci visibili non viene mostrato. I `name` sono le rotte e le chiavi di `menu.hidden`: non rinominarli.
+- [AppLayout](frontend/src/components/AppLayout.vue): sidebar chiara (sticky da `lg`, drawer sotto) e topbar sticky su tutte le larghezze con hamburger + titolo pagina (< `lg`), "+ Transazione" (da `lg`, link a `transactions?new=1`: [TransactionsView](frontend/src/views/TransactionsView.vue) apre la modale e toglie il parametro), campanella notifiche con pallino non lette, menu utente (`<details>`, da `lg`) con Impostazioni ed Esci; sotto `lg` Esci sta in fondo al drawer. Icone solo da `AppIcon` (aggiungere un path in `icons.ts`, niente librerie di icone).
 - Visibilità configurabile dall'utente in **Impostazioni** (card "Sezioni del menu"): ogni voce può essere disattivata, lo store `menu` filtra `NAV_ITEMS` in modo reattivo (sidebar + drawer mobile). `dashboard` e `settings` sono in `ALWAYS_VISIBLE` (non disattivabili, per non bloccare l'accesso alle Impostazioni).
 - **Preferenza solo-client per dispositivo**, persistita in `localStorage` (`menu.hidden`, array di route name) — stesso approccio di `reports.visible`. Nessuna rotta protetta: le view restano raggiungibili via URL, si nasconde solo la voce di menu.
 
@@ -446,7 +448,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 
 ### PWA (installabile)
 L'app si installa sulla home screen e parte a schermo pieno (`display: standalone`). Tutto statico in `frontend/public/`, servito da Vite in dev e copiato in `dist/` dalla build:
-- `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#4f46e5` (indigo-600, l'accento dell'app), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
+- `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#ffffff` (come la topbar bianca, così la barra di stato Android si fonde con l'header), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
 - `icon-192.png` / `icon-512.png` — **segnaposto** generati a mano (barre bianche su fondo indigo, full-bleed perché le maskable vengono ritagliate dall'OS): sostituibili con un'icona vera senza toccare altro.
 - `sw.js` — service worker **vuoto di proposito**, registrato solo in produzione da [main.ts](frontend/src/main.ts). Serve unicamente al criterio di installabilità di Chrome (manifest + handler `fetch`), che altrimenti non offre "Installa app" su Android; iOS installa col solo manifest. Nessuna cache: un'app di dati vive di richieste fresche, e una cache offline darebbe solo saldi vecchi da debuggare.
 - [index.html](frontend/index.html) — `theme-color`, `manifest`, `apple-touch-icon` e i meta `apple-mobile-web-app-*` (iOS non legge il manifest per lo schermo pieno).
