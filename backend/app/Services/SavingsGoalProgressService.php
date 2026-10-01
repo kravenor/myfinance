@@ -5,10 +5,13 @@ namespace App\Services;
 use App\Models\SavingsGoal;
 use App\Models\Transaction;
 use App\Support\FinancialMonth;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
 class SavingsGoalProgressService
 {
+    public function __construct(private readonly CurrencyConverter $converter) {}
+
     /**
      * Calcola e attacca a ogni goal gli attributi derivati, calcolati LIVE
      * dalle transazioni del conto collegato sul periodo di riferimento:
@@ -31,12 +34,17 @@ class SavingsGoalProgressService
         }
 
         $now = $now ?? Carbon::now();
+        (new Collection($goals))->loadMissing('account');
 
         foreach ($goals as $goal) {
             [$start, $end] = $this->period($goal, $now);
 
             $target = (float) $goal->target_amount;
             $saved = $goal->account_id ? $this->savedForGoal((int) $goal->account_id, $start, $end) : 0.0;
+            // I movimenti sono nella valuta del conto: il risparmiato si mostra in quella dell'obiettivo.
+            if ($goal->account !== null && $goal->account->currency !== $goal->currency) {
+                $saved = $this->converter->convert($saved, $goal->account->currency, $goal->currency, $now);
+            }
             $remaining = max(0.0, $target - $saved);
 
             $progress = $target > 0 ? min(100.0, round($saved / $target * 100, 1)) : ($saved > 0 ? 100.0 : 0.0);

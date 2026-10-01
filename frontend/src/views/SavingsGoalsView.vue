@@ -33,6 +33,12 @@ const { items, loading, submitting, fieldErrors, list, create, update, destroy }
 const toast = useToastStore()
 
 const accounts = ref<Account[]>([])
+
+// Scegliendo il conto la valuta si allinea alla sua (resta modificabile).
+function onAccountChange() {
+  const account = accounts.value.find((a) => a.id === form.value.account_id)
+  if (account) form.value.currency = account.currency
+}
 const categories = ref<Category[]>([])
 const statusFilter = ref<'active' | 'completed' | 'archived' | 'all'>('active')
 
@@ -389,14 +395,15 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Valuta</label>
-            <select v-model="form.currency" class="input" :class="{ 'input-invalid': fieldErrors.currency }">
+            <select v-model="form.currency" class="input" :class="{ 'input-invalid': fieldErrors.currency }" aria-describedby="hint-currency">
               <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
             </select>
+            <p id="hint-currency" class="field-hint">Di solito è quella del conto collegato; se è diversa il risparmiato viene convertito al cambio di oggi.</p>
             <FieldError :errors="fieldErrors" name="currency" />
           </div>
           <div>
             <label class="label">Conto collegato</label>
-            <select v-model="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" aria-describedby="hint-account">
+            <select v-model="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" aria-describedby="hint-account" @change="onAccountChange">
               <option value="">— (nessuno)</option>
               <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>

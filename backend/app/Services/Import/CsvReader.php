@@ -66,6 +66,8 @@ class CsvReader extends ImportReader
             'description' => $find(['descrizione', 'description', 'causale', 'memo']),
             'type' => $find(['tipo', 'type']),
             'category' => $find(['categoria', 'category']),
+            // Parole chiave strette: un generico "id" prenderebbe colonne sbagliate.
+            'external_id' => $find(['external_id', 'id univoco', 'id operazione']),
         ];
     }
 

@@ -28,7 +28,8 @@ class CategorizationRuleMatcher
 
     public function match(?string $description, string $type): ?CategorizationRule
     {
-        if ($description === null || trim($description) === '') {
+        // Un giroconto non ha categoria: le regole valgono solo per entrate e uscite.
+        if ($type === 'transfer' || $description === null || trim($description) === '') {
             return null;
         }
 

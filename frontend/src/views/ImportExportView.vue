@@ -10,23 +10,25 @@ interface PreviewResult {
   mapping_locked: boolean
   headers: string[]
   sample: Record<string, string>[]
-  suggested: Partial<Record<'date' | 'amount' | 'description' | 'type' | 'category', string | null>>
+  suggested: Partial<Record<MappingField, string | null>>
 }
 
 const FORMAT_LABELS: Record<string, string> = { csv: 'CSV', ofx: 'OFX', qif: 'QIF' }
 
-type MappingField = 'date' | 'amount' | 'description' | 'type' | 'category'
+type MappingField = 'date' | 'amount' | 'description' | 'type' | 'category' | 'external_id'
 const MAPPING_FIELD_LABEL: Record<MappingField, string> = {
   date: 'Data',
   amount: 'Importo',
   description: 'Descrizione',
   type: 'Tipo',
   category: 'Categoria',
+  external_id: 'ID univoco',
 }
 const MAPPING_FIELDS = Object.keys(MAPPING_FIELD_LABEL) as MappingField[]
 const MAPPING_FIELD_HINT: Partial<Record<MappingField, string>> = {
   type: 'Se non la scegli, gli importi positivi diventano entrate e i negativi uscite.',
   category: 'Usata solo se il valore coincide con il nome di una tua categoria; altrimenti decidono le regole.',
+  external_id: 'Colonna con un codice diverso per ogni movimento (es. l\'export di questa app): le righe già importate vengono saltate.',
 }
 
 interface ImportResult {
@@ -74,12 +76,13 @@ const importFile = ref<File | null>(null)
 const importAccount = ref<number>(0)
 const dateFormat = ref('Y-m-d')
 const preview = ref<PreviewResult | null>(null)
-const mapping = ref<Record<'date' | 'amount' | 'description' | 'type' | 'category', string>>({
+const mapping = ref<Record<MappingField, string>>({
   date: '',
   amount: '',
   description: '',
   type: '',
   category: '',
+  external_id: '',
 })
 const importResult = ref<ImportResult | null>(null)
 const importing = ref(false)
@@ -109,6 +112,7 @@ async function loadPredictions() {
     if (mapping.value.description) form.append('mapping[description]', mapping.value.description)
     if (mapping.value.type) form.append('mapping[type]', mapping.value.type)
     if (mapping.value.category) form.append('mapping[category]', mapping.value.category)
+    if (mapping.value.external_id) form.append('mapping[external_id]', mapping.value.external_id)
     const { data } = await api.post<{ data: Prediction[] }>(
       '/transactions/import/preview-predictions',
       form,
@@ -137,6 +141,7 @@ async function runPreview() {
       description: data.data.suggested.description ?? '',
       type: data.data.suggested.type ?? '',
       category: data.data.suggested.category ?? '',
+      external_id: data.data.suggested.external_id ?? '',
     }
     await loadPredictions()
   } catch (e: unknown) {
@@ -161,6 +166,7 @@ async function runImport() {
     if (mapping.value.description) form.append('mapping[description]', mapping.value.description)
     if (mapping.value.type) form.append('mapping[type]', mapping.value.type)
     if (mapping.value.category) form.append('mapping[category]', mapping.value.category)
+    if (mapping.value.external_id) form.append('mapping[external_id]', mapping.value.external_id)
     form.append('date_format', dateFormat.value)
 
     const { data } = await api.post<{ data: ImportResult }>('/transactions/import', form)
@@ -210,7 +216,7 @@ onMounted(async () => {
           <li>«Analizza file» mostra le prime righe e la categoria che le regole assegnerebbero: nulla viene salvato finché non premi «Esegui import».</li>
           <li>Nei CSV scegli tu quale colonna è la data, l'importo e gli altri campi; OFX e QIF hanno campi fissi e vengono letti in automatico.</li>
           <li>Ogni riga diventa un'entrata o un'uscita sul conto scelto, mai un trasferimento; le righe con data o importo illeggibili vengono saltate ed elencate negli errori.</li>
-          <li>Solo i file OFX hanno un codice univoco per movimento, quindi solo lì le righe già importate vengono ignorate: reimportare lo stesso CSV o QIF crea dei doppioni.</li>
+          <li>Le righe già importate vengono saltate se il file ha un codice univoco per movimento: sempre negli OFX, nei CSV se indichi la colonna «ID univoco» (l'export di questa app ce l'ha). I QIF non ne hanno: reimportarli crea dei doppioni.</li>
         </ul>
       </details>
     </div>

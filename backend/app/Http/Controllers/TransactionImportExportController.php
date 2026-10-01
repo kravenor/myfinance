@@ -54,6 +54,7 @@ class TransactionImportExportController extends Controller
             'mapping.description' => ['nullable', 'string'],
             'mapping.type' => ['nullable', 'string'],
             'mapping.category' => ['nullable', 'string'],
+            'mapping.external_id' => ['nullable', 'string'],
         ]);
 
         $predictions = $this->importer->previewPredictions(
@@ -80,6 +81,7 @@ class TransactionImportExportController extends Controller
             'mapping.description' => ['nullable', 'string'],
             'mapping.type' => ['nullable', 'string'],
             'mapping.category' => ['nullable', 'string'],
+            'mapping.external_id' => ['nullable', 'string'],
             'date_format' => ['nullable', 'string', 'max:32'],
             'currency' => ['nullable', 'string', 'size:3'],
         ]);
