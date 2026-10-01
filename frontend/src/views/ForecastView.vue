@@ -4,7 +4,18 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { formatCurrency as money, CURRENCIES } from '@/lib/money'
+import { MUTED_COLOR, PRIMARY_COLOR } from '@/lib/chartTheme'
+import { SCENARIO_CADENCE_LABEL, TX_TYPE_LABEL } from '@/lib/labels'
 import RowActions from '@/components/ui/RowActions.vue'
+import Amount from '@/components/ui/Amount.vue'
+import AppModal from '@/components/ui/AppModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import type { FieldErrors } from '@/composables/useCrud'
+import type { AxiosError } from 'axios'
 import type {
   Account,
   Category,
@@ -19,6 +30,7 @@ import type {
   ExpenseForecastCell,
   ExpenseForecastCompare,
 } from '@/types/reports'
+import { confirmAction } from '@/composables/useConfirm'
 
 const auth = useAuthStore()
 
@@ -88,19 +100,29 @@ async function loadScenarios() {
 
 const editingScenario = ref<Scenario | null>(null)
 const showScenarioForm = ref(false)
-const scenarioForm = ref({ name: '', description: '', color: '#6366f1', is_active: true })
+const scenarioForm = ref({ name: '', description: '', color: PRIMARY_COLOR, is_active: true })
+const scenarioDirty = useFormDirty(scenarioForm, showScenarioForm)
+const scenarioSaving = ref(false)
+const scenarioErrors = ref<FieldErrors>({})
 
 function resetScenarioForm() {
   editingScenario.value = null
-  scenarioForm.value = { name: '', description: '', color: '#6366f1', is_active: true }
+  scenarioErrors.value = {}
+  scenarioForm.value = { name: '', description: '', color: PRIMARY_COLOR, is_active: true }
+}
+
+function openNewScenario() {
+  resetScenarioForm()
+  showScenarioForm.value = true
 }
 
 function startEditScenario(s: Scenario) {
   editingScenario.value = s
+  scenarioErrors.value = {}
   scenarioForm.value = {
     name: s.name,
     description: s.description ?? '',
-    color: s.color ?? '#6366f1',
+    color: s.color ?? PRIMARY_COLOR,
     is_active: s.is_active,
   }
   showScenarioForm.value = true
@@ -113,11 +135,23 @@ async function submitScenario() {
     color: scenarioForm.value.color || null,
     is_active: scenarioForm.value.is_active,
   }
-  if (editingScenario.value) {
-    await api.patch(`/scenarios/${editingScenario.value.id}`, payload)
-  } else {
-    const { data } = await api.post<{ data: Scenario }>('/scenarios', payload)
-    selectedScenarioId.value = data.data.id
+  scenarioSaving.value = true
+  scenarioErrors.value = {}
+  try {
+    if (editingScenario.value) {
+      await api.patch(`/scenarios/${editingScenario.value.id}`, payload)
+    } else {
+      const { data } = await api.post<{ data: Scenario }>('/scenarios', payload)
+      selectedScenarioId.value = data.data.id
+    }
+  } catch (e: unknown) {
+    // 422: errori sotto i campi, la modale resta aperta con i dati inseriti.
+    const err = e as AxiosError<{ errors?: FieldErrors }>
+    if (err.response?.status !== 422) throw e
+    scenarioErrors.value = err.response.data?.errors ?? {}
+    return
+  } finally {
+    scenarioSaving.value = false
   }
   resetScenarioForm()
   showScenarioForm.value = false
@@ -126,7 +160,7 @@ async function submitScenario() {
 }
 
 async function deleteScenario(s: Scenario) {
-  if (!confirm(`Eliminare lo scenario "${s.name}"?`)) return
+  if (!(await confirmAction(`Eliminare lo scenario "${s.name}"?`))) return
   await api.delete(`/scenarios/${s.id}`)
   if (selectedScenarioId.value === s.id) selectedScenarioId.value = ''
   await loadScenarios()
@@ -235,7 +269,7 @@ async function addItem() {
 
 async function deleteItem(it: ScenarioItem) {
   if (!itemsScenario.value) return
-  if (!confirm('Eliminare questa voce simulata?')) return
+  if (!(await confirmAction('Eliminare questa voce simulata?'))) return
   await api.delete(`/scenarios/${itemsScenario.value.id}/items/${it.id}`)
   await loadItems()
   await loadScenarios()
@@ -254,19 +288,7 @@ function accountName(id: number | null): string {
 
 const expenseCategories = computed(() => categories.value.filter((c) => c.type === 'expense'))
 
-const CADENCE_LABEL: Record<ScenarioCadence, string> = {
-  one_time: 'Una tantum',
-  monthly: 'Mensile',
-  quarterly: 'Trimestrale',
-  yearly: 'Annuale',
-}
-
-function netClass(value: string | number): string {
-  const n = typeof value === 'string' ? parseFloat(value) : value
-  if (n > 0.005) return 'text-emerald-600'
-  if (n < -0.005) return 'text-red-600'
-  return 'text-slate-500'
-}
+const scenarioCadences = Object.keys(SCENARIO_CADENCE_LABEL) as ScenarioCadence[]
 
 function deltaText(value: number): string {
   if (Math.abs(value) < 0.005) return '±0'
@@ -278,7 +300,7 @@ function deltaClass(value: number, lowerIsBetter = false): string {
   if (Math.abs(value) < 0.005) return 'text-slate-500'
   const positive = value > 0
   const good = lowerIsBetter ? !positive : positive
-  return good ? 'text-emerald-600' : 'text-red-600'
+  return good ? 'text-income-600' : 'text-expense-600'
 }
 
 function periodLabel(period: string): string {
@@ -289,10 +311,11 @@ function periodLabel(period: string): string {
 
 function cellTooltip(cell: ExpenseForecastCell): string {
   const lines: string[] = []
-  if (parseFloat(cell.recurring) > 0) lines.push(`Ricorrenti: ${cell.recurring}`)
-  if (cell.budget) lines.push(`Budget: ${cell.budget}`)
-  if (parseFloat(cell.scenario) > 0) lines.push(`Scenario: ${cell.scenario}`)
-  lines.push(`Totale: ${cell.total}`)
+  const fmt = (v: string) => money(v, baseCurrency.value)
+  if (parseFloat(cell.recurring) > 0) lines.push(`Ricorrenti: ${fmt(cell.recurring)}`)
+  if (cell.budget) lines.push(`Budget: ${fmt(cell.budget)}`)
+  if (parseFloat(cell.scenario) > 0) lines.push(`Scenario: ${fmt(cell.scenario)}`)
+  lines.push(`Totale: ${fmt(cell.total)}`)
   if (cell.budget_breach) lines.push('⚠️ Sfora il budget')
   return lines.join('\n')
 }
@@ -312,12 +335,13 @@ const compareRows = computed<CompareRow[]>(() => {
   const rows: CompareRow[] = []
 
   const baselineNets = comparison.value.baseline.totals_by_month.map((t) => parseFloat(t.net))
-  const baselineTotal = baselineNets.reduce((s, v) => s + v, 0)
+  const sum = (vals: number[]) => Math.round(vals.reduce((s, v) => s + v, 0) * 100) / 100
+  const baselineTotal = sum(baselineNets)
 
   rows.push({
     id: null,
     name: 'Baseline (nessuno scenario)',
-    color: '#94a3b8',
+    color: MUTED_COLOR,
     monthly: baselineNets,
     total: baselineTotal,
     deltaTotal: 0,
@@ -325,11 +349,11 @@ const compareRows = computed<CompareRow[]>(() => {
 
   for (const s of comparison.value.scenarios) {
     const monthly = s.totals_by_month.map((t) => parseFloat(t.net))
-    const total = monthly.reduce((sum, v) => sum + v, 0)
+    const total = sum(monthly)
     rows.push({
       id: s.scenario?.id ?? null,
       name: s.scenario?.name ?? '—',
-      color: s.scenario?.color ?? '#6366f1',
+      color: s.scenario?.color ?? PRIMARY_COLOR,
       monthly,
       total,
       deltaTotal: total - baselineTotal,
@@ -356,7 +380,7 @@ onMounted(async () => {
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
         <h1 class="text-xl sm:text-2xl font-semibold">Previsioni</h1>
-        <p class="text-sm text-slate-500">
+        <p class="page-desc">
           Quanto ti resta a fine mese per vivere, baseline e con ogni scenario applicato.
         </p>
       </div>
@@ -371,83 +395,109 @@ onMounted(async () => {
       </div>
     </div>
 
+    <details class="help-panel">
+      <summary>Come funziona</summary>
+      <ul>
+        <li>La baseline usa solo ciò che è pianificato: le entrate ricorrenti attive e, per ogni categoria di spesa, il budget del mese se c'è, altrimenti le uscite ricorrenti.</li>
+        <li>Transazioni singole, giroconti e uscite ricorrenti senza categoria non entrano nella previsione.</li>
+        <li>Uno scenario raccoglie voci ipotetiche, una tantum o con cadenza, che si sommano alla baseline; il confronto mostra tutti gli scenari attivi.</li>
+        <li>«Resta a fine mese» è entrate meno uscite previste nel mese, senza il saldo attuale dei conti; gli scenari non creano transazioni vere.</li>
+      </ul>
+    </details>
+
     <!-- KPI residuo + selettore scenario -->
     <section v-if="forecast" class="card p-4 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="font-medium">Scenario applicato</h2>
+        <div>
+          <h2 class="font-medium">Scenario applicato</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Scegli uno scenario per aggiungere le sue voci alla baseline; puoi applicare anche quelli inattivi.</p>
+        </div>
         <div class="flex flex-wrap items-center gap-2">
           <select v-model.number="selectedScenarioId" class="input w-auto">
             <option value="">— Baseline (nessuno scenario) —</option>
             <option v-for="s in scenarios" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
-          <button class="btn-primary" @click="showScenarioForm = !showScenarioForm; resetScenarioForm()">
-            {{ showScenarioForm ? 'Annulla' : 'Nuovo scenario' }}
-          </button>
+          <button class="btn-primary" @click="openNewScenario()">Nuovo scenario</button>
         </div>
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="card p-3">
           <p class="text-xs uppercase text-slate-500">Entrate totali ({{ forecast.summary.months_count }} mesi)</p>
-          <p class="text-lg font-semibold mt-1">{{ money(forecast.summary.total_income, baseCurrency) }}</p>
+          <Amount class="block text-lg font-semibold mt-1" :value="forecast.summary.total_income" :currency="baseCurrency" type="income" />
         </div>
         <div class="card p-3">
           <p class="text-xs uppercase text-slate-500">Uscite totali</p>
-          <p class="text-lg font-semibold mt-1 text-red-600">
-            {{ money(forecast.summary.total_expense, baseCurrency) }}
-          </p>
+          <Amount class="block text-lg font-semibold mt-1" :value="forecast.summary.total_expense" :currency="baseCurrency" type="expense" />
         </div>
         <div class="card p-3">
           <p class="text-xs uppercase text-slate-500">Resta totale</p>
-          <p class="text-2xl font-semibold mt-1" :class="netClass(forecast.summary.total_net)">
-            {{ money(forecast.summary.total_net, baseCurrency) }}
-          </p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="forecast.summary.total_net" :currency="baseCurrency" signed />
         </div>
         <div class="card p-3">
           <p class="text-xs uppercase text-slate-500">Mese peggiore</p>
-          <p class="text-lg font-semibold mt-1" :class="netClass(forecast.summary.min_monthly_net)">
-            {{ money(forecast.summary.min_monthly_net, baseCurrency) }}
-          </p>
+          <Amount class="block text-lg font-semibold mt-1" :value="forecast.summary.min_monthly_net" :currency="baseCurrency" signed />
           <p v-if="forecast.summary.min_monthly_net_period" class="text-xs text-slate-500 mt-1">
             {{ periodLabel(forecast.summary.min_monthly_net_period) }}
           </p>
         </div>
       </div>
+    </section>
 
-      <form
-        v-if="showScenarioForm"
-        class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-100"
-        @submit.prevent="submitScenario"
-      >
-        <div class="sm:col-span-2">
-          <label class="label">Nome</label>
-          <input v-model="scenarioForm.name" type="text" maxlength="120" class="input" required />
+    <div v-if="loading && !forecast" class="grid grid-cols-2 md:grid-cols-4 gap-3" aria-busy="true" aria-label="Caricamento">
+      <div v-for="i in 4" :key="i" class="card h-20 animate-pulse bg-slate-100" />
+      <div class="card col-span-2 md:col-span-4 h-64 animate-pulse bg-slate-100" />
+    </div>
+
+    <AppModal
+      v-slot="{ close }"
+      v-model="showScenarioForm"
+      :dirty="scenarioDirty"
+      :title="editingScenario ? 'Modifica scenario' : 'Nuovo scenario'"
+    >
+      <form @submit.prevent="submitScenario">
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors class="col-span-full" :errors="scenarioErrors" :shown="['name', 'color', 'is_active', 'description']" />
+          <div class="sm:col-span-2">
+            <label class="label">Nome</label>
+            <input v-model="scenarioForm.name" type="text" maxlength="120" class="input" :class="{ 'input-invalid': scenarioErrors.name }" required />
+            <FieldError :errors="scenarioErrors" name="name" />
+          </div>
+          <div>
+            <label class="label">Colore</label>
+            <input v-model="scenarioForm.color" type="color" class="input h-10 p-1" :class="{ 'input-invalid': scenarioErrors.color }" />
+            <FieldError :errors="scenarioErrors" name="color" />
+          </div>
+          <div class="flex flex-col justify-end">
+            <label class="inline-flex items-center gap-2 text-sm">
+              <input v-model="scenarioForm.is_active" type="checkbox" aria-describedby="hint-scenario-active" />
+              Attivo
+            </label>
+            <p id="hint-scenario-active" class="field-hint">Solo gli scenari attivi compaiono nel confronto.</p>
+            <FieldError :errors="scenarioErrors" name="is_active" />
+          </div>
+          <div class="sm:col-span-4">
+            <label class="label">Descrizione</label>
+            <textarea v-model="scenarioForm.description" rows="2" maxlength="2000" class="input" :class="{ 'input-invalid': scenarioErrors.description }" />
+            <FieldError :errors="scenarioErrors" name="description" />
+          </div>
         </div>
-        <div>
-          <label class="label">Colore</label>
-          <input v-model="scenarioForm.color" type="color" class="input h-10 p-1" />
-        </div>
-        <div class="flex items-end">
-          <label class="inline-flex items-center gap-2 text-sm">
-            <input v-model="scenarioForm.is_active" type="checkbox" />
-            Attivo
-          </label>
-        </div>
-        <div class="sm:col-span-4">
-          <label class="label">Descrizione</label>
-          <textarea v-model="scenarioForm.description" rows="2" maxlength="2000" class="input" />
-        </div>
-        <div class="sm:col-span-4 flex justify-end gap-2">
-          <button type="button" class="btn-secondary" @click="showScenarioForm = false; resetScenarioForm()">Annulla</button>
-          <button type="submit" class="btn-primary">{{ editingScenario ? 'Salva' : 'Crea' }}</button>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="scenarioSaving">
+            {{ scenarioSaving ? 'Salvataggio…' : editingScenario ? 'Salva' : 'Crea' }}
+          </button>
         </div>
       </form>
-    </section>
+    </AppModal>
 
     <!-- Tabella mese per mese: residuo in evidenza -->
     <section v-if="forecast" class="card p-4">
       <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
-        <h2 class="font-medium">Mese per mese</h2>
+        <div>
+          <h2 class="font-medium">Mese per mese</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Resta a fine mese = entrate previste meno uscite previste, senza contare il saldo attuale dei conti.</p>
+        </div>
         <p v-if="loading" class="text-xs text-slate-500">Aggiornamento…</p>
       </div>
       <div class="table-responsive md:overflow-x-auto">
@@ -465,15 +515,15 @@ onMounted(async () => {
           <tbody class="divide-y divide-slate-100">
             <tr v-for="t in forecast.totals_by_month" :key="t.period">
               <td data-label="Mese" class="font-medium">{{ periodLabel(t.period) }}</td>
-              <td data-label="Entrate" class="md:text-right">{{ money(t.income, baseCurrency) }}</td>
-              <td data-label="Uscite" class="md:text-right">{{ money(t.expense_total, baseCurrency) }}</td>
-              <td v-if="forecast.scenario" data-label="di cui scenario" class="md:text-right text-indigo-600">
+              <td data-label="Entrate" class="md:text-right num">{{ money(t.income, baseCurrency) }}</td>
+              <td data-label="Uscite" class="md:text-right num">{{ money(t.expense_total, baseCurrency) }}</td>
+              <td v-if="forecast.scenario" data-label="di cui scenario" class="md:text-right num text-primary-600">
                 {{ parseFloat(t.scenario) > 0 ? '+' + money(t.scenario, baseCurrency) : '—' }}
               </td>
-              <td data-label="Resta" class="md:text-right text-base font-semibold" :class="netClass(t.net)">
-                {{ money(t.net, baseCurrency) }}
+              <td data-label="Resta" class="md:text-right text-base font-semibold">
+                <Amount :value="t.net" :currency="baseCurrency" signed />
               </td>
-              <td v-if="forecast.scenario" data-label="Δ baseline" class="md:text-right"
+              <td v-if="forecast.scenario" data-label="Δ baseline" class="md:text-right num"
                   :class="deltaClass(deltaNetForPeriod(t.period, parseFloat(t.net)))">
                 {{ deltaText(deltaNetForPeriod(t.period, parseFloat(t.net))) }}
               </td>
@@ -485,12 +535,13 @@ onMounted(async () => {
 
     <!-- Confronto scenari -->
     <section v-if="compareRows.length > 1" class="card p-4">
-      <h2 class="font-medium mb-3">Confronto scenari — Resta a fine mese</h2>
+      <h2 class="font-medium">Confronto scenari — Resta a fine mese</h2>
+      <p class="text-xs text-slate-500 mt-0.5 mb-3">La baseline e, sotto, ogni scenario attivo applicato da solo.</p>
       <div class="overflow-x-auto">
         <table class="min-w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200">
-              <th class="text-left p-2 sticky left-0 bg-white">Scenario</th>
+              <th class="text-left p-2 sticky left-0 bg-surface">Scenario</th>
               <th v-for="m in comparison?.months ?? []" :key="m" class="text-right p-2 whitespace-nowrap">
                 {{ periodLabel(m) }}
               </th>
@@ -503,21 +554,21 @@ onMounted(async () => {
               v-for="row in compareRows"
               :key="row.id ?? 'baseline'"
               class="border-b border-slate-100"
-              :class="row.id === selectedScenarioId ? 'bg-indigo-50/60' : ''"
+              :class="row.id === selectedScenarioId ? 'bg-primary-50/60' : ''"
             >
               <td class="p-2 sticky left-0 bg-inherit">
                 <span class="inline-flex items-center gap-2">
-                  <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? '#94a3b8' }" />
+                  <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
                   <span class="font-medium">{{ row.name }}</span>
                 </span>
               </td>
-              <td v-for="(v, i) in row.monthly" :key="i" class="p-2 text-right whitespace-nowrap" :class="netClass(v)">
-                {{ money(v, baseCurrency) }}
+              <td v-for="(v, i) in row.monthly" :key="i" class="p-2 text-right whitespace-nowrap">
+                <Amount :value="v" :currency="baseCurrency" signed />
               </td>
-              <td class="p-2 text-right font-semibold whitespace-nowrap" :class="netClass(row.total)">
-                {{ money(row.total, baseCurrency) }}
+              <td class="p-2 text-right font-semibold whitespace-nowrap">
+                <Amount :value="row.total" :currency="baseCurrency" signed />
               </td>
-              <td class="p-2 text-right whitespace-nowrap" :class="deltaClass(row.deltaTotal)">
+              <td class="p-2 text-right num" :class="deltaClass(row.deltaTotal)">
                 {{ row.id === null ? '—' : deltaText(row.deltaTotal) }}
               </td>
             </tr>
@@ -532,13 +583,14 @@ onMounted(async () => {
     <!-- Lista scenari -->
     <section class="card p-4 space-y-3">
       <h2 class="font-medium">I tuoi scenari</h2>
-      <ul v-if="scenarios.length" class="divide-y divide-slate-100">
+      <ListSkeleton v-if="scenariosLoading && !scenarios.length" :rows="3" />
+      <ul v-else-if="scenarios.length" class="divide-y divide-slate-100">
         <li v-for="s in scenarios" :key="s.id" class="py-2 flex items-center gap-3">
-          <span class="inline-block w-3 h-3 rounded-full" :style="{ backgroundColor: s.color ?? '#6366f1' }" />
+          <span class="inline-block w-3 h-3 rounded-full" :style="{ backgroundColor: s.color ?? PRIMARY_COLOR }" />
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate">
               {{ s.name }}
-              <span v-if="!s.is_active" class="ml-1 text-xs text-slate-400">(inattivo)</span>
+              <span v-if="!s.is_active" class="ml-1 text-xs text-slate-500">(inattivo)</span>
             </p>
             <p v-if="s.description" class="text-xs text-slate-500 truncate">{{ s.description }}</p>
           </div>
@@ -549,9 +601,9 @@ onMounted(async () => {
           <RowActions @edit="startEditScenario(s)" @delete="deleteScenario(s)" />
         </li>
       </ul>
-      <p v-else-if="!scenariosLoading" class="text-sm text-slate-500">
-        Nessuno scenario. Creane uno per simulare l'impatto di spese future.
-      </p>
+      <EmptyState v-else title="Non hai ancora creato scenari. Creane uno per simulare l'impatto di spese future.">
+        <button type="button" class="btn-primary" @click="openNewScenario()">Nuovo scenario</button>
+      </EmptyState>
     </section>
 
     <!-- Breakdown categoria (collassabile) -->
@@ -564,11 +616,14 @@ onMounted(async () => {
         <h2 class="font-medium">Dettaglio uscite per categoria</h2>
         <span class="text-sm text-slate-500">{{ showCategoryBreakdown ? 'Nascondi ▴' : 'Mostra ▾' }}</span>
       </button>
+      <p v-if="showCategoryBreakdown" class="text-xs text-slate-500 mt-2">
+        Per ogni categoria conta il budget del mese se c'è, altrimenti le uscite ricorrenti; in rosso i mesi che sforano il budget, evidenziati quelli con voci dello scenario.
+      </p>
       <div v-if="showCategoryBreakdown" class="overflow-x-auto mt-3">
         <table class="min-w-full text-sm">
           <thead>
             <tr class="border-b border-slate-200">
-              <th class="text-left p-2 sticky left-0 bg-white">Categoria</th>
+              <th class="text-left p-2 sticky left-0 bg-surface">Categoria</th>
               <th v-for="m in forecast.months" :key="m" class="text-right p-2 whitespace-nowrap">
                 {{ periodLabel(m) }}
               </th>
@@ -577,19 +632,19 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="row in forecast.categories" :key="(row.category_id ?? 'u') + ''" class="border-b border-slate-100">
-              <td class="p-2 sticky left-0 bg-white">
+              <td class="p-2 sticky left-0 bg-surface">
                 <span class="inline-flex items-center gap-2">
-                  <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? '#94a3b8' }" />
+                  <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
                   <span class="font-medium">{{ row.category_name }}</span>
                 </span>
               </td>
               <td
                 v-for="cell in row.monthly"
                 :key="cell.period"
-                class="p-2 text-right whitespace-nowrap"
+                class="p-2 text-right num"
                 :class="[
-                  cell.budget_breach ? 'bg-red-50 text-red-700 font-semibold' : '',
-                  parseFloat(cell.scenario) > 0 && !cell.budget_breach ? 'bg-indigo-50' : '',
+                  cell.budget_breach ? 'bg-danger-50 text-danger-700 font-semibold' : '',
+                  parseFloat(cell.scenario) > 0 && !cell.budget_breach ? 'bg-primary-50' : '',
                 ]"
                 :title="cellTooltip(cell)"
               >
@@ -601,7 +656,7 @@ onMounted(async () => {
                   </span>
                 </template>
               </td>
-              <td class="p-2 text-right font-semibold whitespace-nowrap">
+              <td class="p-2 text-right font-semibold num">
                 {{ money(row.total, baseCurrency) }}
               </td>
             </tr>
@@ -610,9 +665,9 @@ onMounted(async () => {
       </div>
     </section>
 
-    <p v-else-if="!loading" class="card p-8 text-center text-slate-500">
-      Nessuna previsione disponibile. Crea ricorrenti, budget o uno scenario per popolare la tabella.
-    </p>
+    <div v-else-if="!loading" class="card">
+      <EmptyState title="Nessuna previsione disponibile. Crea ricorrenti, budget o uno scenario per popolare la tabella." />
+    </div>
 
     <!-- Modale gestione voci scenario -->
     <div
@@ -628,19 +683,24 @@ onMounted(async () => {
               Aggiungi uscite o entrate ipotetiche per simulare l'impatto sui mesi successivi.
             </p>
           </div>
-          <button class="icon-btn icon-btn-delete" aria-label="Chiudi" @click="closeItems">
+          <button
+            type="button"
+            class="icon-btn text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:ring-primary-500"
+            aria-label="Chiudi"
+            @click="closeItems"
+          >
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="w-5 h-5">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 6l12 12M6 18L18 6" />
             </svg>
           </button>
         </div>
 
-        <form class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-end" @submit.prevent="addItem">
+        <form class="grid grid-cols-2 sm:grid-cols-6 gap-2 items-start" @submit.prevent="addItem">
           <div>
             <label class="label">Tipo</label>
             <select v-model="itemForm.type" class="input">
-              <option value="expense">Uscita</option>
-              <option value="income">Entrata</option>
+              <option value="expense">{{ TX_TYPE_LABEL.expense }}</option>
+              <option value="income">{{ TX_TYPE_LABEL.income }}</option>
             </select>
           </div>
           <div class="col-span-2">
@@ -653,10 +713,11 @@ onMounted(async () => {
           </div>
           <div>
             <label class="label">Conto</label>
-            <select v-model="itemForm.account_id" class="input">
+            <select v-model="itemForm.account_id" class="input" aria-describedby="hint-item-account">
               <option value="">—</option>
               <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+            <p id="hint-item-account" class="field-hint">Facoltativo: imposta la valuta del conto. La previsione somma tutti i conti.</p>
           </div>
           <div>
             <label class="label">Valuta</label>
@@ -666,19 +727,18 @@ onMounted(async () => {
           </div>
           <div v-if="itemForm.type === 'expense'">
             <label class="label">Categoria</label>
-            <select v-model="itemForm.category_id" class="input">
+            <select v-model="itemForm.category_id" class="input" aria-describedby="hint-item-category">
               <option value="">—</option>
               <option v-for="c in expenseCategories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
+            <p id="hint-item-category" class="field-hint">Se la categoria ha un budget nel mese, la voce si somma al budget e lo segna come sforato.</p>
           </div>
           <div>
             <label class="label">Cadenza</label>
-            <select v-model="itemForm.cadence" class="input">
-              <option value="one_time">Una tantum</option>
-              <option value="monthly">Mensile</option>
-              <option value="quarterly">Trimestrale</option>
-              <option value="yearly">Annuale</option>
+            <select v-model="itemForm.cadence" class="input" aria-describedby="hint-item-cadence">
+              <option v-for="c in scenarioCadences" :key="c" :value="c">{{ SCENARIO_CADENCE_LABEL[c] }}</option>
             </select>
+            <p id="hint-item-cadence" class="field-hint">Una tantum conta una volta nel mese di «Dal»; le altre si ripetono fino a «Fino al» o alla fine dell'orizzonte.</p>
           </div>
           <div>
             <label class="label">Dal</label>
@@ -694,7 +754,7 @@ onMounted(async () => {
         </form>
 
         <div class="table-responsive md:overflow-x-auto border-t border-slate-100 pt-2">
-          <p v-if="itemsLoading" class="p-3 text-sm text-slate-500">Caricamento…</p>
+          <ListSkeleton v-if="itemsLoading" :rows="3" />
           <table v-else class="table">
             <thead class="bg-slate-100">
               <tr>
@@ -712,22 +772,18 @@ onMounted(async () => {
             <tbody class="divide-y divide-slate-100">
               <tr v-for="it in items" :key="it.id">
                 <td data-label="Tipo">
-                  <span :class="it.type === 'income' ? 'text-green-600' : 'text-slate-600'">
-                    {{ it.type === 'income' ? 'Entrata' : 'Uscita' }}
+                  <span :class="it.type === 'income' ? 'text-income-700' : 'text-slate-600'">
+                    {{ TX_TYPE_LABEL[it.type] }}
                   </span>
                 </td>
                 <td data-label="Descrizione">{{ it.description ?? '—' }}</td>
                 <td data-label="Conto">{{ accountName(it.account_id) }}</td>
                 <td data-label="Categoria">{{ categoryName(it.category_id) }}</td>
-                <td data-label="Cadenza">{{ CADENCE_LABEL[it.cadence] }}</td>
+                <td data-label="Cadenza">{{ SCENARIO_CADENCE_LABEL[it.cadence] }}</td>
                 <td data-label="Dal">{{ formatDate(it.starts_on) }}</td>
                 <td data-label="Fino">{{ formatDate(it.ends_on) }}</td>
-                <td
-                  data-label="Importo"
-                  class="md:text-right font-medium"
-                  :class="it.type === 'income' ? 'text-green-600' : ''"
-                >
-                  {{ it.type === 'income' ? '+' : '−' }}{{ money(it.amount, it.currency) }}
+                <td data-label="Importo" class="md:text-right font-medium">
+                  <Amount :value="it.amount" :currency="it.currency" :type="it.type" />
                 </td>
                 <td class="md:text-right actions-cell">
                   <button class="icon-btn icon-btn-delete" aria-label="Elimina" @click="deleteItem(it)">
@@ -738,8 +794,8 @@ onMounted(async () => {
                 </td>
               </tr>
               <tr v-if="items.length === 0">
-                <td colspan="9" class="text-center text-slate-500 py-6">
-                  Nessuna voce simulata. Aggiungine una per vedere l'impatto sul forecast.
+                <td colspan="9" class="whitespace-normal">
+                  <EmptyState title="Nessuna voce simulata. Aggiungine una qui sopra per vedere l'impatto sulla previsione." />
                 </td>
               </tr>
             </tbody>

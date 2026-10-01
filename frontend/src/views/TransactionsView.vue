@@ -1,19 +1,37 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
+import Amount from '@/components/ui/Amount.vue'
+import AppModal from '@/components/ui/AppModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
+import { useQueryFilters } from '@/composables/useQueryFilters'
 import { formatCurrency } from '@/lib/money'
+import { FALLBACK_TAG_COLOR } from '@/lib/chartTheme'
+import { TX_TYPE_LABEL, TX_TYPES } from '@/lib/labels'
+import { useToastStore } from '@/stores/toast'
 import type { Account, Category, Paginated, Tag, Transaction, TransactionType } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, meta, list, create, update, destroy } = useCrud<Transaction>('transactions')
+const { items, loading, meta, submitting, fieldErrors, list, create, update, destroy } = useCrud<Transaction>('transactions')
+const toast = useToastStore()
+const route = useRoute()
+const router = useRouter()
 
 const accounts = ref<Account[]>([])
 const categories = ref<Category[]>([])
 const tags = ref<Tag[]>([])
 
-const filters = ref({ account_id: '', type: '', from: '', to: '', search: '', tag_id: '' })
+const { filters, isFiltered, reset: resetFilters } = useQueryFilters(
+  { account_id: '', type: '', from: '', to: '', search: '', tag_id: '' },
+  () => applyFilters(),
+)
 const expandedDescriptions = ref(new Set<number>())
 function toggleDescription(id: number) {
   const set = expandedDescriptions.value
@@ -36,6 +54,7 @@ const form = ref({
   description: '',
   tag_ids: [] as number[],
 })
+const dirty = useFormDirty(form, showForm)
 
 function accountCurrency(id: number | null | undefined): string {
   if (!id) return ''
@@ -96,26 +115,25 @@ function categoryName(id: number | null | undefined): string {
   return categories.value.find((c) => c.id === id)?.name ?? ''
 }
 
-function txBorderClass(type: TransactionType): string {
-  if (type === 'income') return 'border-green-500'
-  if (type === 'expense') return 'border-red-400'
-  return 'border-slate-300'
+const TX_BORDER_CLASS: Record<TransactionType, string> = {
+  income: 'border-income-500',
+  expense: 'border-expense-400',
+  transfer: 'border-transfer-300',
 }
 
-function txAmountClass(type: TransactionType): string {
-  if (type === 'income') return 'text-green-600'
-  if (type === 'expense') return 'text-red-600'
-  return 'text-slate-700'
+const TX_BADGE_CLASS: Record<TransactionType, string> = {
+  income: 'bg-income-50 text-income-700',
+  expense: 'bg-expense-50 text-expense-700',
+  transfer: 'bg-transfer-50 text-transfer-700',
 }
 
-function txAmountSign(type: TransactionType): string {
-  if (type === 'income') return '+'
-  if (type === 'expense') return '−'
-  return ''
+function fieldError(name: string): string | undefined {
+  return fieldErrors.value[name]?.[0]
 }
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
     category_id: null,
@@ -142,7 +160,17 @@ function startEdit(tx: Transaction) {
     description: tx.description ?? '',
     tag_ids: (tx.tags ?? []).map((t) => t.id),
   }
+  openForm()
+}
+
+function openForm() {
+  fieldErrors.value = {}
   showForm.value = true
+}
+
+function openNew() {
+  reset()
+  openForm()
 }
 
 async function onSubmit() {
@@ -164,19 +192,27 @@ async function onSubmit() {
     }
   }
   const wasEditing = editing.value !== null
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: errori sotto i campi, il form resta aperto con i dati inseriti.
+    if (Object.keys(fieldErrors.value).length) toast.error('Controlla i campi evidenziati.')
+    return
   }
+  toast.success(wasEditing ? 'Transazione aggiornata.' : 'Transazione registrata.')
   reset()
   showForm.value = false
   await applyFilters(!wasEditing)
 }
 
 async function onDelete(tx: Transaction) {
-  if (!confirm('Eliminare la transazione?')) return
+  if (!(await confirmAction('Eliminare la transazione?'))) return
   await destroy(tx.id)
+  toast.success('Transazione eliminata.')
   await applyFilters(false)
 }
 
@@ -210,17 +246,31 @@ onMounted(async () => {
   categories.value = c.data.data
   tags.value = t.data.data
   form.value.account_id = accounts.value[0]?.id ?? 0
+  openNewFromQuery()
   await applyFilters()
+})
+
+// "+ Transazione" della topbar arriva con ?new=1, anche quando si è già su questa pagina.
+function openNewFromQuery() {
+  if (route.query.new !== '1') return
+  openNew()
+  const query = { ...route.query }
+  delete query.new
+  router.replace({ query })
+}
+watch(() => route.query.new, () => {
+  if (accounts.value.length) openNewFromQuery()
 })
 </script>
 
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuova transazione' }}
-      </button>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Transazioni</h1>
+        <p class="page-desc">Tutti i movimenti dei tuoi conti: entrate, uscite e trasferimenti tra conti, da filtrare, cercare e correggere.</p>
+      </div>
+      <button class="btn-primary" @click="openNew()">Nuova transazione</button>
     </div>
 
     <button
@@ -228,30 +278,36 @@ onMounted(async () => {
       type="button"
       class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
       aria-label="Nuova transazione"
-      @click="showForm = true; reset()"
+      @click="openNew()"
     >+</button>
 
     <details class="card filter-panel" open>
       <summary>Filtri</summary>
-      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent="applyFilters()">
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3" @submit.prevent>
         <div class="sm:col-span-2 md:col-span-5">
           <label class="label">Cerca nella descrizione</label>
-          <input v-model="filters.search" type="search" class="input" placeholder="Parole chiave…" />
+          <input
+            v-model="filters.search"
+            type="search"
+            class="input"
+            placeholder="Parole chiave… (premi / per cercare)"
+            aria-keyshortcuts="/"
+            aria-describedby="hint-search"
+          />
+          <p id="hint-search" class="field-hint">Trova le transazioni la cui descrizione contiene tutte le parole che scrivi, in qualsiasi ordine.</p>
         </div>
         <div>
           <label class="label">Conto</label>
           <select v-model="filters.account_id" class="input">
             <option value="">Tutti</option>
-            <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
+            <option v-for="a in accounts" :key="a.id" :value="String(a.id)">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
           </select>
         </div>
         <div>
           <label class="label">Tipo</label>
           <select v-model="filters.type" class="input">
             <option value="">Tutti</option>
-            <option value="income">income</option>
-            <option value="expense">expense</option>
-            <option value="transfer">transfer</option>
+            <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
           </select>
         </div>
         <div>
@@ -266,11 +322,8 @@ onMounted(async () => {
           <label class="label">Tag</label>
           <select v-model="filters.tag_id" class="input">
             <option value="">Tutti</option>
-            <option v-for="t in tags" :key="t.id" :value="t.id">{{ t.name }}</option>
+            <option v-for="t in tags" :key="t.id" :value="String(t.id)">{{ t.name }}</option>
           </select>
-        </div>
-        <div class="flex items-end sm:col-span-2 md:col-span-1">
-          <button type="submit" class="btn-secondary w-full">Filtra</button>
         </div>
       </form>
     </details>
@@ -280,97 +333,134 @@ onMounted(async () => {
       <span v-if="meta.total > 0"> · {{ meta.from }}–{{ meta.to }}</span>
     </p>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Tipo</label>
-        <select v-model="form.type" class="input">
-          <option value="expense">expense</option>
-          <option value="income">income</option>
-          <option value="transfer">transfer</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Conto</label>
-        <select v-model.number="form.account_id" class="input" required>
-          <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
-        </select>
-      </div>
-      <div v-if="form.type === 'transfer'">
-        <label class="label">Conto destinazione</label>
-        <select v-model.number="form.transfer_account_id" class="input" required>
-          <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
-            {{ a.name }}
-          </option>
-        </select>
-      </div>
-      <div v-else>
-        <label class="label">Categoria</label>
-        <select v-model.number="form.category_id" class="input">
-          <option :value="null">— Nessuna —</option>
-          <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
-        <input v-model="form.amount" type="number" step="0.01" min="0.01" class="input" required />
-      </div>
-      <div v-if="isCrossCurrencyTransfer">
-        <label class="label">Importo ricevuto ({{ accountCurrency(form.transfer_account_id) }})</label>
-        <input
-          v-model="form.transfer_amount"
-          type="number"
-          step="0.01"
-          min="0.01"
-          class="input"
-          :placeholder="`Auto (tasso del ${form.occurred_at})`"
-        />
-      </div>
-      <div>
-        <label class="label">Data</label>
-        <input v-model="form.occurred_at" type="date" class="input" required />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Descrizione</label>
-        <input v-model="form.description" class="input" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Tag</label>
-        <div v-if="tags.length" class="flex flex-wrap gap-2">
-          <button
-            v-for="t in tags"
-            :key="t.id"
-            type="button"
-            class="px-3 py-1 rounded-full text-sm border transition"
-            :class="form.tag_ids.includes(t.id)
-              ? 'text-white border-transparent'
-              : 'bg-white text-slate-600 border-slate-300 hover:border-slate-400'"
-            :style="form.tag_ids.includes(t.id) ? { background: t.color || '#475569' } : {}"
-            @click="toggleTag(t.id)"
-          >
-            {{ t.name }}
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica transazione' : 'Nuova transazione'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors
+            class="col-span-full"
+            :errors="fieldErrors"
+            :shown="['account_id', 'transfer_account_id', 'category_id', 'amount', 'transfer_amount', 'occurred_at', 'description']"
+          />
+          <div>
+            <label class="label">Tipo</label>
+            <select v-model="form.type" class="input">
+              <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="label">Conto</label>
+            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldError('account_id') }" required>
+              <option v-for="a in accounts" :key="a.id" :value="a.id">{{ a.name }}{{ a.is_primary ? ' ★' : '' }}</option>
+            </select>
+            <p v-if="fieldError('account_id')" class="field-error">{{ fieldError('account_id') }}</p>
+          </div>
+          <div v-if="form.type === 'transfer'">
+            <label class="label">Conto destinazione</label>
+            <select
+              v-model.number="form.transfer_account_id"
+              class="input"
+              :class="{ 'input-invalid': fieldError('transfer_account_id') }"
+              required
+              aria-describedby="hint-transfer-account"
+            >
+              <option v-for="a in accounts.filter((a) => a.id !== form.account_id)" :key="a.id" :value="a.id">
+                {{ a.name }}
+              </option>
+            </select>
+            <p id="hint-transfer-account" class="field-hint">Il trasferimento sposta denaro tra due tuoi conti: non conta né come entrata né come uscita.</p>
+            <p v-if="fieldError('transfer_account_id')" class="field-error">{{ fieldError('transfer_account_id') }}</p>
+          </div>
+          <div v-else>
+            <label class="label">Categoria</label>
+            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldError('category_id') }">
+              <option :value="null">— Nessuna —</option>
+              <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
+            </select>
+            <p v-if="fieldError('category_id')" class="field-error">{{ fieldError('category_id') }}</p>
+          </div>
+          <div>
+            <label class="label">Importo<span v-if="form.type === 'transfer'"> ({{ accountCurrency(form.account_id) }})</span></label>
+            <input
+              v-model="form.amount"
+              type="number"
+              inputmode="decimal"
+              step="0.01"
+              min="0.01"
+              class="input"
+              :class="{ 'input-invalid': fieldError('amount') }"
+              required
+              aria-describedby="hint-amount"
+            />
+            <p id="hint-amount" class="field-hint">Inseriscilo sempre positivo: se il denaro entra o esce lo decide il tipo.</p>
+            <p v-if="fieldError('amount')" class="field-error">{{ fieldError('amount') }}</p>
+          </div>
+          <div v-if="isCrossCurrencyTransfer">
+            <label class="label">Importo ricevuto ({{ accountCurrency(form.transfer_account_id) }})</label>
+            <input
+              v-model="form.transfer_amount"
+              type="number"
+              step="0.01"
+              min="0.01"
+              class="input"
+              :placeholder="`Auto (tasso del ${form.occurred_at})`"
+              :class="{ 'input-invalid': fieldError('transfer_amount') }"
+              aria-describedby="hint-transfer-amount"
+            />
+            <p id="hint-transfer-amount" class="field-hint">Quanto arriva sul conto destinazione nella sua valuta; se lo lasci vuoto viene calcolato con il tasso di cambio della data.</p>
+            <p v-if="fieldError('transfer_amount')" class="field-error">{{ fieldError('transfer_amount') }}</p>
+          </div>
+          <div>
+            <label class="label">Data</label>
+            <input v-model="form.occurred_at" type="date" class="input" :class="{ 'input-invalid': fieldError('occurred_at') }" required />
+            <p v-if="fieldError('occurred_at')" class="field-error">{{ fieldError('occurred_at') }}</p>
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Descrizione</label>
+            <input v-model="form.description" class="input" :class="{ 'input-invalid': fieldError('description') }" />
+            <p v-if="fieldError('description')" class="field-error">{{ fieldError('description') }}</p>
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Tag</label>
+            <div v-if="tags.length" class="flex flex-wrap gap-2">
+              <button
+                v-for="t in tags"
+                :key="t.id"
+                type="button"
+                class="px-3 py-1 rounded-full text-sm border transition"
+                :class="form.tag_ids.includes(t.id)
+                  ? 'text-white border-transparent'
+                  : 'bg-surface text-slate-600 border-slate-300 hover:border-slate-400'"
+                :style="form.tag_ids.includes(t.id) ? { background: t.color || FALLBACK_TAG_COLOR } : {}"
+                @click="toggleTag(t.id)"
+              >
+                {{ t.name }}
+              </button>
+            </div>
+            <p v-else class="text-sm text-slate-500">
+              Nessun tag disponibile. Creane in
+              <RouterLink class="underline" to="/tags">Tag</RouterLink>.
+            </p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
         </div>
-        <p v-else class="text-sm text-slate-400">
-          Nessun tag disponibile. Creane in
-          <RouterLink class="underline" to="/tags">Tag</RouterLink>.
-        </p>
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+      </form>
+    </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per transazione, pensata per la lettura rapida (sotto md). -->
-      <ul v-else class="md:hidden divide-y divide-slate-100">
+      <ul v-else class="md:hidden divide-y divide-slate-100" :class="{ 'opacity-60': loading }">
         <li
           v-for="tx in items"
           :key="tx.id"
           class="p-4 border-l-4"
-          :class="txBorderClass(tx.type)"
+          :class="TX_BORDER_CLASS[tx.type]"
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
@@ -379,7 +469,7 @@ onMounted(async () => {
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
                 {{ formatDate(tx.occurred_at) }} ·
-                {{ accountName(tx.account_id) }}<span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500">★</span>
+                {{ accountName(tx.account_id) }}<span v-if="isPrimaryAccount(tx.account_id)" class="text-warning-500">★</span>
                 <template v-if="tx.type === 'transfer'"> → {{ accountName(tx.transfer_account_id) }}</template>
                 <template v-else-if="tx.description && categoryName(tx.category_id)"> · {{ categoryName(tx.category_id) }}</template>
               </p>
@@ -387,28 +477,30 @@ onMounted(async () => {
                 <span
                   v-for="t in tx.tags"
                   :key="t.id"
-                  class="inline-block px-2 py-0.5 rounded-full text-[10px] text-white"
-                  :style="{ background: t.color || '#475569' }"
+                  class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
+                  :style="{ background: t.color || FALLBACK_TAG_COLOR }"
                 >{{ t.name }}</span>
               </div>
             </div>
             <div class="text-right shrink-0">
-              <p class="font-semibold whitespace-nowrap" :class="txAmountClass(tx.type)">
-                {{ txAmountSign(tx.type) }}{{ formatCurrency(tx.amount, tx.currency) }}
-              </p>
+              <Amount class="block font-semibold" :value="tx.amount" :currency="tx.currency" :type="tx.type" />
               <p
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
-                class="text-xs font-normal text-slate-400 mt-0.5"
+                class="text-xs font-normal text-slate-500 mt-0.5"
               >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</p>
               <RowActions class="mt-2 justify-end" @edit="startEdit(tx)" @delete="onDelete(tx)" />
             </div>
           </div>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessuna transazione.</li>
+        <li v-if="items.length === 0">
+          <EmptyState title="Non hai ancora registrato transazioni." :filtered="isFiltered" @reset="resetFilters()">
+            <button type="button" class="btn-primary" @click="openNew()">Registra la prima</button>
+          </EmptyState>
+        </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Data</th>
@@ -423,13 +515,17 @@ onMounted(async () => {
         <tbody class="divide-y divide-slate-100">
           <tr v-for="tx in items" :key="tx.id">
             <td>{{ formatDate(tx.occurred_at) }}</td>
-            <td class="capitalize">{{ tx.type }}</td>
+            <td>
+              <span class="inline-block rounded px-2 py-0.5 text-xs font-medium" :class="TX_BADGE_CLASS[tx.type]">
+                {{ TX_TYPE_LABEL[tx.type] }}
+              </span>
+            </td>
             <td>
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(tx.account_id) }}</span>
-                <span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500" title="Conto principale">★</span>
+                <span v-if="isPrimaryAccount(tx.account_id)" class="text-warning-500" title="Conto principale">★</span>
               </span>
-              <span v-if="tx.type === 'transfer'" class="text-slate-400"> → {{ accountName(tx.transfer_account_id) }}</span>
+              <span v-if="tx.type === 'transfer'" class="text-slate-500"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>
             <td
               class="max-w-xs cursor-pointer"
@@ -443,16 +539,16 @@ onMounted(async () => {
                   v-for="t in tx.tags"
                   :key="t.id"
                   class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
-                  :style="{ background: t.color || '#475569' }"
+                  :style="{ background: t.color || FALLBACK_TAG_COLOR }"
                 >{{ t.name }}</span>
               </span>
-              <span v-else class="text-slate-400">—</span>
+              <span v-else class="text-slate-500">—</span>
             </td>
             <td class="text-right font-medium">
-              {{ formatCurrency(tx.amount, tx.currency) }}
+              <Amount :value="tx.amount" :currency="tx.currency" :type="tx.type" />
               <span
                 v-if="tx.type === 'transfer' && tx.transfer_amount && accountCurrency(tx.transfer_account_id) !== tx.currency"
-                class="block text-xs font-normal text-slate-400"
+                class="block text-xs font-normal text-slate-500"
               >→ {{ formatCurrency(tx.transfer_amount, accountCurrency(tx.transfer_account_id)) }}</span>
             </td>
             <td class="text-right">
@@ -460,7 +556,11 @@ onMounted(async () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="7" class="text-center text-slate-500 py-6">Nessuna transazione.</td>
+            <td colspan="7" class="whitespace-normal">
+              <EmptyState title="Non hai ancora registrato transazioni." :filtered="isFiltered" @reset="resetFilters()">
+                <button type="button" class="btn-primary" @click="openNew()">Registra la prima</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

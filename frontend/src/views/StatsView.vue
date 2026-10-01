@@ -13,6 +13,11 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import Amount from '@/components/ui/Amount.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
+import { INCOME_COLOR, PRIMARY_COLOR, paletteColor } from '@/lib/chartTheme'
+import { TX_TYPE_LABEL } from '@/lib/labels'
 import { formatCurrency } from '@/lib/money'
 import type {
   CashFlowPoint,
@@ -22,11 +27,6 @@ import type {
 } from '@/types/reports'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
-
-const palette = [
-  '#6366f1', '#ec4899', '#22c55e', '#f59e0b', '#0ea5e9',
-  '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#eab308',
-]
 
 const unit = ref<'month' | 'year'>('month')
 const forecastMonths = ref(6)
@@ -64,8 +64,8 @@ const trendData = computed(() => {
     datasets: trend.value.categories.map((c, i) => ({
       label: c.category_name,
       data: c.values.map((v) => parseFloat(v)),
-      borderColor: palette[i % palette.length],
-      backgroundColor: palette[i % palette.length],
+      borderColor: paletteColor(i),
+      backgroundColor: paletteColor(i),
       tension: 0.3,
       fill: false,
     })),
@@ -76,26 +76,26 @@ const forecastData = computed(() => ({
   labels: forecast.value.map((p) => formatMonth(p.period)),
   datasets: [
     {
-      label: 'Net mensile previsto',
+      label: 'Saldo mensile previsto',
       data: forecast.value.map((p) => parseFloat(p.net)),
-      borderColor: '#22c55e',
-      backgroundColor: 'rgba(34,197,94,0.15)',
+      borderColor: INCOME_COLOR,
+      backgroundColor: `${INCOME_COLOR}26`,
       tension: 0.3,
       fill: true,
     },
     {
       label: 'Patrimonio proiettato',
       data: forecast.value.map((p) => parseFloat(p.projected_net_worth)),
-      borderColor: '#6366f1',
-      backgroundColor: 'rgba(99,102,241,0.1)',
+      borderColor: PRIMARY_COLOR,
+      backgroundColor: `${PRIMARY_COLOR}1a`,
       tension: 0.3,
       fill: false,
       yAxisID: 'y1',
     },
     {
-      label: 'Net mensile con storico',
+      label: 'Saldo mensile con storico',
       data: forecast.value.map((p) => parseFloat(p.net) + parseFloat(p.historical_net)),
-      borderColor: '#f59e0b',
+      borderColor: paletteColor(3),
       borderDash: [6, 4],
       tension: 0.3,
       fill: false,
@@ -103,7 +103,7 @@ const forecastData = computed(() => ({
     {
       label: 'Patrimonio con storico',
       data: forecast.value.map((p) => parseFloat(p.projected_net_worth_with_history)),
-      borderColor: '#a855f7',
+      borderColor: paletteColor(5),
       borderDash: [6, 4],
       tension: 0.3,
       fill: false,
@@ -121,7 +121,7 @@ const chartOptions = {
 const forecastOptions = {
   ...chartOptions,
   scales: {
-    y: { position: 'left' as const, title: { display: true, text: 'Net mensile' } },
+    y: { position: 'left' as const, title: { display: true, text: 'Saldo mensile' } },
     y1: {
       position: 'right' as const,
       grid: { drawOnChartArea: false },
@@ -152,7 +152,7 @@ function deltaClass(value: string | null | undefined, lowerIsBetter = false) {
   if (n === 0) return 'text-slate-500'
   const isPositive = n > 0
   const good = lowerIsBetter ? !isPositive : isPositive
-  return good ? 'text-green-600' : 'text-red-600'
+  return good ? 'text-income-700' : 'text-expense-700'
 }
 
 onMounted(refresh)
@@ -161,7 +161,12 @@ onMounted(refresh)
 <template>
   <div class="space-y-6">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Statistiche</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Statistiche</h1>
+        <p class="page-desc">
+          L'andamento nel tempo: confronto tra periodi, categorie principali e una stima di come evolveranno saldo e patrimonio.
+        </p>
+      </div>
       <button class="btn-secondary" :disabled="loading" @click="refresh">
         {{ loading ? 'Aggiorno…' : 'Aggiorna' }}
       </button>
@@ -169,21 +174,29 @@ onMounted(refresh)
 
     <section class="card p-4 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-2">
-        <h2 class="font-medium">Confronto periodi</h2>
+        <div>
+          <h2 class="font-medium">Confronto periodi</h2>
+          <p class="text-xs text-slate-500">
+            Il periodo in corso, anche se non è finito, contro il precedente intero. I mesi seguono il giorno di inizio mese delle Impostazioni, gli anni sono solari.
+          </p>
+        </div>
         <select v-model="unit" class="input md:w-40" @change="refresh">
           <option value="month">Mese vs precedente</option>
           <option value="year">Anno vs precedente</option>
         </select>
       </div>
 
-      <div v-if="comparison" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div v-if="!comparison && loading" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div v-for="i in 3" :key="i" class="card h-36 animate-pulse bg-slate-100" />
+      </div>
+      <div v-else-if="comparison" class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Income {{ formatMonth(comparison.current.label) }}</p>
-          <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.income, baseCurrency) }}</p>
-          <p class="text-xs text-slate-500 mt-2">
+          <p class="text-xs uppercase text-slate-500">Entrate {{ formatMonth(comparison.current.label) }}</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="comparison.current.income" :currency="baseCurrency" type="income" />
+          <p class="num text-xs text-slate-500 mt-2">
             vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.income, baseCurrency) }}
           </p>
-          <p class="text-sm mt-1" :class="deltaClass(comparison.delta.income_pct)">
+          <p class="num text-sm mt-1" :class="deltaClass(comparison.delta.income_pct)">
             Δ {{ formatMoneyDelta(comparison.delta.income) }}
             <span v-if="comparison.delta.income_pct">
               ({{ formatDelta(comparison.delta.income_pct, '%') }})
@@ -191,12 +204,12 @@ onMounted(refresh)
           </p>
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Expense {{ formatMonth(comparison.current.label) }}</p>
-          <p class="text-2xl font-semibold mt-1">{{ formatCurrency(comparison.current.expense, baseCurrency) }}</p>
-          <p class="text-xs text-slate-500 mt-2">
+          <p class="text-xs uppercase text-slate-500">Uscite {{ formatMonth(comparison.current.label) }}</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="comparison.current.expense" :currency="baseCurrency" type="expense" />
+          <p class="num text-xs text-slate-500 mt-2">
             vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.expense, baseCurrency) }}
           </p>
-          <p class="text-sm mt-1" :class="deltaClass(comparison.delta.expense_pct, true)">
+          <p class="num text-sm mt-1" :class="deltaClass(comparison.delta.expense_pct, true)">
             Δ {{ formatMoneyDelta(comparison.delta.expense) }}
             <span v-if="comparison.delta.expense_pct">
               ({{ formatDelta(comparison.delta.expense_pct, '%') }})
@@ -204,17 +217,12 @@ onMounted(refresh)
           </p>
         </div>
         <div class="card p-4">
-          <p class="text-xs uppercase text-slate-500">Net {{ formatMonth(comparison.current.label) }}</p>
-          <p
-            class="text-2xl font-semibold mt-1"
-            :class="parseFloat(comparison.current.net) >= 0 ? 'text-green-600' : 'text-red-600'"
-          >
-            {{ formatCurrency(comparison.current.net, baseCurrency) }}
-          </p>
-          <p class="text-xs text-slate-500 mt-2">
+          <p class="text-xs uppercase text-slate-500">Saldo {{ formatMonth(comparison.current.label) }}</p>
+          <Amount class="block text-2xl font-semibold mt-1" :value="comparison.current.net" :currency="baseCurrency" signed />
+          <p class="num text-xs text-slate-500 mt-2">
             vs {{ formatMonth(comparison.previous.label) }}: {{ formatCurrency(comparison.previous.net, baseCurrency) }}
           </p>
-          <p class="text-sm mt-1" :class="deltaClass(comparison.delta.net)">
+          <p class="num text-sm mt-1" :class="deltaClass(comparison.delta.net)">
             Δ {{ formatMoneyDelta(comparison.delta.net) }}
           </p>
         </div>
@@ -222,8 +230,11 @@ onMounted(refresh)
     </section>
 
     <section class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="font-medium">Trend top categorie (12 mesi)</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-medium">Trend top categorie (12 mesi)</h2>
+          <p class="text-xs text-slate-500">Le 5 categorie con il totale più alto nel periodo; le transazioni senza categoria sono escluse.</p>
+        </div>
         <select v-model="trendType" class="input md:w-40" @change="refresh">
           <option value="expense">Spese</option>
           <option value="income">Entrate</option>
@@ -231,13 +242,22 @@ onMounted(refresh)
       </div>
       <div class="h-64 sm:h-80">
         <Line v-if="trend && trend.categories.length" :data="trendData" :options="chartOptions" />
-        <p v-else class="text-sm text-slate-500">Nessun dato.</p>
+        <div v-else-if="loading && !trend" class="h-full animate-pulse rounded bg-slate-100" />
+        <EmptyState
+          v-else
+          :title="trendType === 'expense' ? 'Nessuna spesa negli ultimi 12 mesi.' : 'Nessuna entrata negli ultimi 12 mesi.'"
+        />
       </div>
     </section>
 
     <section class="card p-4">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="font-medium">Cash flow forecast</h2>
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 class="font-medium">Proiezione del flusso di cassa</h2>
+          <p class="text-xs text-slate-500">
+            Dal mese in corso. Saldo mensile (asse sinistro): entrate meno uscite previste nel mese. Patrimonio (asse destro): quello di fine mese scorso più i saldi previsti, sommati mese dopo mese.
+          </p>
+        </div>
         <div class="flex items-center gap-2">
           <label class="text-sm text-slate-600">Mesi</label>
           <input
@@ -252,15 +272,16 @@ onMounted(refresh)
       </div>
       <div class="h-64 sm:h-80">
         <Line v-if="forecast.length" :data="forecastData" :options="forecastOptions" />
-        <p v-else class="text-sm text-slate-500">Nessuna ricorrente attiva per la proiezione.</p>
+        <div v-else-if="loading" class="h-full animate-pulse rounded bg-slate-100" />
+        <EmptyState v-else title="Nessuna ricorrente attiva per la proiezione." />
       </div>
       <p class="text-xs text-slate-500 mt-2">
-        Linee piene: solo ricorrenti income/expense attive. Linee tratteggiate: aggiungono ogni mese la mediana di entrate e uscite non ricorrenti degli ultimi 12 mesi.
+        Linee piene: solo ricorrenti di entrata e di uscita attive. Linee tratteggiate: aggiungono ogni mese la mediana di entrate e uscite non ricorrenti degli ultimi 12 mesi.
       </p>
     </section>
 
     <section class="card p-4">
-      <div class="flex items-center justify-between mb-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 class="font-medium">Top transazioni del mese</h2>
         <select v-model="topType" class="input md:w-40" @change="refresh">
           <option value="">Tutti</option>
@@ -269,28 +290,29 @@ onMounted(refresh)
         </select>
       </div>
       <!-- Mobile: card compatta, la lista label/valore generica era illeggibile con 6 colonne. -->
-      <ul class="md:hidden divide-y divide-slate-100">
+      <ListSkeleton v-if="loading && !top.length" :rows="3" />
+      <ul v-else class="md:hidden divide-y divide-slate-100">
         <li v-for="t in top" :key="t.id" class="py-3 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="font-medium text-slate-800 truncate">{{ t.description ?? '—' }}</p>
             <p class="text-xs text-slate-500 mt-0.5 truncate">{{ t.category_name ?? '—' }}</p>
-            <p class="text-xs text-slate-400 mt-0.5 truncate">
+            <p class="text-xs text-slate-500 mt-0.5 truncate">
               {{ formatDate(t.occurred_at) }} · {{ t.account_name ?? '—' }}
             </p>
           </div>
           <div class="text-right shrink-0">
-            <p class="font-semibold whitespace-nowrap" :class="t.type === 'income' ? 'text-green-600' : 'text-red-600'">
-              {{ formatCurrency(t.amount, t.currency) }}
-            </p>
-            <p v-if="t.currency !== baseCurrency" class="text-xs text-slate-400 whitespace-nowrap mt-0.5">
+            <Amount class="block font-semibold whitespace-nowrap" :value="t.amount" :currency="t.currency" :type="t.type" />
+            <p v-if="t.currency !== baseCurrency" class="num text-xs text-slate-500 whitespace-nowrap mt-0.5">
               ≈ {{ formatCurrency(t.amount_base, baseCurrency) }}
             </p>
           </div>
         </li>
-        <li v-if="top.length === 0" class="py-6 text-center text-slate-500 text-sm">Nessuna transazione nel periodo.</li>
+        <li v-if="top.length === 0">
+          <EmptyState title="Nessuna transazione nel mese." />
+        </li>
       </ul>
 
-      <div class="hidden md:block md:overflow-x-auto">
+      <div v-if="!(loading && !top.length)" class="hidden md:block md:overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>
@@ -305,19 +327,21 @@ onMounted(refresh)
           <tbody class="divide-y divide-slate-100">
             <tr v-for="t in top" :key="t.id">
               <td data-label="Data">{{ formatDate(t.occurred_at) }}</td>
-              <td data-label="Tipo" class="capitalize">{{ t.type }}</td>
+              <td data-label="Tipo">{{ TX_TYPE_LABEL[t.type] }}</td>
               <td data-label="Conto">{{ t.account_name ?? '—' }}</td>
               <td data-label="Categoria">{{ t.category_name ?? '—' }}</td>
               <td data-label="Descrizione">{{ t.description ?? '—' }}</td>
               <td data-label="Importo" class="md:text-right font-medium">
-                {{ formatCurrency(t.amount, t.currency) }}
-                <span v-if="t.currency !== baseCurrency" class="block text-xs font-normal text-slate-400">
+                <Amount :value="t.amount" :currency="t.currency" :type="t.type" />
+                <span v-if="t.currency !== baseCurrency" class="num block text-xs font-normal text-slate-500">
                   ≈ {{ formatCurrency(t.amount_base, baseCurrency) }}
                 </span>
               </td>
             </tr>
             <tr v-if="top.length === 0">
-              <td colspan="6" class="text-center text-slate-500 py-6">Nessuna transazione nel periodo.</td>
+              <td colspan="6" class="whitespace-normal">
+                <EmptyState title="Nessuna transazione nel mese." />
+              </td>
             </tr>
           </tbody>
         </table>

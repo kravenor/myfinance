@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import Amount from '@/components/ui/Amount.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/date'
+import { INVESTMENT_SIDE_LABEL } from '@/lib/labels'
 import { formatCurrency } from '@/lib/money'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { InvestmentHolding, InvestmentSide, InvestmentTransaction, Paginated } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 const props = defineProps<{ holding: InvestmentHolding }>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'changed'): void }>()
@@ -47,10 +52,9 @@ const totalPl = computed(
   () => parseFloat(props.holding.unrealized_pl) + parseFloat(props.holding.realized_pl),
 )
 
-const sideLabel = (side: InvestmentSide) =>
-  ({ buy: 'Acquisto', sell: 'Vendita', fee: 'Costo' })[side]
+const SIDES = Object.keys(INVESTMENT_SIDE_LABEL) as InvestmentSide[]
 const sideClass = (side: InvestmentSide) =>
-  ({ buy: 'text-slate-800', sell: 'text-amber-700', fee: 'text-slate-500' })[side]
+  ({ buy: 'text-slate-800', sell: 'text-warning-700', fee: 'text-slate-500' })[side]
 
 async function load() {
   loading.value = true
@@ -119,7 +123,7 @@ async function onSubmit() {
 }
 
 async function onDelete(m: InvestmentTransaction) {
-  if (!confirm(`Eliminare il movimento del ${formatDate(m.occurred_at)}?`)) return
+  if (!(await confirmAction(`Eliminare il movimento del ${formatDate(m.occurred_at)}?`))) return
   await api.delete(`${base.value}/${m.id}`)
   if (editingId.value === m.id) cancelEdit()
   await load()
@@ -130,9 +134,9 @@ onMounted(load)
 </script>
 
 <template>
-  <div class="fixed inset-0 z-40 flex justify-end bg-slate-900/40" @click.self="emit('close')">
-    <div class="w-full max-w-xl h-full overflow-y-auto bg-white shadow-xl">
-      <header class="sticky top-0 bg-white border-b border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
+  <div class="fixed inset-0 z-40 flex justify-end bg-black/40" @click.self="emit('close')">
+    <div class="w-full max-w-xl h-full overflow-y-auto bg-surface shadow-xl">
+      <header class="sticky top-0 bg-surface border-b border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h2 class="font-semibold text-slate-800 truncate">{{ holding.name }}</h2>
           <p class="text-xs text-slate-500">Registro movimenti</p>
@@ -141,37 +145,39 @@ onMounted(load)
       </header>
 
       <dl class="grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 border-b border-slate-200 text-sm">
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">Versato netto</dt>
-          <dd class="font-medium">{{ formatCurrency(holding.net_invested, holding.currency) }}</dd>
+          <dd class="font-medium"><Amount :value="holding.net_invested" :currency="holding.currency" /></dd>
         </div>
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">Valore attuale</dt>
-          <dd class="font-medium">{{ formatCurrency(holding.market_value, holding.currency) }}</dd>
+          <dd class="font-medium"><Amount :value="holding.market_value" :currency="holding.currency" /></dd>
         </div>
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">P/L realizzato</dt>
-          <dd class="font-medium" :class="parseFloat(holding.realized_pl) >= 0 ? 'text-green-600' : 'text-red-600'">
-            {{ formatCurrency(holding.realized_pl, holding.currency) }}
-          </dd>
+          <dd class="font-medium"><Amount :value="holding.realized_pl" :currency="holding.currency" signed /></dd>
         </div>
-        <div class="bg-white p-3">
+        <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">P/L totale</dt>
-          <dd class="font-medium" :class="totalPl >= 0 ? 'text-green-600' : 'text-red-600'">
-            {{ formatCurrency(String(totalPl), holding.currency) }}
-          </dd>
+          <dd class="font-medium"><Amount :value="totalPl" :currency="holding.currency" signed /></dd>
         </div>
       </dl>
+      <p class="px-4 py-2 border-b border-slate-200 text-xs text-slate-500">
+        Versato netto: acquisti e costi meno l'incasso delle vendite. P/L totale: latente (valore meno costo delle quote rimaste) più realizzato.
+      </p>
 
       <form class="p-4 space-y-3 border-b border-slate-200" @submit.prevent="onSubmit">
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="label">Operazione</label>
-            <select v-model="form.side" class="input">
-              <option value="buy">Acquisto</option>
-              <option value="sell">Vendita</option>
-              <option value="fee">Costo</option>
+            <select v-model="form.side" class="input" aria-describedby="hint-mv-side">
+              <option v-for="s in SIDES" :key="s" :value="s">{{ INVESTMENT_SIDE_LABEL[s] }}</option>
             </select>
+            <p id="hint-mv-side" class="field-hint">
+              <template v-if="form.side === 'buy'">Aggiunge quote e alza il versato; il prezzo di carico diventa la media ponderata con le quote che avevi.</template>
+              <template v-else-if="form.side === 'sell'">Toglie quote e riduce il versato; la differenza col prezzo di carico va nel P/L realizzato e il carico non cambia.</template>
+              <template v-else>Bollo, custodia e simili: non muove quote, alza il versato e riduce il P/L realizzato.</template>
+            </p>
           </div>
           <div>
             <label class="label">Data</label>
@@ -179,11 +185,13 @@ onMounted(load)
           </div>
           <div v-if="form.side === 'buy'">
             <label class="label">Importo versato ({{ holding.currency }})</label>
-            <input v-model="form.amount" type="number" step="0.01" min="0" class="input" placeholder="es. 100" />
+            <input v-model="form.amount" type="number" step="0.01" min="0" class="input" placeholder="es. 100" aria-describedby="hint-mv-amount" />
+            <p id="hint-mv-amount" class="field-hint">Le quote si calcolano da sole (importo ÷ prezzo); le commissioni si aggiungono a parte.</p>
           </div>
           <div v-if="!isFee">
             <label class="label">Prezzo ({{ holding.currency }})</label>
-            <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required />
+            <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required aria-describedby="hint-mv-price" />
+            <p id="hint-mv-price" class="field-hint">Prezzo per quota a cui è stato eseguito l'ordine; parte dalla quotazione attuale.</p>
           </div>
           <div v-if="!isFee">
             <label class="label">Quantità</label>
@@ -197,7 +205,9 @@ onMounted(load)
               :class="{ 'bg-slate-100 text-slate-500': computedQuantity !== null }"
               :required="computedQuantity === null"
               :placeholder="computedQuantity !== null ? String(computedQuantity) : ''"
+              :aria-describedby="form.side === 'sell' ? 'hint-mv-quantity' : undefined"
             />
+            <p v-if="form.side === 'sell'" id="hint-mv-quantity" class="field-hint">Non puoi vendere più quote di quante ne avevi alla data della vendita.</p>
           </div>
           <div>
             <label class="label">{{ isFee ? `Costo (${holding.currency})` : 'Commissioni' }}</label>
@@ -209,46 +219,51 @@ onMounted(load)
               class="input"
               placeholder="0,00"
               :required="isFee"
+              :aria-describedby="isFee ? undefined : 'hint-mv-fees'"
             />
+            <p v-if="!isFee" id="hint-mv-fees" class="field-hint">In un acquisto si sommano al costo, in una vendita riducono l'incasso.</p>
           </div>
           <div>
             <label class="label">Note</label>
             <input v-model="form.notes" class="input" :placeholder="isFee ? 'es. bollo titoli' : 'es. rata PAC'" />
           </div>
         </div>
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+        <p v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</p>
         <div class="flex gap-2">
           <button type="submit" class="btn-primary" :disabled="saving">
-            {{ editingId ? 'Salva movimento' : 'Registra movimento' }}
+            {{ saving ? 'Salvataggio…' : editingId ? 'Salva movimento' : 'Registra movimento' }}
           </button>
           <button v-if="editingId" type="button" class="btn-secondary" @click="cancelEdit">Annulla</button>
         </div>
       </form>
 
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !movements.length" />
       <ul v-else class="divide-y divide-slate-100">
         <li v-for="m in movements" :key="m.id" class="p-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="text-sm font-medium" :class="sideClass(m.side)">
-              {{ sideLabel(m.side) }} · {{ formatDate(m.occurred_at) }}
+              {{ INVESTMENT_SIDE_LABEL[m.side] }} · {{ formatDate(m.occurred_at) }}
             </p>
-            <p v-if="m.side !== 'fee'" class="text-xs text-slate-500 mt-0.5">
+            <p v-if="m.side !== 'fee'" class="num text-xs text-slate-500 mt-0.5">
               {{ m.quantity }} × {{ formatCurrency(m.price, holding.currency) }}
               <template v-if="parseFloat(m.fees) > 0">
                 + {{ formatCurrency(m.fees, holding.currency) }} comm.
               </template>
             </p>
-            <p v-if="m.notes" class="text-xs text-slate-400 mt-0.5 truncate">{{ m.notes }}</p>
+            <p v-if="m.notes" class="text-xs text-slate-500 mt-0.5 truncate">{{ m.notes }}</p>
           </div>
           <div class="text-right shrink-0">
-            <p class="text-sm font-medium whitespace-nowrap">
-              {{ m.side === 'sell' ? '+' : '−' }}{{ formatCurrency(m.cash_flow, holding.currency) }}
-            </p>
+            <Amount
+              class="block text-sm font-medium whitespace-nowrap"
+              :value="m.cash_flow"
+              :currency="holding.currency"
+              :type="m.side === 'sell' ? 'income' : 'expense'"
+            />
             <RowActions class="mt-1 justify-end" @edit="startEdit(m)" @delete="onDelete(m)" />
           </div>
         </li>
-        <li v-if="movements.length === 0" class="p-6 text-center text-sm text-slate-500">
-          Nessun movimento.
+        <li v-if="movements.length === 0">
+          <EmptyState title="Nessun movimento registrato: usa il form qui sopra per il primo." />
         </li>
       </ul>
     </div>

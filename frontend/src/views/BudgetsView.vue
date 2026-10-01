@@ -1,21 +1,53 @@
 <script setup lang="ts">
 import { financialMonthStart, formatMonth } from '@/lib/date'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import Amount from '@/components/ui/Amount.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { formatCurrency } from '@/lib/money'
+import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Budget, Category, Paginated } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 function budgetPeriod(year: number, month: number): string {
   return formatMonth(`${year}-${String(month).padStart(2, '0')}`)
 }
 
-const { items, loading, list, create, update, destroy } = useCrud<Budget>('budgets')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<Budget>('budgets')
+const toast = useToastStore()
+const auth = useAuthStore()
+// Il backend somma le uscite senza conversione: gli importi sono nella valuta dell'utente.
+const currency = computed(() => auth.user?.currency ?? 'EUR')
 
 const categories = ref<Category[]>([])
 // Periodo di default: il ciclo finanziario corrente (vedi month_start_day).
 const currentCycle = financialMonthStart()
-const filters = ref({ year: currentCycle.getFullYear(), month: currentCycle.getMonth() + 1 })
+const periodKey = (year: number, month: number) => `${year}-${String(month).padStart(2, '0')}`
+const { filters: query } = useQueryFilters(
+  { period: periodKey(currentCycle.getFullYear(), currentCycle.getMonth() + 1) },
+  () => refresh(),
+  0,
+)
+const filters = computed(() => {
+  const [year, month] = query.value.period.split('-').map(Number)
+  return year && month >= 1 && month <= 12
+    ? { year, month }
+    : { year: currentCycle.getFullYear(), month: currentCycle.getMonth() + 1 }
+})
+
+function shiftPeriod(delta: number) {
+  const d = new Date(filters.value.year, filters.value.month - 1 + delta, 1)
+  query.value.period = periodKey(d.getFullYear(), d.getMonth() + 1)
+}
 
 const editing = ref<Budget | null>(null)
 const showForm = ref(false)
@@ -25,9 +57,11 @@ const form = ref({
   month: filters.value.month,
   amount: '',
 })
+const dirty = useFormDirty(form, showForm)
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = {
     category_id: categories.value[0]?.id ?? 0,
     year: filters.value.year,
@@ -38,7 +72,13 @@ function reset() {
 
 function startEdit(b: Budget) {
   editing.value = b
+  fieldErrors.value = {}
   form.value = { category_id: b.category_id, year: b.year, month: b.month, amount: b.amount }
+  showForm.value = true
+}
+
+function openNew() {
+  reset()
   showForm.value = true
 }
 
@@ -47,18 +87,25 @@ async function refresh() {
 }
 
 async function onSubmit() {
-  if (editing.value) {
-    await update(editing.value.id, form.value)
-  } else {
-    await create(form.value)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, form.value)
+    } else {
+      await create(form.value)
+    }
+  } catch {
+    // 422: errori sotto i campi, il form resta aperto con i dati inseriti.
+    if (Object.keys(fieldErrors.value).length) toast.error('Controlla i campi evidenziati.')
+    return
   }
+  toast.success('Budget salvato.')
   reset()
   showForm.value = false
   await refresh()
 }
 
 async function onDelete(b: Budget) {
-  if (!confirm('Eliminare il budget?')) return
+  if (!(await confirmAction('Eliminare il budget?'))) return
   await destroy(b.id)
 }
 
@@ -85,7 +132,7 @@ function status(b: Budget): 'ok' | 'warning' | 'exceeded' {
 }
 
 function barClass(b: Budget): string {
-  return { ok: 'bg-indigo-500', warning: 'bg-amber-500', exceeded: 'bg-red-500' }[status(b)]
+  return { ok: 'bg-primary-500', warning: 'bg-warning-500', exceeded: 'bg-danger-500' }[status(b)]
 }
 
 onMounted(async () => {
@@ -99,9 +146,12 @@ onMounted(async () => {
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuovo budget' }}
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
+        <p class="page-desc">Fissa quanto vuoi spendere al massimo per una categoria in un mese e controlla quanto hai già speso.</p>
+      </div>
+      <button class="btn-primary" @click="openNew()">
+        Nuovo budget
       </button>
     </div>
 
@@ -110,56 +160,59 @@ onMounted(async () => {
       type="button"
       class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
       aria-label="Nuovo budget"
-      @click="showForm = true; reset()"
+      @click="openNew()"
     >+</button>
 
-    <details class="card filter-panel" open>
-      <summary>Filtri</summary>
-      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3" @submit.prevent="refresh">
-        <div>
-          <label class="label">Anno</label>
-          <input v-model.number="filters.year" type="number" min="2000" max="2100" class="input" />
+    <div class="card flex items-center justify-between gap-2 p-2">
+      <button type="button" class="icon-btn text-2xl leading-none text-slate-600 hover:bg-slate-100 focus:ring-primary-500" aria-label="Mese precedente" @click="shiftPeriod(-1)">‹</button>
+      <p class="text-sm font-semibold text-slate-900" aria-live="polite">{{ budgetPeriod(filters.year, filters.month) }}</p>
+      <button type="button" class="icon-btn text-2xl leading-none text-slate-600 hover:bg-slate-100 focus:ring-primary-500" aria-label="Mese successivo" @click="shiftPeriod(1)">›</button>
+    </div>
+
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica budget' : 'Nuovo budget'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors class="col-span-full" :errors="fieldErrors" :shown="['category_id', 'year', 'month', 'amount']" />
+          <div>
+            <label class="label">Categoria</label>
+            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldErrors.category_id }" aria-describedby="hint-category" required>
+              <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+            </select>
+            <p id="hint-category" class="field-hint">Conta solo le uscite registrate su questa categoria, non quelle delle sue sottocategorie.</p>
+            <FieldError :errors="fieldErrors" name="category_id" />
+          </div>
+          <div>
+            <label class="label">Anno</label>
+            <input v-model.number="form.year" type="number" min="2000" max="2100" class="input" :class="{ 'input-invalid': fieldErrors.year }" required />
+            <FieldError :errors="fieldErrors" name="year" />
+          </div>
+          <div>
+            <label class="label">Mese</label>
+            <input v-model.number="form.month" type="number" min="1" max="12" class="input" :class="{ 'input-invalid': fieldErrors.month }" aria-describedby="hint-month" required />
+            <p id="hint-month" class="field-hint">Segue il giorno di inizio mese delle Impostazioni: con inizio il 27, giugno va dal 27/06 al 26/07.</p>
+            <FieldError :errors="fieldErrors" name="month" />
+          </div>
+          <div>
+            <label class="label">Importo</label>
+            <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" class="input" :class="{ 'input-invalid': fieldErrors.amount }" aria-describedby="hint-amount" required />
+            <p id="hint-amount" class="field-hint">Il tetto di spesa del mese: dall'80% la barra diventa ambra, dal 100% rossa.</p>
+            <FieldError :errors="fieldErrors" name="amount" />
+          </div>
         </div>
-        <div>
-          <label class="label">Mese</label>
-          <input v-model.number="filters.month" type="number" min="1" max="12" class="input" />
-        </div>
-        <div class="flex items-end">
-          <button type="submit" class="btn-secondary w-full">Filtra</button>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
         </div>
       </form>
-    </details>
-
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4" @submit.prevent="onSubmit">
-      <div>
-        <label class="label">Categoria</label>
-        <select v-model.number="form.category_id" class="input" required>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Anno</label>
-        <input v-model.number="form.year" type="number" min="2000" max="2100" class="input" required />
-      </div>
-      <div>
-        <label class="label">Mese</label>
-        <input v-model.number="form.month" type="number" min="1" max="12" class="input" required />
-      </div>
-      <div>
-        <label class="label">Importo</label>
-        <input v-model="form.amount" type="number" step="0.01" class="input" required />
-      </div>
-      <div class="sm:col-span-2 md:col-span-4 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+    </AppModal>
 
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per budget, la barra di progresso ha bisogno di spazio orizzontale pieno (sotto md). -->
-      <ul v-else class="md:hidden divide-y divide-slate-100">
+      <ul v-else class="md:hidden divide-y divide-slate-100" :class="{ 'opacity-60': loading }">
         <li v-for="b in items" :key="b.id" class="p-4">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
@@ -175,16 +228,23 @@ onMounted(async () => {
             <span
               v-if="status(b) !== 'ok'"
               class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
-              :class="status(b) === 'exceeded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+              :class="status(b) === 'exceeded' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'"
             >{{ rawPercent(b) }}%</span>
           </div>
-          <p class="text-xs text-slate-500 mt-1.5">{{ b.spent ?? '0.00' }} / {{ b.amount }}</p>
+          <p class="text-xs text-slate-500 mt-1.5">
+            <span class="num">{{ formatCurrency(b.spent ?? 0, currency) }}</span> di
+            <span class="num">{{ formatCurrency(b.amount, currency) }}</span>
+          </p>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessun budget per il periodo.</li>
+        <li v-if="items.length === 0">
+          <EmptyState :title="`Nessun budget per ${budgetPeriod(filters.year, filters.month)}.`">
+            <button type="button" class="btn-primary" @click="openNew()">Nuovo budget</button>
+          </EmptyState>
+        </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Categoria</th>
@@ -199,8 +259,8 @@ onMounted(async () => {
           <tr v-for="b in items" :key="b.id">
             <td class="font-medium">{{ categoryName(b.category_id) }}</td>
             <td>{{ budgetPeriod(b.year, b.month) }}</td>
-            <td class="text-right">{{ b.amount }}</td>
-            <td class="text-right">{{ b.spent ?? '0.00' }}</td>
+            <td class="text-right"><Amount :value="b.amount" :currency="currency" /></td>
+            <td class="text-right"><Amount :value="b.spent ?? 0" :currency="currency" /></td>
             <td>
               <div class="flex items-center gap-2">
                 <div class="flex-1 bg-slate-200 rounded h-2">
@@ -209,7 +269,7 @@ onMounted(async () => {
                 <span
                   v-if="status(b) !== 'ok'"
                   class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
-                  :class="status(b) === 'exceeded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+                  :class="status(b) === 'exceeded' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'"
                 >
                   {{ rawPercent(b) }}%
                 </span>
@@ -220,7 +280,11 @@ onMounted(async () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="6" class="text-center text-slate-500 py-6">Nessun budget per il periodo.</td>
+            <td colspan="6" class="whitespace-normal">
+              <EmptyState :title="`Nessun budget per ${budgetPeriod(filters.year, filters.month)}.`">
+                <button type="button" class="btn-primary" @click="openNew()">Nuovo budget</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

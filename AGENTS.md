@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-09-27**
-Fase corrente: **Estensione — Asset type `certificate` sugli investment holdings (COMPLETATA)**
+Ultimo aggiornamento: **2026-10-01**
+Fase corrente: **Estensione — Restyling UI/UX (IN CORSO, step 1-2 di [analisi](docs/analysis/UI-UX-REDESIGN-ANALYSIS.md))**
 
 ---
 
@@ -97,14 +97,22 @@ Finance/
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── lib/date.ts        # formatDate/formatDateWith/formatMonth + financialMonthStart/Range (vedi §6)
+│       ├── lib/labels.ts      # TX_TYPE_LABEL / TX_TYPES (etichette italiane dei tipi transazione)
+│       ├── lib/chartTheme.ts  # palette e colori unici dei grafici Chart.js
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
 │       ├── stores/auth.ts     # Pinia: user, login, register, logout, fetchMe
 │       ├── stores/menu.ts     # Pinia: NAV_ITEMS + visibilità sezioni menu (localStorage `menu.hidden`)
 │       ├── stores/notifications.ts # Pinia: lista notifiche + unreadCount
-│       ├── composables/useCrud.ts  # list/create/update/destroy generico
+│       ├── stores/theme.ts    # Pinia: preferenza tema (sistema/chiaro/scuro) + classe .dark
+│       ├── theme.css          # variabili RGB della palette, chiara e scura
+│       ├── stores/toast.ts    # Pinia: messaggi di feedback (success/error/info), mostrati da ToastHost
+│       ├── composables/useCrud.ts  # list/create/update/destroy generico + submitting/fieldErrors
+│       ├── composables/useConfirm.ts # confirmAction(): conferma modale al posto di window.confirm
+│       ├── composables/useQueryFilters.ts # filtri di lista in query string con debounce
+│       ├── composables/useFormDirty.ts # modifiche non salvate di un form in modale
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
-│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga tabella/card)
+│       ├── components/ui/     # RowActions.vue (pulsanti icona per riga), Amount.vue (importo con segno/colore/cifre tabulari), AppModal.vue (`<dialog>` nativo), AppIcon.vue + icons.ts (path Heroicons outline inline, MIT), FieldError.vue + FormErrors.vue (errori 422 per campo / senza campo), EmptyState.vue, ListSkeleton.vue, ToastHost.vue e ConfirmHost.vue (montati in App.vue)
 │       └── views/             # Login, Register, ForgotPassword, ResetPassword, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
 │
 ├── scripts/               # backup.sh / restore.sh (dump MySQL, vedi §12)
@@ -221,6 +229,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Response**: API Resources, niente array grezzi
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
 - **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
+- **Messaggi in italiano**: `APP_LOCALE=it` con traduzioni in `backend/lang/it/` (`validation.php`, `auth.php`, `passwords.php`). `validation.php` contiene solo le regole usate dalle Form Request (le chiavi mancanti ricadono sull'inglese del framework) e la mappa `attributes` campo → nome leggibile: un nuovo campo in una Form Request va aggiunto lì, una nuova regola pure.
 - **Code style**: Laravel Pint (preset `laravel`)
 - **Test**: PHPUnit / Pest, feature test per ogni endpoint. Test DB su SQLite in-memory (vedi `phpunit.xml`).
 
@@ -231,7 +240,14 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **HTTP**: client axios centralizzato in `src/lib/api.ts` con interceptor CSRF e gestione errori
 - **Formattazione**: punto di verità unico per valuta (`src/lib/money.ts` → `formatCurrency`) e date (`src/lib/date.ts` → `formatDate`, che applica la preferenza `auth.user.date_format`; `formatDateWith` per un formato esplicito; `formatMonth` per i periodi mensili `YYYY-MM` dei report, che deriva il formato mese da quello utente togliendo il giorno). Nessuna view deve formattare date a mano (`toLocaleDateString`, `slice(0, 10)`): l'unica eccezione è `ForecastView.periodLabel` (etichetta mese/anno breve). Gli `<input type="date">` restano nativi (valore ISO): la preferenza agisce solo sul display in lettura. Il "mese corrente" lato frontend si costruisce con `financialMonthStart`/`financialMonthRange` (stesso `lib/date.ts`), mai con `getMonth()` a mano.
 - **Routing**: lazy import per ogni route
-- **Stile**: Tailwind utility-first, componenti riusabili in `src/components/ui/`
+- **Stile**: Tailwind utility-first, componenti riusabili in `src/components/ui/`. Colori **semantici** da [tailwind.config.js](frontend/tailwind.config.js): `primary` (accento/azioni), `income`, `expense`, `transfer`, `warning`, `danger` — niente `green-600`/`red-600`/`indigo-600` grezzi nel codice nuovo. Grafici: colori e palette solo da [chartTheme.ts](frontend/src/lib/chartTheme.ts) (`paletteColor(i)`, `INCOME_COLOR`, …), mai esadecimali nelle view. Importi in lettura con `<Amount>` (`type` per colore/segno da tipo transazione, `signed` per saldi/P/L): il colore non è mai l'unico segnale, c'è sempre il segno `+`/`−`. Classi `.num` (cifre tabulari), `.input-invalid` + `.field-error` per gli errori di campo.
+- **Etichette**: nessun valore enum dell'API in UI. Mappe uniche in [labels.ts](frontend/src/lib/labels.ts): `TX_TYPE_LABEL`, `CATEGORY_TYPE_LABEL`, `ACCOUNT_TYPE_LABEL`, `ASSET_TYPE_LABEL`, `INVESTMENT_SIDE_LABEL`, `RULE_MATCH_LABEL`, `RULE_APPLIES_LABEL`, `RECURRENCE_LABEL`, `CADENCE_LABEL` + `cadenceText(interval, cadence)` ("ogni 2 mesi"), `SCENARIO_CADENCE_LABEL`, `NOTIFICATION_LEVEL_LABEL`. Nelle `<select>` il value resta quello API.
+- **Feedback ed errori**: `useCrud` espone `submitting` (disabilitare il submit, testo "Salvataggio…") e `fieldErrors` (422, per campo); `create`/`update` rilanciano l'errore, la view lo intercetta lasciando il form aperto con i dati. Esito delle azioni con `useToastStore().success/error/info`. [api.ts](frontend/src/lib/api.ts) ha un interceptor di risposta: 419 → nuovo cookie CSRF e un retry, 401 su rotta protetta → logout lato client + redirect a login, rete/5xx → toast generico (nessun dettaglio tecnico). Le view non devono duplicare questi toast.
+- **Dark mode e tema**: i colori Tailwind `slate`, `surface` (sfondo di card/input/modali, al posto di `white`) e i token semantici puntano a variabili RGB in [theme.css](frontend/src/theme.css), invertite da `:root.dark` (`darkMode: 'class'`): le view non usano classi `dark:`. Regole: sfondo di superficie sempre `bg-surface` (mai `bg-white`), overlay/backdrop `bg-black/…` (`black` e `white` non si invertono, `text-white` resta per il testo su pulsanti pieni); in scuro i token 600/700 diventano chiari per il testo, quindi `.btn-primary`, `.btn-danger` e `bg-primary-600` hanno un override a fondo `style.css`. Preferenza Automatico/Chiaro/Scuro in Impostazioni → [stores/theme.ts](frontend/src/stores/theme.ts) (`localStorage` `theme`, assente = sistema), applicata prima del primo paint da uno script inline in `index.html`; aggiorna anche `meta theme-color` e i default di Chart.js (`syncChartTheme`).
+- **Aiuto contestuale** (sempre visibile, mai tooltip al passaggio del mouse): ogni pagina ha sotto l'`<h1>` un `<p class="page-desc">` con lo scopo in una frase; i campi non ovvi hanno `<p id="hint-<chiave>" class="field-hint">` sotto l'input, collegato con `aria-describedby`; le pagine con concetti non intuitivi (Regole, Import, Obiettivi, Previsioni, Investimenti) hanno un `<details class="help-panel"><summary>Come funziona</summary><ul>…</ul></details>` chiuso di default con 2-4 punti. Testi in seconda persona, concreti sull'effetto, verificati sul comportamento reale del backend.
+- **Scorciatoie** (listener in AppLayout, inattive mentre si scrive o con una modale aperta): `N` nuova transazione, `/` focus sul primo `input[type=search]` della pagina; dichiarate con `aria-keyshortcuts` e indicate accanto al comando.
+- **Filtri, caricamento, stati vuoti**: i filtri di lista usano [useQueryFilters](frontend/src/composables/useQueryFilters.ts) (valori stringa, default esclusi dall'URL, debounce 300ms, nessun pulsante "Filtra"): Transazioni, Budget (`?period=YYYY-MM` con frecce mese precedente/successivo) e Report. Le liste mostrano `<ListSkeleton>` solo al primo caricamento (`loading && !items.length`), nei ricaricamenti restano visibili in `opacity-60`. Lista vuota con `<EmptyState title="…" :filtered="isFiltered" @reset="…">` + CTA nello slot: con filtri attivi mostra "Nessun risultato con questi filtri" e "Azzera filtri". Testo informativo mai sotto `text-slate-500` (contrasto AA).
+- **Form e conferme**: i form di creazione/modifica stanno in `<AppModal v-model="showForm" :title="…">` (finestra centrata da `sm`, a tutto schermo sotto), mai inline nella pagina: struttura `<form>` → `<div class="grid … px-4 py-4 sm:px-6">` campi → `<div class="modal-footer">` Annulla + submit. Errori 422 per campo: `:class="{ 'input-invalid': fieldErrors.<chiave> }"` + `<FieldError :errors="fieldErrors" name="<chiave>" />` sotto l'input; in cima `<FormErrors :errors="fieldErrors" :shown="[…chiavi con FieldError]">` mostra solo gli errori senza un campo nel form. Modifiche non salvate: `const dirty = useFormDirty(form, showForm)` ([useFormDirty.ts](frontend/src/composables/useFormDirty.ts)) + `<AppModal v-slot="{ close }" :dirty="dirty">` con Annulla `@click="close"`: X, click fuori, Esc e Annulla chiedono conferma se il form è cambiato dall'apertura; la chiusura dopo un salvataggio riuscito (`showForm = false`) non chiede nulla. Restano inline solo filtri, form di Impostazioni e righe di inserimento rapido dentro un pannello. Eliminazioni con `await confirmAction(messaggio)` ([useConfirm.ts](frontend/src/composables/useConfirm.ts)), mai `window.confirm`.
 - **Responsive / mobile**: layout mobile-first. Sidebar di `AppLayout` diventa drawer < `lg` con topbar + hamburger; le griglie usano breakpoint `sm/md/lg`. Le tabelle dati sono wrappate in `.table-responsive` (utility in `style.css`) che sotto `md` collassa le righe in card stack: ogni `<td>` deve avere `data-label="…"`, la cella delle azioni la classe `actions-cell`. Gli `input/select/textarea` partono da 16px (no zoom iOS), si riducono da `sm` in su. I pulsanti icona (`.icon-btn`, es. `RowActions.vue`) sono 44×44px sotto `sm` (touch target) e tornano 32×32px da `sm` in su. Le view con un form filtri separato (Transazioni, Budget, Report) lo wrappano in `<details class="card filter-panel"><summary>Filtri</summary>…` — collassato di default sotto `md`, sempre visibile da `md` in su (nessun JS, solo CSS in `style.css`). Le view con un'azione di creazione primaria in cima pagina replicano il bottone anche come FAB (`fixed bottom-5 right-5 lg:hidden`, nascosto con `v-if="!showForm"` quando il form è aperto); il contenitore radice della view aggiunge `pb-20 lg:pb-0` per evitare che il FAB copra le azioni dell'ultima riga della lista. **Eccezione**: `TransactionsView`, `InvestmentsView`, `CategorizationRulesView`, `BudgetsView`, `RecurringView` e `AccountsView` non usano `.table-responsive` — hanno un doppio markup (`<ul class="md:hidden">` con card per riga sotto `md`, `<table class="hidden md:table">` invariata da `md` in su) perché hanno troppi campi (o widget grafici come la barra di progresso) per il collasso label/valore generico. `TransactionsView`: card con descrizione/categoria come titolo, importo colorato per tipo (verde income, rosso expense) con segno `+`/`−`, bordo laterale colorato. `InvestmentsView`: card con nome/tipo/conto come titolo, valore di mercato in evidenza e P/L colorato (verde/rosso) sotto, bordo laterale colorato in base al segno del P/L. `CategorizationRulesView`: card con nome regola come titolo, condizione/pattern e categoria/priorità come meta, toggle attiva/inattiva e contatore applicazioni a destra, riga in `opacity-60` se la regola è inattiva. `BudgetsView`: card con categoria/periodo come titolo, barra di progresso a piena larghezza sotto (stessa logica colore di `barClass`), speso/budget in piccolo. `RecurringView`: card con descrizione come titolo (pallino verde/grigio per attiva/inattiva), tipo/conto/cadenza/prossima esecuzione come meta, importo in evidenza a destra. `AccountsView`: card con stella "conto principale" + nome come titolo, tipo/valuta come meta, saldo iniziale in evidenza a destra. Estendere lo stesso pattern ad altre view con tabelle molto dense (molte colonne o widget grafici) invece del collasso generico.
 
 ### Git
@@ -420,7 +436,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 |------|------|------|
 | `/login` | LoginView | precompila `demo@finance.local` / `password` per il seed locale |
 | `/register` | RegisterView | conferma password obbligatoria |
-| `/` | DashboardView | cards conti + ultime 5 transazioni |
+| `/` | DashboardView | KPI del mese con confronto, ultime 5 transazioni, budget in allerta, conti, grafici |
 | `/accounts` | AccountsView | CRUD inline |
 | `/categories` | CategoriesView | CRUD + parent select filtrato per type |
 | `/tags` | TagsView | CRUD + swatch colore |
@@ -429,7 +445,8 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
 
 ### Menu / sidebar (AppLayout)
-- Le voci del menu hanno fonte unica in [stores/menu.ts](frontend/src/stores/menu.ts) (`NAV_ITEMS`): non più hardcoded in [AppLayout](frontend/src/components/AppLayout.vue).
+- Le voci del menu hanno fonte unica in [stores/menu.ts](frontend/src/stores/menu.ts) (`NAV_ITEMS`, con `group` e `icon`; ordine dei gruppi in `NAV_GROUPS`: Panoramica, Movimenti, Pianificazione, Patrimonio, Analisi, Configurazione). Un gruppo senza voci visibili non viene mostrato. I `name` sono le rotte e le chiavi di `menu.hidden`: non rinominarli.
+- [AppLayout](frontend/src/components/AppLayout.vue): sidebar chiara (sticky da `lg`, drawer sotto) e topbar sticky su tutte le larghezze con hamburger + titolo pagina (< `lg`), "+ Transazione" (da `lg`, link a `transactions?new=1`: [TransactionsView](frontend/src/views/TransactionsView.vue) apre la modale e toglie il parametro), campanella notifiche con pallino non lette, menu utente (`<details>`, da `lg`) con Impostazioni ed Esci; sotto `lg` Esci sta in fondo al drawer. Icone solo da `AppIcon` (aggiungere un path in `icons.ts`, niente librerie di icone).
 - Visibilità configurabile dall'utente in **Impostazioni** (card "Sezioni del menu"): ogni voce può essere disattivata, lo store `menu` filtra `NAV_ITEMS` in modo reattivo (sidebar + drawer mobile). `dashboard` e `settings` sono in `ALWAYS_VISIBLE` (non disattivabili, per non bloccare l'accesso alle Impostazioni).
 - **Preferenza solo-client per dispositivo**, persistita in `localStorage` (`menu.hidden`, array di route name) — stesso approccio di `reports.visible`. Nessuna rotta protetta: le view restano raggiungibili via URL, si nasconde solo la voce di menu.
 
@@ -439,7 +456,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 
 ### PWA (installabile)
 L'app si installa sulla home screen e parte a schermo pieno (`display: standalone`). Tutto statico in `frontend/public/`, servito da Vite in dev e copiato in `dist/` dalla build:
-- `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#4f46e5` (indigo-600, l'accento dell'app), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
+- `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#ffffff` (come la topbar bianca, così la barra di stato Android si fonde con l'header; in dark mode il `meta theme-color` passa a `#0f172a` a runtime), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
 - `icon-192.png` / `icon-512.png` — **segnaposto** generati a mano (barre bianche su fondo indigo, full-bleed perché le maskable vengono ritagliate dall'OS): sostituibili con un'icona vera senza toccare altro.
 - `sw.js` — service worker **vuoto di proposito**, registrato solo in produzione da [main.ts](frontend/src/main.ts). Serve unicamente al criterio di installabilità di Chrome (manifest + handler `fetch`), che altrimenti non offre "Installa app" su Android; iOS installa col solo manifest. Nessuna cache: un'app di dati vive di richieste fresche, e una cache offline darebbe solo saldi vecchi da debuggare.
 - [index.html](frontend/index.html) — `theme-color`, `manifest`, `apple-touch-icon` e i meta `apple-mobile-web-app-*` (iOS non legge il manifest per lo schermo pieno).
@@ -462,7 +479,7 @@ Logica in [ReportService](backend/app/Services/ReportService.php). Saldo per con
 
 ### Frontend
 - Libreria: `chart.js` + `vue-chartjs`.
-- [DashboardView](frontend/src/views/DashboardView.vue): 4 KPI cards (income/expense/net mese + patrimonio netto), saldi conti, donut categorie del mese, bar income vs expense 12 mesi.
+- [DashboardView](frontend/src/views/DashboardView.vue): KPI patrimonio netto + entrate/uscite/risparmio del mese con delta % vs mese precedente (penultimo punto di `/reports/timeline`, che termina sul mese finanziario corrente: nessuna query extra; colore del delta per significato, uscite in aumento = rosso) e `saving_rate`. Colonna principale: ultime 5 transazioni (`/transactions?per_page=5`, in `Promise.all`) e bar entrate/uscite 12 mesi; laterale: budget in allerta con barra di progresso (`/budgets/alerts`), conti, donut spese per categoria. Stati vuoti con CTA, skeleton al caricamento.
 - [ReportsView](frontend/src/views/ReportsView.vue) (`/reports`): filtri data + type categoria, donut by-category, donut by-tag (usa il `color` del tag), bar timeline, line net-worth, tabella categorie + tabella tag. Il selettore type (`expense`/`income`) filtra sia by-category sia by-tag. Toggle "Report visibili" (4 gruppi: Categorie/Tag/Income vs Expense/Patrimonio netto) per mostrare/nascondere ogni report; scelta persistita in `localStorage` (`reports.visible`). I dati vengono comunque caricati: i toggle agiscono solo sulla visualizzazione.
 
 ## 11. Import / Export CSV (Fase 8)

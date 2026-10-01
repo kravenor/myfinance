@@ -30,7 +30,7 @@ async function onSubmit() {
   <div class="min-h-screen flex items-center justify-center px-4">
     <form class="card w-full max-w-md p-6 space-y-4" @submit.prevent="onSubmit">
       <h1 class="text-xl font-semibold">Accedi</h1>
-      <p v-if="resetDone" class="text-sm text-green-600">
+      <p v-if="resetDone" role="status" class="text-sm text-income-700">
         Password reimpostata con successo. Ora puoi accedere.
       </p>
       <div>
@@ -46,17 +46,17 @@ async function onSubmit() {
           <input v-model="remember" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
           Ricordami
         </label>
-        <RouterLink to="/forgot-password" class="text-sm text-indigo-600 hover:underline py-2">
+        <RouterLink to="/forgot-password" class="text-sm text-primary-600 hover:underline py-2">
           Password dimenticata?
         </RouterLink>
       </div>
-      <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</p>
       <button type="submit" class="btn-primary w-full" :disabled="auth.loading">
         {{ auth.loading ? 'Accesso…' : 'Accedi' }}
       </button>
       <p class="text-sm text-slate-600 text-center">
         Non hai un account?
-        <RouterLink to="/register" class="text-indigo-600 hover:underline">Registrati</RouterLink>
+        <RouterLink to="/register" class="text-primary-600 hover:underline">Registrati</RouterLink>
       </p>
     </form>
   </div>

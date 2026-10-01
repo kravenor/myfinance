@@ -20,8 +20,13 @@ async function onSubmit() {
     await auth.register(form.value)
     router.push('/')
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } } }
-    error.value = err.response?.data?.message ?? 'Registrazione fallita.'
+    const err = e as {
+      response?: { data?: { message?: string; errors?: Record<string, string[]> } }
+    }
+    const errors = err.response?.data?.errors
+    error.value = errors
+      ? Object.values(errors).flat().join(' ')
+      : (err.response?.data?.message ?? 'Registrazione non riuscita.')
   }
 }
 </script>
@@ -52,13 +57,13 @@ async function onSubmit() {
           class="input"
         />
       </div>
-      <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+      <p v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</p>
       <button type="submit" class="btn-primary w-full" :disabled="auth.loading">
         {{ auth.loading ? 'Registrazione…' : 'Crea account' }}
       </button>
       <p class="text-sm text-slate-600 text-center">
         Hai già un account?
-        <RouterLink to="/login" class="text-indigo-600 hover:underline">Accedi</RouterLink>
+        <RouterLink to="/login" class="text-primary-600 hover:underline">Accedi</RouterLink>
       </p>
     </form>
   </div>

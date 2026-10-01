@@ -15,6 +15,11 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import Amount from '@/components/ui/Amount.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { useQueryFilters } from '@/composables/useQueryFilters'
+import { useAuthStore } from '@/stores/auth'
+import { EXPENSE_COLOR, FALLBACK_TAG_COLOR, INCOME_COLOR, PRIMARY_COLOR, paletteColor } from '@/lib/chartTheme'
 import type { CategoryTotal, NetWorthPoint, TagTotal, TimelinePoint } from '@/types/reports'
 
 ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
@@ -26,13 +31,16 @@ function defaultRange() {
   return { from, to }
 }
 
-const filters = ref(defaultRange())
-const categoryType = ref<'expense' | 'income'>('expense')
+// I totali dei report sono convertiti nella valuta base dell'utente.
+const auth = useAuthStore()
+const baseCurrency = computed(() => auth.user?.currency ?? 'EUR')
+
+const { filters } = useQueryFilters({ ...defaultRange(), type: 'expense' }, () => refresh())
 
 const REPORTS = [
   { key: 'category', label: 'Categorie' },
   { key: 'tag', label: 'Tag' },
-  { key: 'timeline', label: 'Income vs Expense' },
+  { key: 'timeline', label: 'Entrate vs uscite' },
   { key: 'netWorth', label: 'Patrimonio netto' },
 ] as const
 type ReportKey = (typeof REPORTS)[number]['key']
@@ -71,18 +79,12 @@ const timeline = ref<TimelinePoint[]>([])
 const netWorth = ref<NetWorthPoint[]>([])
 const loading = ref(false)
 
-const palette = [
-  '#6366f1', '#ec4899', '#22c55e', '#f59e0b', '#0ea5e9',
-  '#a855f7', '#14b8a6', '#ef4444', '#84cc16', '#eab308',
-  '#06b6d4', '#f97316',
-]
-
 const donutData = () => ({
   labels: categories.value.map((c) => c.category_name),
   datasets: [
     {
       data: categories.value.map((c) => parseFloat(c.total)),
-      backgroundColor: categories.value.map((_, i) => palette[i % palette.length]),
+      backgroundColor: categories.value.map((_, i) => paletteColor(i)),
       borderWidth: 0,
     },
   ],
@@ -93,7 +95,7 @@ const tagDonutData = () => ({
   datasets: [
     {
       data: tags.value.map((t) => parseFloat(t.total)),
-      backgroundColor: tags.value.map((t, i) => t.tag_color || palette[i % palette.length]),
+      backgroundColor: tags.value.map((t, i) => t.tag_color || paletteColor(i)),
       borderWidth: 0,
     },
   ],
@@ -102,8 +104,8 @@ const tagDonutData = () => ({
 const barData = () => ({
   labels: timeline.value.map((t) => formatMonth(t.period)),
   datasets: [
-    { label: 'Income', data: timeline.value.map((t) => parseFloat(t.income)), backgroundColor: '#22c55e' },
-    { label: 'Expense', data: timeline.value.map((t) => parseFloat(t.expense)), backgroundColor: '#ef4444' },
+    { label: 'Entrate', data: timeline.value.map((t) => parseFloat(t.income)), backgroundColor: INCOME_COLOR },
+    { label: 'Uscite', data: timeline.value.map((t) => parseFloat(t.expense)), backgroundColor: EXPENSE_COLOR },
   ],
 })
 
@@ -113,8 +115,8 @@ const lineData = () => ({
     {
       label: 'Patrimonio netto',
       data: netWorth.value.map((p) => parseFloat(p.net_worth)),
-      borderColor: '#6366f1',
-      backgroundColor: 'rgba(99,102,241,0.15)',
+      borderColor: PRIMARY_COLOR,
+      backgroundColor: `${PRIMARY_COLOR}26`,
       fill: true,
       tension: 0.3,
     },
@@ -132,10 +134,10 @@ async function refresh() {
   try {
     const [c, tg, t, nw] = await Promise.all([
       api.get<{ data: CategoryTotal[] }>('/reports/by-category', {
-        params: { from: filters.value.from, to: filters.value.to, type: categoryType.value },
+        params: { from: filters.value.from, to: filters.value.to, type: filters.value.type },
       }),
       api.get<{ data: TagTotal[] }>('/reports/by-tag', {
-        params: { from: filters.value.from, to: filters.value.to, type: categoryType.value },
+        params: { from: filters.value.from, to: filters.value.to, type: filters.value.type },
       }),
       api.get<{ data: TimelinePoint[] }>('/reports/timeline', {
         params: { from: filters.value.from, to: filters.value.to },
@@ -158,11 +160,16 @@ onMounted(refresh)
 
 <template>
   <div class="space-y-4">
-    <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
+    <div>
+      <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
+      <p class="page-desc">
+        Dove vanno e da dove arrivano i soldi nel periodo scelto, con importi convertiti nella tua valuta principale.
+      </p>
+    </div>
 
     <details class="card filter-panel" open>
       <summary>Filtri</summary>
-      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3" @submit.prevent="refresh">
+      <form class="p-4 pt-0 md:pt-4 grid grid-cols-1 sm:grid-cols-3 gap-3" @submit.prevent>
         <div>
           <label class="label">Da</label>
           <input v-model="filters.from" type="date" class="input" required />
@@ -173,13 +180,11 @@ onMounted(refresh)
         </div>
         <div>
           <label class="label">Categorie</label>
-          <select v-model="categoryType" class="input">
-            <option value="expense">expense</option>
-            <option value="income">income</option>
+          <select v-model="filters.type" class="input" aria-describedby="hint-report-type">
+            <option value="expense">Uscite</option>
+            <option value="income">Entrate</option>
           </select>
-        </div>
-        <div class="flex items-end">
-          <button class="btn-secondary w-full" type="submit">Aggiorna</button>
+          <p id="hint-report-type" class="field-hint">Vale per i totali per categoria e per tag; i giroconti non sono mai inclusi.</p>
         </div>
       </form>
     </details>
@@ -194,35 +199,45 @@ onMounted(refresh)
       </div>
     </div>
 
-    <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
-    <p v-else-if="!anyVisible" class="text-sm text-slate-500">Nessun report selezionato.</p>
+    <div v-if="loading && !timeline.length" class="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-busy="true" aria-label="Caricamento">
+      <div v-for="i in 4" :key="i" class="card h-72 animate-pulse bg-slate-100" />
+    </div>
+    <div v-else-if="!anyVisible" class="card">
+      <EmptyState title="Nessun report selezionato: attivane almeno uno da «Report visibili»." />
+    </div>
 
-    <section v-else class="space-y-4">
+    <section v-else class="space-y-4 transition-opacity" :class="{ 'opacity-60': loading }">
       <div v-if="visible.category || visible.tag || visible.timeline" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div v-if="visible.category" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Totali per categoria ({{ categoryType }})
+            Totali per categoria ({{ filters.type === 'income' ? 'entrate' : 'uscite' }})
           </h3>
+          <p class="-mt-2 mb-3 text-xs text-slate-500">Le sottocategorie hanno un totale proprio e non si sommano alla categoria padre.</p>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="categories.length" :data="donutData()" :options="chartOptions" />
-            <p v-else class="text-sm text-slate-500">Nessun dato nel periodo.</p>
+            <EmptyState
+              v-else
+              :title="filters.type === 'income' ? 'Nessuna entrata nel periodo.' : 'Nessuna uscita nel periodo.'"
+            />
           </div>
         </div>
         <div v-if="visible.tag" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Totali per tag ({{ categoryType }})
+            Totali per tag ({{ filters.type === 'income' ? 'entrate' : 'uscite' }})
           </h3>
+          <p class="-mt-2 mb-3 text-xs text-slate-500">Una transazione con più tag conta per intero in ognuno.</p>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="tags.length" :data="tagDonutData()" :options="chartOptions" />
-            <p v-else class="text-sm text-slate-500">Nessuna transazione con tag nel periodo.</p>
+            <EmptyState v-else title="Nessuna transazione con tag nel periodo." />
           </div>
         </div>
         <div v-if="visible.timeline" class="card p-4">
           <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
-            Income vs Expense (mensile)
+            Entrate vs uscite (mensile)
           </h3>
           <div class="h-64 sm:h-80">
-            <Bar :data="barData()" :options="chartOptions" />
+            <Bar v-if="timeline.some((t) => parseFloat(t.income) || parseFloat(t.expense))" :data="barData()" :options="chartOptions" />
+            <EmptyState v-else title="Nessuna transazione nel periodo." />
           </div>
         </div>
       </div>
@@ -231,8 +246,10 @@ onMounted(refresh)
         <h3 class="text-sm font-medium text-slate-600 uppercase tracking-wide mb-3">
           Patrimonio netto (cumulato)
         </h3>
+        <p class="-mt-2 mb-3 text-xs text-slate-500">Somma dei saldi di tutti i conti alla fine di ogni mese.</p>
         <div class="h-64 sm:h-80">
-          <Line :data="lineData()" :options="chartOptions" />
+          <Line v-if="netWorth.length" :data="lineData()" :options="chartOptions" />
+          <EmptyState v-else title="Nessun dato sul patrimonio nel periodo." />
         </div>
       </div>
 
@@ -247,10 +264,14 @@ onMounted(refresh)
           <tbody class="divide-y divide-slate-100">
             <tr v-for="c in categories" :key="c.category_id ?? 0">
               <td data-label="Categoria" class="font-medium">{{ c.category_name }}</td>
-              <td data-label="Totale" class="md:text-right">{{ c.total }}</td>
+              <td data-label="Totale" class="md:text-right"><Amount :value="c.total" :currency="baseCurrency" /></td>
             </tr>
             <tr v-if="categories.length === 0">
-              <td colspan="2" class="text-center text-slate-500 py-6">Nessuna categoria.</td>
+              <td colspan="2" class="whitespace-normal">
+                <EmptyState
+                  :title="filters.type === 'income' ? 'Nessuna entrata nel periodo.' : 'Nessuna uscita nel periodo.'"
+                />
+              </td>
             </tr>
           </tbody>
         </table>
@@ -270,15 +291,17 @@ onMounted(refresh)
                 <span class="inline-flex items-center gap-2">
                   <span
                     class="inline-block w-3 h-3 rounded-full"
-                    :style="{ background: t.tag_color || '#475569' }"
+                    :style="{ background: t.tag_color || FALLBACK_TAG_COLOR }"
                   />
                   {{ t.tag_name }}
                 </span>
               </td>
-              <td data-label="Totale" class="md:text-right">{{ t.total }}</td>
+              <td data-label="Totale" class="md:text-right"><Amount :value="t.total" :currency="baseCurrency" /></td>
             </tr>
             <tr v-if="tags.length === 0">
-              <td colspan="2" class="text-center text-slate-500 py-6">Nessun tag.</td>
+              <td colspan="2" class="whitespace-normal">
+                <EmptyState title="Nessuna transazione con tag nel periodo." />
+              </td>
             </tr>
           </tbody>
         </table>

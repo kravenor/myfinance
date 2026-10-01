@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { formatDate, formatMonth } from '@/lib/date'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -15,6 +16,15 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import Amount from '@/components/ui/Amount.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { MUTED_COLOR, PRIMARY_COLOR } from '@/lib/chartTheme'
+import { ACCOUNT_TYPE_LABEL, ASSET_TYPE_LABEL } from '@/lib/labels'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import HoldingMovements from '@/components/HoldingMovements.vue'
 import { CURRENCIES, formatCurrency } from '@/lib/money'
@@ -27,10 +37,12 @@ import type {
   InvestmentOverview,
   Paginated,
 } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Legend, Tooltip)
 
-const { items, loading, list, create, update, destroy } = useCrud<InvestmentHolding>('investment-holdings')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<InvestmentHolding>('investment-holdings')
+const toast = useToastStore()
 
 const accounts = ref<Account[]>([])
 const overview = ref<InvestmentOverview | null>(null)
@@ -64,16 +76,16 @@ const historyData = computed(() => ({
     {
       label: 'Versato',
       data: chartPoints.value.map((p) => parseFloat(p.invested)),
-      borderColor: '#94a3b8',
-      backgroundColor: 'rgba(148,163,184,0.12)',
+      borderColor: MUTED_COLOR,
+      backgroundColor: `${MUTED_COLOR}1f`,
       fill: true,
       tension: 0.3,
     },
     {
       label: 'Valore',
       data: chartPoints.value.map((p) => parseFloat(p.market_value)),
-      borderColor: '#6366f1',
-      backgroundColor: 'rgba(99,102,241,0.15)',
+      borderColor: PRIMARY_COLOR,
+      backgroundColor: `${PRIMARY_COLOR}26`,
       fill: true,
       tension: 0.3,
     },
@@ -115,6 +127,7 @@ const form = ref({
   last_price: '',
   notes: '',
 })
+const dirty = useFormDirty(form, showForm)
 
 const lookupResults = ref<InstrumentCandidate[]>([])
 const lookupLoading = ref(false)
@@ -132,19 +145,20 @@ function plClass(value: string | null | undefined): string {
   if (value === null || value === undefined) return 'text-slate-500'
   const n = parseFloat(value)
   if (n === 0) return 'text-slate-500'
-  return n > 0 ? 'text-green-600' : 'text-red-600'
+  return n > 0 ? 'text-income-600' : 'text-expense-600'
 }
 
 function plBorderClass(value: string | null | undefined): string {
   if (value === null || value === undefined) return 'border-slate-300'
   const n = parseFloat(value)
   if (n === 0) return 'border-slate-300'
-  return n > 0 ? 'border-green-500' : 'border-red-400'
+  return n > 0 ? 'border-income-500' : 'border-expense-400'
 }
 
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   lookupResults.value = []
   lookupError.value = ''
   form.value = {
@@ -163,6 +177,7 @@ function reset() {
 
 function startEdit(h: InvestmentHolding) {
   editing.value = h
+  fieldErrors.value = {}
   lookupResults.value = []
   lookupError.value = ''
   form.value = {
@@ -233,18 +248,24 @@ async function onSubmit() {
   }
   if (form.value.last_price !== '') payload.last_price_at = new Date().toISOString()
 
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Posizione salvata.')
   reset()
   showForm.value = false
   await refresh()
 }
 
 async function onDelete(h: InvestmentHolding) {
-  if (!confirm(`Eliminare la posizione "${h.name}"?`)) return
+  if (!(await confirmAction(`Eliminare la posizione "${h.name}"?`))) return
   await destroy(h.id)
   await refresh()
 }
@@ -288,7 +309,12 @@ onMounted(async () => {
 <template>
   <div class="space-y-6 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Investimenti</h1>
+        <p class="page-desc">
+          Le tue posizioni a valore di mercato: quote e costo derivano dai movimenti registrati, le quotazioni si aggiornano da sole.
+        </p>
+      </div>
       <div class="flex gap-2">
         <button
           type="button"
@@ -301,12 +327,22 @@ onMounted(async () => {
         <button
           class="btn-primary"
           :disabled="investmentAccounts.length === 0"
-          @click="showForm = !showForm; reset()"
+          @click="showForm = true; reset()"
         >
-          {{ showForm ? 'Annulla' : 'Nuova posizione' }}
+          Nuova posizione
         </button>
       </div>
     </div>
+
+    <details class="help-panel">
+      <summary>Come funziona</summary>
+      <ul>
+        <li>Quantità, prezzo di carico e versato si ricalcolano dal registro movimenti di ogni posizione: per cambiarli aggiungi o correggi un movimento, non la posizione.</li>
+        <li>Ogni mattina la quotazione arriva da sola in base al tipo (Yahoo Finance per azioni, ETF e fondi, CoinGecko per le crypto, Borsa Italiana o Teleborsa per obbligazioni e certificati); senza quotazione vale il prezzo corrente inserito a mano, altrimenti il carico.</li>
+        <li>Il P/L latente è il valore attuale meno il costo delle quote che hai ancora; il P/L realizzato nasce solo da vendite e costi e lo trovi nel registro movimenti.</li>
+        <li>L'annualizzato (XIRR) è il rendimento medio per anno che tiene conto di quando hai versato ogni importo: compare dopo almeno un anno dal primo movimento.</li>
+      </ul>
+    </details>
 
     <button
       v-if="!showForm"
@@ -318,7 +354,7 @@ onMounted(async () => {
     >+</button>
 
     <p v-if="investmentAccounts.length === 0" class="card p-4 text-sm text-slate-500">
-      Nessun conto di tipo <strong>investment</strong>. Creane uno in
+      Nessun conto di tipo <strong>{{ ACCOUNT_TYPE_LABEL.investment }}</strong>. Creane uno in
       <RouterLink class="underline" to="/accounts">Conti</RouterLink> per registrare le posizioni.
     </p>
 
@@ -326,18 +362,23 @@ onMounted(async () => {
     <section v-if="overview && overview.holdings_count > 0" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Valore di mercato</p>
-        <p class="text-2xl font-semibold mt-1">
-          {{ formatCurrency(overview.total_market_value, overview.base_currency) }}
-        </p>
+        <Amount
+          class="block text-2xl font-semibold mt-1"
+          :value="overview.total_market_value"
+          :currency="overview.base_currency"
+        />
         <p class="text-xs text-slate-500 mt-1">
-          Costo: {{ formatCurrency(overview.total_cost_basis, overview.base_currency) }}
+          Costo: <Amount :value="overview.total_cost_basis" :currency="overview.base_currency" />
         </p>
       </div>
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Plus/minus latente</p>
-        <p class="text-2xl font-semibold mt-1" :class="plClass(overview.total_unrealized_pl)">
-          {{ formatCurrency(overview.total_unrealized_pl, overview.base_currency) }}
-        </p>
+        <Amount
+          class="block text-2xl font-semibold mt-1"
+          :value="overview.total_unrealized_pl"
+          :currency="overview.base_currency"
+          signed
+        />
         <p v-if="overview.total_unrealized_pl_pct" class="text-xs mt-1" :class="plClass(overview.total_unrealized_pl_pct)">
           {{ parseFloat(overview.total_unrealized_pl_pct) > 0 ? '+' : '' }}{{ overview.total_unrealized_pl_pct }}%
         </p>
@@ -345,6 +386,7 @@ onMounted(async () => {
           Annualizzato:
           <span :class="plClass(history.xirr_pct)">{{ parseFloat(history.xirr_pct) > 0 ? '+' : '' }}{{ history.xirr_pct }}%</span>
         </p>
+        <p class="text-xs text-slate-500 mt-1">Valore meno costo delle quote ancora in portafoglio, vendite escluse.</p>
       </div>
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Allocazione</p>
@@ -354,115 +396,147 @@ onMounted(async () => {
             :key="row.asset_type"
             class="flex items-center justify-between text-sm"
           >
-            <span class="capitalize">{{ row.asset_type }}</span>
-            <span :class="parseFloat(row.pct) < 0 ? 'text-red-600' : 'text-slate-500'">{{ row.pct }}%</span>
+            <span>{{ ASSET_TYPE_LABEL[row.asset_type] }}</span>
+            <span class="num" :class="parseFloat(row.pct) < 0 ? 'text-expense-600' : 'text-slate-500'">{{ row.pct }}%</span>
           </li>
         </ul>
       </div>
     </section>
 
     <!-- Form -->
-    <form
-      v-if="showForm"
-      class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
-      @submit.prevent="onSubmit"
-    >
-      <div class="sm:col-span-2 md:col-span-1">
-        <label class="label">Nome</label>
-        <input v-model="form.name" class="input" required />
-      </div>
-      <div>
-        <label class="label">Ticker / Symbol</label>
-        <input v-model="form.symbol" class="input" placeholder="es. CSSPX.MI (auto da ISIN)" />
-        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
-          Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
-          quotazione sul MOT di Borsa Italiana.
-        </p>
-        <p v-else-if="form.asset_type === 'certificate'" class="text-xs text-slate-500 mt-1">
-          Per i certificati lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
-          quotazione sul SeDeX/Cert-X.
-        </p>
-      </div>
-      <div>
-        <label class="label">ISIN</label>
-        <div class="flex gap-2">
-          <input v-model="form.isin" class="input uppercase" maxlength="12" placeholder="es. IE00B5BMR087" />
-          <button
-            type="button"
-            class="btn-secondary whitespace-nowrap"
-            :disabled="lookupLoading"
-            @click="lookupSymbol"
-          >
-            {{ lookupLoading ? '…' : 'Cerca' }}
+    <AppModal v-slot="{ close }" v-model="showForm" size="lg" :dirty="dirty" :title="editing ? 'Modifica posizione' : 'Nuova posizione'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors
+            class="col-span-full"
+            :errors="fieldErrors"
+            :shown="['name', 'symbol', 'isin', 'account_id', 'asset_type', 'currency', 'quantity', 'avg_cost', 'last_price', 'notes']"
+          />
+          <div class="sm:col-span-2 md:col-span-1">
+            <label class="label">Nome</label>
+            <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required />
+            <FieldError :errors="fieldErrors" name="name" />
+          </div>
+          <div>
+            <label class="label">Ticker / Symbol</label>
+            <input v-model="form.symbol" class="input" :class="{ 'input-invalid': fieldErrors.symbol }" placeholder="es. CSSPX.MI (auto da ISIN)" aria-describedby="hint-symbol" />
+            <p v-if="form.asset_type === 'bond'" id="hint-symbol" class="field-hint">
+              Per le obbligazioni lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+              quotazione sul MOT di Borsa Italiana.
+            </p>
+            <p v-else-if="form.asset_type === 'certificate'" id="hint-symbol" class="field-hint">
+              Per i certificati lascialo vuoto: viene compilato con l'ISIN, che è la chiave della
+              quotazione sul SeDeX/Cert-X.
+            </p>
+            <p v-else-if="form.asset_type === 'crypto'" id="hint-symbol" class="field-hint">
+              Per le crypto usa l'identificativo CoinGecko (es. bitcoin, ethereum): è quello che serve per la quotazione.
+            </p>
+            <p v-else-if="['commodity', 'cash', 'other'].includes(form.asset_type)" id="hint-symbol" class="field-hint">
+              Per questo tipo non c'è quotazione automatica: il valore segue il prezzo corrente che inserisci tu.
+            </p>
+            <p v-else id="hint-symbol" class="field-hint">
+              Serve per la quotazione automatica: è il simbolo di Yahoo Finance, che puoi trovare con «Cerca» accanto all'ISIN.
+            </p>
+            <FieldError :errors="fieldErrors" name="symbol" />
+          </div>
+          <div>
+            <label class="label">ISIN</label>
+            <div class="flex gap-2">
+              <input v-model="form.isin" class="input uppercase" :class="{ 'input-invalid': fieldErrors.isin }" maxlength="12" placeholder="es. IE00B5BMR087" aria-describedby="hint-isin" />
+              <button
+                type="button"
+                class="btn-secondary whitespace-nowrap"
+                :disabled="lookupLoading"
+                @click="lookupSymbol"
+              >
+                {{ lookupLoading ? '…' : 'Cerca' }}
+              </button>
+            </div>
+            <p id="hint-isin" class="field-hint">«Cerca» trova il ticker quotabile partendo dall'ISIN o, se è vuoto, da ticker o nome.</p>
+            <FieldError :errors="fieldErrors" name="isin" />
+          </div>
+          <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
+            <p v-if="lookupError" class="text-sm text-danger-600">{{ lookupError }}</p>
+            <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
+              <li
+                v-for="c in lookupResults"
+                :key="c.symbol"
+                class="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
+                @click="applyCandidate(c)"
+              >
+                <span>
+                  <span class="font-medium">{{ c.symbol }}</span>
+                  <span class="text-slate-500"> · {{ c.exchange }}</span>
+                  <span class="block text-xs text-slate-500">{{ c.name }}</span>
+                </span>
+                <span class="whitespace-nowrap">
+                  <span v-if="c.price !== null" class="num">{{ formatCurrency(String(c.price), c.currency ?? form.currency) }}</span>
+                  <span v-else class="text-slate-500">n/d</span>
+                </span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <label class="label">Conto</label>
+            <select v-model.number="form.account_id" class="input" :class="{ 'input-invalid': fieldErrors.account_id }" required aria-describedby="hint-account">
+              <option v-for="a in investmentAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+            <p id="hint-account" class="field-hint">Il saldo di questo conto è la somma del valore di mercato delle sue posizioni.</p>
+            <FieldError :errors="fieldErrors" name="account_id" />
+          </div>
+          <div>
+            <label class="label">Tipo asset</label>
+            <select v-model="form.asset_type" class="input" :class="{ 'input-invalid': fieldErrors.asset_type }" aria-describedby="hint-asset-type">
+              <option v-for="t in assetTypes" :key="t" :value="t">{{ ASSET_TYPE_LABEL[t] }}</option>
+            </select>
+            <p id="hint-asset-type" class="field-hint">Decide da quale fonte arriva la quotazione automatica.</p>
+            <FieldError :errors="fieldErrors" name="asset_type" />
+          </div>
+          <div>
+            <label class="label">Valuta</label>
+            <select v-model="form.currency" class="input" :class="{ 'input-invalid': fieldErrors.currency }">
+              <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+            </select>
+            <FieldError :errors="fieldErrors" name="currency" />
+          </div>
+          <div v-if="!editing">
+            <label class="label">Quantità iniziale</label>
+            <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.quantity }" required aria-describedby="hint-quantity" />
+            <p id="hint-quantity" class="field-hint">
+              <template v-if="form.asset_type === 'bond'">Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti. </template>
+              Con il prezzo di carico diventa il primo acquisto del registro, datato oggi; metti 0 per partire dai movimenti.
+            </p>
+            <FieldError :errors="fieldErrors" name="quantity" />
+          </div>
+          <div v-if="!editing">
+            <label class="label">Prezzo di carico ({{ form.currency }})</label>
+            <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.avg_cost }" required aria-describedby="hint-avg-cost" />
+            <p id="hint-avg-cost" class="field-hint">Prezzo medio pagato per quota, commissioni comprese.</p>
+            <FieldError :errors="fieldErrors" name="avg_cost" />
+          </div>
+          <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
+            Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
+          </div>
+          <div>
+            <label class="label">Prezzo corrente ({{ form.currency }})</label>
+            <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.last_price }" placeholder="= carico se vuoto" aria-describedby="hint-last-price" />
+            <p id="hint-last-price" class="field-hint">Prezzo manuale: conta solo finché non c'è una quotazione automatica; se vuoto vale il prezzo di carico.</p>
+            <FieldError :errors="fieldErrors" name="last_price" />
+          </div>
+          <div class="sm:col-span-2 md:col-span-3">
+            <label class="label">Note</label>
+            <input v-model="form.notes" class="input" :class="{ 'input-invalid': fieldErrors.notes }" />
+            <FieldError :errors="fieldErrors" name="notes" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
         </div>
-      </div>
-      <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
-        <p v-if="lookupError" class="text-sm text-red-600">{{ lookupError }}</p>
-        <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
-          <li
-            v-for="c in lookupResults"
-            :key="c.symbol"
-            class="flex items-center justify-between gap-3 px-3 py-2 hover:bg-slate-50 cursor-pointer"
-            @click="applyCandidate(c)"
-          >
-            <span>
-              <span class="font-medium">{{ c.symbol }}</span>
-              <span class="text-slate-400"> · {{ c.exchange }}</span>
-              <span class="block text-xs text-slate-500">{{ c.name }}</span>
-            </span>
-            <span class="whitespace-nowrap">
-              <span v-if="c.price !== null">{{ formatCurrency(String(c.price), c.currency ?? form.currency) }}</span>
-              <span v-else class="text-slate-400">n/d</span>
-            </span>
-          </li>
-        </ul>
-      </div>
-      <div>
-        <label class="label">Conto</label>
-        <select v-model.number="form.account_id" class="input" required>
-          <option v-for="a in investmentAccounts" :key="a.id" :value="a.id">{{ a.name }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Tipo asset</label>
-        <select v-model="form.asset_type" class="input">
-          <option v-for="t in assetTypes" :key="t" :value="t">{{ t }}</option>
-        </select>
-      </div>
-      <div>
-        <label class="label">Valuta</label>
-        <select v-model="form.currency" class="input">
-          <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
-        </select>
-      </div>
-      <div v-if="!editing">
-        <label class="label">Quantità iniziale</label>
-        <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" required />
-        <p v-if="form.asset_type === 'bond'" class="text-xs text-slate-500 mt-1">
-          Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti.
-        </p>
-      </div>
-      <div v-if="!editing">
-        <label class="label">Prezzo di carico ({{ form.currency }})</label>
-        <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" required />
-      </div>
-      <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
-        Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
-      </div>
-      <div>
-        <label class="label">Prezzo corrente ({{ form.currency }})</label>
-        <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" placeholder="= carico se vuoto" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3">
-        <label class="label">Note</label>
-        <input v-model="form.notes" class="input" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+      </form>
+    </AppModal>
 
     <!-- Versato vs valore: nessun punto prima del primo movimento. -->
     <div v-if="(history?.points.length ?? 0) > 1" class="card p-4">
@@ -482,7 +556,9 @@ onMounted(async () => {
           </select>
         </div>
       </div>
-      <p class="text-xs text-slate-500 mb-2">dal primo movimento</p>
+      <p class="text-xs text-slate-500 mb-2">
+        Versato: soldi immessi meno quelli ripresi con le vendite, commissioni comprese. Parte dal primo movimento; nei mesi senza quotazione il valore usa il costo medio.
+      </p>
       <div class="h-64">
         <Line :data="historyData" :options="chartOptions" />
       </div>
@@ -490,7 +566,7 @@ onMounted(async () => {
 
     <!-- Posizioni -->
     <div class="card">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
+      <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per posizione, troppi campi per il collasso label/valore generico (sotto md). -->
       <ul v-else class="md:hidden divide-y divide-slate-100">
@@ -505,23 +581,23 @@ onMounted(async () => {
               <p class="font-medium text-slate-800 truncate">{{ h.name }}</p>
               <p class="text-xs text-slate-500 mt-0.5">
                 <span
-                  class="inline-block px-2 py-0.5 rounded-full text-xs text-white capitalize"
+                  class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
                   :style="{ background: assetTypeColors[h.asset_type] }"
-                >{{ h.asset_type }}</span>
+                >{{ ASSET_TYPE_LABEL[h.asset_type] }}</span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">{{ accountName(h.account_id) }}</p>
-              <p v-if="h.symbol" class="text-xs text-slate-400 mt-0.5 truncate">{{ h.symbol }}</p>
-              <p class="text-xs text-slate-400 mt-0.5 truncate">
+              <p v-if="h.symbol" class="text-xs text-slate-500 mt-0.5 truncate">{{ h.symbol }}</p>
+              <p class="num text-xs text-slate-500 mt-0.5 truncate">
                 {{ h.quantity }} × {{ formatCurrency(h.effective_price, h.currency) }}
               </p>
-              <p v-if="h.price_source === 'auto'" class="text-xs text-green-600 mt-0.5 truncate">
+              <p v-if="h.price_source === 'auto'" class="text-xs text-income-700 mt-0.5 truncate">
                 auto<template v-if="h.price_as_of"> · {{ formatDate(h.price_as_of) }}</template>
               </p>
             </div>
             <div class="text-right shrink-0">
-              <p class="font-semibold whitespace-nowrap">{{ formatCurrency(h.market_value, h.currency) }}</p>
+              <Amount class="block font-semibold whitespace-nowrap" :value="h.market_value" :currency="h.currency" />
               <p class="text-xs font-medium whitespace-nowrap mt-0.5" :class="plClass(h.unrealized_pl)">
-                {{ formatCurrency(h.unrealized_pl, h.currency) }}
+                <Amount :value="h.unrealized_pl" :currency="h.currency" signed />
                 <template v-if="h.unrealized_pl_pct">({{ parseFloat(h.unrealized_pl_pct) > 0 ? '+' : '' }}{{ h.unrealized_pl_pct }}%)</template>
               </p>
               <div class="mt-2 flex items-center gap-1 justify-end">
@@ -535,11 +611,17 @@ onMounted(async () => {
             </div>
           </div>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessuna posizione.</li>
+        <li v-if="items.length === 0">
+          <EmptyState title="Non hai ancora registrato posizioni.">
+            <button type="button" class="btn-primary" :disabled="investmentAccounts.length === 0" @click="showForm = true; reset()">
+              Nuova posizione
+            </button>
+          </EmptyState>
+        </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!loading" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table">
         <thead class="bg-slate-100">
           <tr>
             <th>Asset</th>
@@ -558,33 +640,33 @@ onMounted(async () => {
           <tr v-for="h in items" :key="h.id">
             <td class="font-medium">
               {{ h.name }}
-              <span v-if="h.symbol" class="block text-xs text-slate-400">{{ h.symbol }}</span>
-              <span v-if="h.isin" class="block text-xs text-slate-300">{{ h.isin }}</span>
+              <span v-if="h.symbol" class="block text-xs text-slate-500">{{ h.symbol }}</span>
+              <span v-if="h.isin" class="block text-xs text-slate-500">{{ h.isin }}</span>
             </td>
             <td>
               <span
-                class="inline-block px-2 py-0.5 rounded-full text-xs text-white capitalize"
+                class="inline-block px-2 py-0.5 rounded-full text-xs text-white"
                 :style="{ background: assetTypeColors[h.asset_type] }"
-              >{{ h.asset_type }}</span>
+              >{{ ASSET_TYPE_LABEL[h.asset_type] }}</span>
             </td>
             <td>{{ accountName(h.account_id) }}</td>
-            <td class="text-right">{{ h.quantity }}</td>
-            <td class="text-right">{{ formatCurrency(h.avg_cost, h.currency) }}</td>
-            <td class="text-right text-slate-500">{{ formatCurrency(h.net_invested, h.currency) }}</td>
+            <td class="num text-right">{{ h.quantity }}</td>
+            <td class="text-right"><Amount :value="h.avg_cost" :currency="h.currency" /></td>
+            <td class="text-right text-slate-500"><Amount :value="h.net_invested" :currency="h.currency" /></td>
             <td class="text-right">
-              {{ formatCurrency(h.effective_price, h.currency) }}
+              <Amount :value="h.effective_price" :currency="h.currency" />
               <span
                 v-if="h.price_source === 'auto'"
-                class="block text-xs text-green-600"
+                class="block text-xs text-income-700"
                 :title="h.price_as_of ? `Quotazione automatica aggiornata il ${formatDate(h.price_as_of)}` : 'Quotazione automatica'"
               >
                 auto<template v-if="h.price_as_of"> · {{ formatDate(h.price_as_of) }}</template>
               </span>
             </td>
-            <td class="text-right font-medium">{{ formatCurrency(h.market_value, h.currency) }}</td>
+            <td class="text-right font-medium"><Amount :value="h.market_value" :currency="h.currency" /></td>
             <td class="text-right" :class="plClass(h.unrealized_pl)">
-              {{ formatCurrency(h.unrealized_pl, h.currency) }}
-              <span v-if="h.unrealized_pl_pct" class="block text-xs">
+              <Amount :value="h.unrealized_pl" :currency="h.currency" signed />
+              <span v-if="h.unrealized_pl_pct" class="num block text-xs">
                 {{ parseFloat(h.unrealized_pl_pct) > 0 ? '+' : '' }}{{ h.unrealized_pl_pct }}%
               </span>
             </td>
@@ -600,7 +682,13 @@ onMounted(async () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="10" class="text-center text-slate-500 py-6">Nessuna posizione.</td>
+            <td colspan="10" class="whitespace-normal">
+              <EmptyState title="Non hai ancora registrato posizioni.">
+                <button type="button" class="btn-primary" :disabled="investmentAccounts.length === 0" @click="showForm = true; reset()">
+                  Nuova posizione
+                </button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

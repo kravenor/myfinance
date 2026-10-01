@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import ToastHost from '@/components/ui/ToastHost.vue'
+import ConfirmHost from '@/components/ui/ConfirmHost.vue'
 
 const auth = useAuthStore()
 
@@ -11,4 +13,6 @@ onMounted(async () => {
 
 <template>
   <RouterView />
+  <ToastHost />
+  <ConfirmHost />
 </template>

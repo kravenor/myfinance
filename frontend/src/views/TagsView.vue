@@ -1,39 +1,57 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useCrud } from '@/composables/useCrud'
+import AppModal from '@/components/ui/AppModal.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Tag } from '@/types/api'
+import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, list, create, update, destroy } = useCrud<Tag>('tags')
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<Tag>('tags')
+const toast = useToastStore()
 
 const editing = ref<Tag | null>(null)
 const showForm = ref(false)
 const form = ref({ name: '', color: '' })
+const dirty = useFormDirty(form, showForm)
 
 function reset() {
   editing.value = null
+  fieldErrors.value = {}
   form.value = { name: '', color: '' }
 }
 
 function startEdit(t: Tag) {
   editing.value = t
+  fieldErrors.value = {}
   form.value = { name: t.name, color: t.color ?? '' }
   showForm.value = true
 }
 
 async function onSubmit() {
   const payload = { name: form.value.name, color: form.value.color || null }
-  if (editing.value) {
-    await update(editing.value.id, payload)
-  } else {
-    await create(payload)
+  try {
+    if (editing.value) {
+      await update(editing.value.id, payload)
+    } else {
+      await create(payload)
+    }
+  } catch {
+    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    return
   }
+  toast.success('Tag salvato.')
   reset()
   showForm.value = false
 }
 
 async function onDelete(t: Tag) {
-  if (!confirm(`Eliminare il tag "${t.name}"?`)) return
+  if (!(await confirmAction(`Eliminare il tag "${t.name}"?`))) return
   await destroy(t.id)
 }
 
@@ -43,9 +61,12 @@ onMounted(() => list())
 <template>
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h1 class="text-xl sm:text-2xl font-semibold">Tag</h1>
-      <button class="btn-primary" @click="showForm = !showForm; reset()">
-        {{ showForm ? 'Annulla' : 'Nuovo tag' }}
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Tag</h1>
+        <p class="page-desc">Etichette libere da aggiungere alle transazioni, anche più d'una, per raggrupparle oltre la categoria (es. «Vacanze 2026»).</p>
+      </div>
+      <button class="btn-primary" @click="showForm = true; reset()">
+        Nuovo tag
       </button>
     </div>
 
@@ -57,24 +78,40 @@ onMounted(() => list())
       @click="showForm = true; reset()"
     >+</button>
 
-    <form v-if="showForm" class="card p-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4" @submit.prevent="onSubmit">
-      <div class="md:col-span-2">
-        <label class="label">Nome</label>
-        <input v-model="form.name" class="input" required maxlength="64" />
-      </div>
-      <div>
-        <label class="label">Colore</label>
-        <input v-model="form.color" class="input" placeholder="#aabbcc" />
-      </div>
-      <div class="sm:col-span-2 md:col-span-3 flex flex-col sm:flex-row gap-2 sm:justify-end">
-        <button type="button" class="btn-secondary" @click="showForm = false; reset()">Annulla</button>
-        <button type="submit" class="btn-primary">{{ editing ? 'Salva' : 'Crea' }}</button>
-      </div>
-    </form>
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica tag' : 'Nuovo tag'">
+      <form @submit.prevent="onSubmit">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors class="col-span-full" :errors="fieldErrors" :shown="['name', 'color']" />
+          <div class="md:col-span-2">
+            <label class="label">Nome</label>
+            <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required maxlength="64" />
+            <FieldError :errors="fieldErrors" name="name" />
+          </div>
+          <div>
+            <label class="label">Colore</label>
+            <input
+              v-model="form.color"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.color }"
+              placeholder="#aabbcc"
+              aria-describedby="hint-color"
+            />
+            <p id="hint-color" class="field-hint">Codice esadecimale nel formato #rrggbb; se lo lasci vuoto il tag usa un colore predefinito.</p>
+            <FieldError :errors="fieldErrors" name="color" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
+          <button type="submit" class="btn-primary" :disabled="submitting">
+            {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
+          </button>
+        </div>
+      </form>
+    </AppModal>
 
     <div class="card table-responsive md:overflow-x-auto">
-      <p v-if="loading" class="p-4 text-sm text-slate-500">Caricamento…</p>
-      <table v-else class="table">
+      <ListSkeleton v-if="loading && !items.length" />
+      <table v-else class="table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Nome</th>
@@ -94,7 +131,11 @@ onMounted(() => list())
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="3" class="text-center text-slate-500 py-6">Nessun tag.</td>
+            <td colspan="3" class="whitespace-normal">
+              <EmptyState title="Non hai ancora creato tag.">
+                <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea il primo tag</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

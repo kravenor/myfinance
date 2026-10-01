@@ -4,10 +4,18 @@ import { api } from '@/lib/api'
 import { DATE_FORMATS, DEFAULT_DATE_FORMAT, formatDateWith, financialMonthRange } from '@/lib/date'
 import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
+import { useThemeStore, type ThemePreference } from '@/stores/theme'
+import AppIcon from '@/components/ui/AppIcon.vue'
 import type { NotificationPreferences, User } from '@/types/api'
 
 const auth = useAuthStore()
 const menu = useMenuStore()
+const theme = useThemeStore()
+const THEME_OPTIONS: { value: ThemePreference; label: string; hint: string }[] = [
+  { value: 'system', label: 'Automatico', hint: 'Segue il sistema operativo' },
+  { value: 'light', label: 'Chiaro', hint: 'Sempre chiaro' },
+  { value: 'dark', label: 'Scuro', hint: 'Sempre scuro' },
+]
 
 const menuItems = NAV_ITEMS.map((item) => ({
   ...item,
@@ -129,6 +137,7 @@ onMounted(async () => {
 
 <template>
   <h1 class="text-xl sm:text-2xl font-semibold">Impostazioni</h1>
+  <p class="page-desc">Avvisi, password, formato delle date, inizio del mese e aspetto dell'app.</p>
   <div class="space-y-6 w-full grid grid-cols-1 lg:grid-cols-2 gap-4">
     <div class="card p-4 sm:p-6 mt-6">
       <form class="space-y-5" @submit.prevent="onSubmit">
@@ -139,7 +148,9 @@ onMounted(async () => {
           </p>
         </div>
 
-        <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
+        <div v-if="loading" class="space-y-3" aria-busy="true" aria-label="Caricamento">
+          <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded bg-slate-100" />
+        </div>
 
         <template v-else>
           <!-- Email -->
@@ -158,8 +169,9 @@ onMounted(async () => {
               type="email"
               class="input"
               :placeholder="auth.user?.email ?? 'email dell\'account'"
+              aria-describedby="hint-email-address"
             />
-            <p class="text-xs text-slate-500 mt-1">Lascia vuoto per usare l'email dell'account.</p>
+            <p id="hint-email-address" class="field-hint">Lascia vuoto per usare l'email dell'account.</p>
           </div>
 
           <hr class="border-slate-100" />
@@ -191,9 +203,10 @@ onMounted(async () => {
               max="100"
               step="1"
               class="input w-32"
+              aria-describedby="hint-budget-threshold"
             />
-            <p class="text-xs text-slate-500 mt-1">
-              Percentuale oltre la quale un budget è «in allerta» (sotto il 100% = sforato).
+            <p id="hint-budget-threshold" class="field-hint">
+              Un budget va «in allerta» quando la spesa raggiunge questa percentuale ed è «sforato» dal 100%. Vale anche per i budget mostrati in Dashboard.
             </p>
           </div>
 
@@ -201,8 +214,8 @@ onMounted(async () => {
             <button type="submit" class="btn-primary" :disabled="saving">
               {{ saving ? 'Salvataggio…' : 'Salva' }}
             </button>
-            <span v-if="saved" class="text-sm text-green-600">Preferenze salvate.</span>
-            <span v-if="error" class="text-sm text-red-600">{{ error }}</span>
+            <span v-if="saved" role="status" class="text-sm text-income-700">Preferenze salvate.</span>
+            <span v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</span>
           </div>
         </template>
       </form>
@@ -249,8 +262,8 @@ onMounted(async () => {
           <button type="submit" class="btn-primary" :disabled="passwordSaving">
             {{ passwordSaving ? 'Salvataggio…' : 'Cambia password' }}
           </button>
-          <span v-if="passwordSaved" class="text-sm text-green-600">Password aggiornata.</span>
-          <span v-if="passwordError" class="text-sm text-red-600">{{ passwordError }}</span>
+          <span v-if="passwordSaved" role="status" class="text-sm text-income-700">Password aggiornata.</span>
+          <span v-if="passwordError" role="alert" class="text-sm text-danger-600">{{ passwordError }}</span>
         </div>
       </form>
     </div>
@@ -266,19 +279,21 @@ onMounted(async () => {
 
         <div>
           <label class="label">Formato</label>
-          <select v-model="dateFormat" class="input w-48">
+          <select v-model="dateFormat" class="input w-48" aria-describedby="hint-date-format">
             <option v-for="f in DATE_FORMATS" :key="f" :value="f">{{ f }}</option>
           </select>
-          <p class="text-xs text-slate-500 mt-1">Anteprima: {{ dateSample }}</p>
+          <p id="hint-date-format" class="field-hint">
+            Anteprima: {{ dateSample }}. Cambia solo come vedi le date; l'import da file ha un suo formato data.
+          </p>
         </div>
 
         <div>
           <label class="label">Giorno di inizio del mese</label>
-          <select v-model.number="monthStartDay" class="input w-48">
+          <select v-model.number="monthStartDay" class="input w-48" aria-describedby="hint-month-start">
             <option v-for="d in monthStartDays" :key="d" :value="d">{{ d }}</option>
           </select>
-          <p class="text-xs text-slate-500 mt-1">
-            Utile se il tuo mese parte dallo stipendio. Periodo corrente: {{ cycleSample }}.
+          <p id="hint-month-start" class="field-hint">
+            Utile se il tuo mese parte dallo stipendio: con 27, il mese di giugno va dal 27/06 al 26/07. Periodo corrente: {{ cycleSample }}.
             Cambiarlo non rinumera i budget già inseriti, ma ricalcola quanto risulta speso.
           </p>
         </div>
@@ -287,11 +302,33 @@ onMounted(async () => {
           <button type="submit" class="btn-primary" :disabled="dateSaving">
             {{ dateSaving ? 'Salvataggio…' : 'Salva' }}
           </button>
-          <span v-if="dateSaved" class="text-sm text-green-600">Formato salvato.</span>
-          <span v-if="dateError" class="text-sm text-red-600">{{ dateError }}</span>
+          <span v-if="dateSaved" role="status" class="text-sm text-income-700">Formato salvato.</span>
+          <span v-if="dateError" role="alert" class="text-sm text-danger-600">{{ dateError }}</span>
         </div>
       </form>
     </div>
+
+    <section class="card p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 class="font-medium">Aspetto</h2>
+        <p class="text-sm text-slate-500 mt-1">Tema dell'interfaccia, salvato su questo dispositivo.</p>
+      </div>
+      <fieldset class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <legend class="sr-only">Tema</legend>
+        <label
+          v-for="opt in THEME_OPTIONS"
+          :key="opt.value"
+          class="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition"
+          :class="theme.preference === opt.value ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'"
+        >
+          <input v-model="theme.preference" type="radio" name="theme" :value="opt.value" class="mt-0.5 h-4 w-4" />
+          <span>
+            <span class="block text-sm font-medium text-slate-900">{{ opt.label }}</span>
+            <span class="block text-xs text-slate-500">{{ opt.hint }}</span>
+          </span>
+        </label>
+      </fieldset>
+    </section>
 
     <section class="card p-4 sm:p-6 space-y-5">
       <div>
@@ -316,6 +353,7 @@ onMounted(async () => {
             :disabled="item.locked"
             @change="menu.setVisible(item.name, ($event.target as HTMLInputElement).checked)"
           />
+          <AppIcon :name="item.icon" class="h-4 w-4 text-slate-500" />
           <span class="text-sm">{{ item.label }}</span>
         </label>
       </div>
