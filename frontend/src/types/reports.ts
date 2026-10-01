@@ -77,6 +77,7 @@ export interface CashFlowPoint {
 export interface CategoryTotal {
   category_id: number | null
   category_name: string
+  category_color?: string | null
   total: string
 }
 

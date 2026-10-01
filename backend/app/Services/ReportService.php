@@ -349,11 +349,12 @@ class ReportService
             ->reject(fn ($k) => $k === 'null')
             ->map(fn ($k) => (int) $k)
             ->all();
-        $categories = Category::query()->whereIn('id', $ids)->pluck('name', 'id');
+        $categories = Category::query()->whereIn('id', $ids)->get(['id', 'name', 'color'])->keyBy('id');
 
         return collect($totals)->map(fn ($total, $key) => [
             'category_id' => $key === 'null' ? null : (int) $key,
-            'category_name' => $key === 'null' ? 'Senza categoria' : ($categories[(int) $key] ?? '—'),
+            'category_name' => $key === 'null' ? 'Senza categoria' : ($categories->get((int) $key)->name ?? '—'),
+            'category_color' => $key === 'null' ? null : $categories->get((int) $key)?->color,
             'total' => $this->fmt($total),
         ])->values()->all();
     }

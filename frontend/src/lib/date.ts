@@ -66,7 +66,7 @@ function monthStartDay(): number {
   return Math.min(MAX_MONTH_START_DAY, Math.max(1, day))
 }
 
-function toIsoDate(date: Date): string {
+export function toIsoDate(date: Date): string {
   return [
     date.getFullYear(),
     String(date.getMonth() + 1).padStart(2, '0'),
