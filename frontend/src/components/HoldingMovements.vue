@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import Amount from '@/components/ui/Amount.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { api } from '@/lib/api'
 import { formatDate } from '@/lib/date'
+import { INVESTMENT_SIDE_LABEL } from '@/lib/labels'
 import { formatCurrency } from '@/lib/money'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { InvestmentHolding, InvestmentSide, InvestmentTransaction, Paginated } from '@/types/api'
@@ -49,10 +52,9 @@ const totalPl = computed(
   () => parseFloat(props.holding.unrealized_pl) + parseFloat(props.holding.realized_pl),
 )
 
-const sideLabel = (side: InvestmentSide) =>
-  ({ buy: 'Acquisto', sell: 'Vendita', fee: 'Costo' })[side]
+const SIDES = Object.keys(INVESTMENT_SIDE_LABEL) as InvestmentSide[]
 const sideClass = (side: InvestmentSide) =>
-  ({ buy: 'text-slate-800', sell: 'text-amber-700', fee: 'text-slate-500' })[side]
+  ({ buy: 'text-slate-800', sell: 'text-warning-700', fee: 'text-slate-500' })[side]
 
 async function load() {
   loading.value = true
@@ -145,23 +147,19 @@ onMounted(load)
       <dl class="grid grid-cols-2 sm:grid-cols-4 gap-px bg-slate-200 border-b border-slate-200 text-sm">
         <div class="bg-white p-3">
           <dt class="text-xs text-slate-500">Versato netto</dt>
-          <dd class="font-medium">{{ formatCurrency(holding.net_invested, holding.currency) }}</dd>
+          <dd class="font-medium"><Amount :value="holding.net_invested" :currency="holding.currency" /></dd>
         </div>
         <div class="bg-white p-3">
           <dt class="text-xs text-slate-500">Valore attuale</dt>
-          <dd class="font-medium">{{ formatCurrency(holding.market_value, holding.currency) }}</dd>
+          <dd class="font-medium"><Amount :value="holding.market_value" :currency="holding.currency" /></dd>
         </div>
         <div class="bg-white p-3">
           <dt class="text-xs text-slate-500">P/L realizzato</dt>
-          <dd class="font-medium" :class="parseFloat(holding.realized_pl) >= 0 ? 'text-green-600' : 'text-red-600'">
-            {{ formatCurrency(holding.realized_pl, holding.currency) }}
-          </dd>
+          <dd class="font-medium"><Amount :value="holding.realized_pl" :currency="holding.currency" signed /></dd>
         </div>
         <div class="bg-white p-3">
           <dt class="text-xs text-slate-500">P/L totale</dt>
-          <dd class="font-medium" :class="totalPl >= 0 ? 'text-green-600' : 'text-red-600'">
-            {{ formatCurrency(String(totalPl), holding.currency) }}
-          </dd>
+          <dd class="font-medium"><Amount :value="totalPl" :currency="holding.currency" signed /></dd>
         </div>
       </dl>
 
@@ -170,9 +168,7 @@ onMounted(load)
           <div>
             <label class="label">Operazione</label>
             <select v-model="form.side" class="input">
-              <option value="buy">Acquisto</option>
-              <option value="sell">Vendita</option>
-              <option value="fee">Costo</option>
+              <option v-for="s in SIDES" :key="s" :value="s">{{ INVESTMENT_SIDE_LABEL[s] }}</option>
             </select>
           </div>
           <div>
@@ -218,10 +214,10 @@ onMounted(load)
             <input v-model="form.notes" class="input" :placeholder="isFee ? 'es. bollo titoli' : 'es. rata PAC'" />
           </div>
         </div>
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+        <p v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</p>
         <div class="flex gap-2">
           <button type="submit" class="btn-primary" :disabled="saving">
-            {{ editingId ? 'Salva movimento' : 'Registra movimento' }}
+            {{ saving ? 'Salvataggio…' : editingId ? 'Salva movimento' : 'Registra movimento' }}
           </button>
           <button v-if="editingId" type="button" class="btn-secondary" @click="cancelEdit">Annulla</button>
         </div>
@@ -232,9 +228,9 @@ onMounted(load)
         <li v-for="m in movements" :key="m.id" class="p-4 flex items-start justify-between gap-3">
           <div class="min-w-0">
             <p class="text-sm font-medium" :class="sideClass(m.side)">
-              {{ sideLabel(m.side) }} · {{ formatDate(m.occurred_at) }}
+              {{ INVESTMENT_SIDE_LABEL[m.side] }} · {{ formatDate(m.occurred_at) }}
             </p>
-            <p v-if="m.side !== 'fee'" class="text-xs text-slate-500 mt-0.5">
+            <p v-if="m.side !== 'fee'" class="num text-xs text-slate-500 mt-0.5">
               {{ m.quantity }} × {{ formatCurrency(m.price, holding.currency) }}
               <template v-if="parseFloat(m.fees) > 0">
                 + {{ formatCurrency(m.fees, holding.currency) }} comm.
@@ -243,14 +239,17 @@ onMounted(load)
             <p v-if="m.notes" class="text-xs text-slate-500 mt-0.5 truncate">{{ m.notes }}</p>
           </div>
           <div class="text-right shrink-0">
-            <p class="text-sm font-medium whitespace-nowrap">
-              {{ m.side === 'sell' ? '+' : '−' }}{{ formatCurrency(m.cash_flow, holding.currency) }}
-            </p>
+            <Amount
+              class="block text-sm font-medium whitespace-nowrap"
+              :value="m.cash_flow"
+              :currency="holding.currency"
+              :type="m.side === 'sell' ? 'income' : 'expense'"
+            />
             <RowActions class="mt-1 justify-end" @edit="startEdit(m)" @delete="onDelete(m)" />
           </div>
         </li>
-        <li v-if="movements.length === 0" class="p-6 text-center text-sm text-slate-500">
-          Nessun movimento.
+        <li v-if="movements.length === 0">
+          <EmptyState title="Nessun movimento registrato: usa il form qui sopra per il primo." />
         </li>
       </ul>
     </div>

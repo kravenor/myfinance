@@ -15,7 +15,10 @@ import {
   Tooltip,
 } from 'chart.js'
 import { api } from '@/lib/api'
+import Amount from '@/components/ui/Amount.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
 import { useQueryFilters } from '@/composables/useQueryFilters'
+import { useAuthStore } from '@/stores/auth'
 import { EXPENSE_COLOR, FALLBACK_TAG_COLOR, INCOME_COLOR, PRIMARY_COLOR, paletteColor } from '@/lib/chartTheme'
 import type { CategoryTotal, NetWorthPoint, TagTotal, TimelinePoint } from '@/types/reports'
 
@@ -27,6 +30,10 @@ function defaultRange() {
   const { from } = financialMonthRange(new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()))
   return { from, to }
 }
+
+// I totali dei report sono convertiti nella valuta base dell'utente.
+const auth = useAuthStore()
+const baseCurrency = computed(() => auth.user?.currency ?? 'EUR')
 
 const { filters } = useQueryFilters({ ...defaultRange(), type: 'expense' }, () => refresh())
 
@@ -109,7 +116,7 @@ const lineData = () => ({
       label: 'Patrimonio netto',
       data: netWorth.value.map((p) => parseFloat(p.net_worth)),
       borderColor: PRIMARY_COLOR,
-      backgroundColor: 'rgba(99,102,241,0.15)',
+      backgroundColor: `${PRIMARY_COLOR}26`,
       fill: true,
       tension: 0.3,
     },
@@ -189,7 +196,9 @@ onMounted(refresh)
     <div v-if="loading && !timeline.length" class="grid grid-cols-1 gap-4 lg:grid-cols-2" aria-busy="true" aria-label="Caricamento">
       <div v-for="i in 4" :key="i" class="card h-72 animate-pulse bg-slate-100" />
     </div>
-    <p v-else-if="!anyVisible" class="text-sm text-slate-500">Nessun report selezionato.</p>
+    <div v-else-if="!anyVisible" class="card">
+      <EmptyState title="Nessun report selezionato: attivane almeno uno da «Report visibili»." />
+    </div>
 
     <section v-else class="space-y-4 transition-opacity" :class="{ 'opacity-60': loading }">
       <div v-if="visible.category || visible.tag || visible.timeline" class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -199,7 +208,10 @@ onMounted(refresh)
           </h3>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="categories.length" :data="donutData()" :options="chartOptions" />
-            <p v-else class="text-sm text-slate-500">Nessun dato nel periodo.</p>
+            <EmptyState
+              v-else
+              :title="filters.type === 'income' ? 'Nessuna entrata nel periodo.' : 'Nessuna uscita nel periodo.'"
+            />
           </div>
         </div>
         <div v-if="visible.tag" class="card p-4">
@@ -208,7 +220,7 @@ onMounted(refresh)
           </h3>
           <div class="h-64 sm:h-80">
             <Doughnut v-if="tags.length" :data="tagDonutData()" :options="chartOptions" />
-            <p v-else class="text-sm text-slate-500">Nessuna transazione con tag nel periodo.</p>
+            <EmptyState v-else title="Nessuna transazione con tag nel periodo." />
           </div>
         </div>
         <div v-if="visible.timeline" class="card p-4">
@@ -216,7 +228,8 @@ onMounted(refresh)
             Entrate vs uscite (mensile)
           </h3>
           <div class="h-64 sm:h-80">
-            <Bar :data="barData()" :options="chartOptions" />
+            <Bar v-if="timeline.some((t) => parseFloat(t.income) || parseFloat(t.expense))" :data="barData()" :options="chartOptions" />
+            <EmptyState v-else title="Nessuna transazione nel periodo." />
           </div>
         </div>
       </div>
@@ -226,7 +239,8 @@ onMounted(refresh)
           Patrimonio netto (cumulato)
         </h3>
         <div class="h-64 sm:h-80">
-          <Line :data="lineData()" :options="chartOptions" />
+          <Line v-if="netWorth.length" :data="lineData()" :options="chartOptions" />
+          <EmptyState v-else title="Nessun dato sul patrimonio nel periodo." />
         </div>
       </div>
 
@@ -241,10 +255,14 @@ onMounted(refresh)
           <tbody class="divide-y divide-slate-100">
             <tr v-for="c in categories" :key="c.category_id ?? 0">
               <td data-label="Categoria" class="font-medium">{{ c.category_name }}</td>
-              <td data-label="Totale" class="md:text-right">{{ c.total }}</td>
+              <td data-label="Totale" class="md:text-right"><Amount :value="c.total" :currency="baseCurrency" /></td>
             </tr>
             <tr v-if="categories.length === 0">
-              <td colspan="2" class="text-center text-slate-500 py-6">Nessuna categoria.</td>
+              <td colspan="2" class="whitespace-normal">
+                <EmptyState
+                  :title="filters.type === 'income' ? 'Nessuna entrata nel periodo.' : 'Nessuna uscita nel periodo.'"
+                />
+              </td>
             </tr>
           </tbody>
         </table>
@@ -269,10 +287,12 @@ onMounted(refresh)
                   {{ t.tag_name }}
                 </span>
               </td>
-              <td data-label="Totale" class="md:text-right">{{ t.total }}</td>
+              <td data-label="Totale" class="md:text-right"><Amount :value="t.total" :currency="baseCurrency" /></td>
             </tr>
             <tr v-if="tags.length === 0">
-              <td colspan="2" class="text-center text-slate-500 py-6">Nessun tag.</td>
+              <td colspan="2" class="whitespace-normal">
+                <EmptyState title="Nessuna transazione con tag nel periodo." />
+              </td>
             </tr>
           </tbody>
         </table>

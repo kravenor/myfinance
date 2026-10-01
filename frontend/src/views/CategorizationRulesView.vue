@@ -4,6 +4,11 @@ import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { CATEGORY_TYPE_LABEL, RULE_APPLIES_LABEL, RULE_MATCH_LABEL } from '@/lib/labels'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import { api, ensureCsrf } from '@/lib/api'
@@ -17,7 +22,7 @@ import type {
 } from '@/types/api'
 import { confirmAction } from '@/composables/useConfirm'
 
-const { items, loading, submitting, list, create, update, destroy } = useCrud<CategorizationRule>(
+const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<CategorizationRule>(
   'categorization-rules',
 )
 const toast = useToastStore()
@@ -126,7 +131,8 @@ interface FormState {
 const editing = ref<CategorizationRule | null>(null)
 const showForm = ref(false)
 const form = ref<FormState>(emptyForm())
-const submitError = ref<string | null>(null)
+const dirty = useFormDirty(form, showForm)
+const categoryMissing = ref(false)
 
 function emptyForm(): FormState {
   return {
@@ -161,23 +167,11 @@ function categoryColor(rule: CategorizationRule): string | null {
   return categories.value.find((c) => c.id === rule.category_id)?.color ?? null
 }
 
-function matchTypeLabel(t: RuleMatchType): string {
-  return {
-    contains: 'contiene',
-    starts_with: 'inizia con',
-    equals: 'uguale a',
-    regex: 'regex',
-  }[t]
-}
-
-function appliesLabel(t: RuleAppliesTo): string {
-  return { any: 'tutte', income: 'entrate', expense: 'spese' }[t]
-}
-
 function reset() {
   editing.value = null
   form.value = emptyForm()
-  submitError.value = null
+  categoryMissing.value = false
+  fieldErrors.value = {}
 }
 
 function startEdit(rule: CategorizationRule) {
@@ -191,36 +185,27 @@ function startEdit(rule: CategorizationRule) {
     priority: rule.priority,
     is_active: rule.is_active,
   }
-  submitError.value = null
+  categoryMissing.value = false
+  fieldErrors.value = {}
   showForm.value = true
 }
 
 async function onSubmit() {
-  submitError.value = null
-  if (!form.value.category_id) {
-    submitError.value = 'Seleziona una categoria.'
-    return
-  }
+  categoryMissing.value = !form.value.category_id
+  if (categoryMissing.value) return
   try {
     if (editing.value) {
       await update(editing.value.id, { ...form.value })
     } else {
       await create({ ...form.value })
     }
-    reset()
-    showForm.value = false
-    toast.success('Regola salvata.')
-  } catch (e: unknown) {
-    const err = e as {
-      response?: { data?: { message?: string; errors?: Record<string, string[]> } }
-    }
-    const errors = err.response?.data?.errors
-    if (errors) {
-      submitError.value = Object.values(errors).flat().join(' ')
-    } else {
-      submitError.value = err.response?.data?.message ?? 'Errore nel salvataggio.'
-    }
+  } catch {
+    if (Object.keys(fieldErrors.value).length) toast.error('Controlla i campi evidenziati.')
+    return
   }
+  reset()
+  showForm.value = false
+  toast.success('Regola salvata.')
 }
 
 async function onDelete(rule: CategorizationRule) {
@@ -276,7 +261,7 @@ onMounted(async () => {
       <div class="card w-full max-w-2xl p-4 space-y-4 mt-10">
         <div class="flex items-center justify-between">
           <h2 class="font-semibold">Applica regole alle transazioni esistenti</h2>
-          <button class="text-slate-500 hover:text-slate-600" @click="showApply = false">✕</button>
+          <button class="text-slate-500 hover:text-slate-700" aria-label="Chiudi" @click="showApply = false">✕</button>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -308,7 +293,7 @@ onMounted(async () => {
 
         <div class="flex flex-wrap gap-2">
           <button class="btn-secondary" :disabled="applyLoading" @click="runApplyDryRun">
-            {{ applyLoading ? 'Calcolo…' : 'Anteprima (dry-run)' }}
+            {{ applyLoading ? 'Calcolo…' : 'Anteprima' }}
           </button>
           <button
             v-if="applyPreview && applyPreview.matched > 0"
@@ -320,10 +305,10 @@ onMounted(async () => {
           </button>
         </div>
 
-        <p v-if="applyError" class="text-sm text-red-600">{{ applyError }}</p>
+        <p v-if="applyError" role="alert" class="text-sm text-danger-700">{{ applyError }}</p>
 
-        <div v-if="applyCommitted" class="card bg-green-50 p-3 text-sm">
-          <span class="font-medium text-green-700">{{ applyCommitted.updated }}</span> transazioni
+        <div v-if="applyCommitted" role="status" class="card bg-income-50 p-3 text-sm">
+          <span class="font-medium text-income-700">{{ applyCommitted.updated }}</span> transazioni
           aggiornate.
         </div>
 
@@ -351,7 +336,7 @@ onMounted(async () => {
               <tbody class="divide-y divide-slate-100">
                 <tr v-for="s in applyPreview.sample" :key="s.transaction_id">
                   <td>{{ formatDate(s.occurred_at) }}</td>
-                  <td>{{ s.description }}</td>
+                  <td>{{ s.description ?? '—' }}</td>
                   <td>{{ categoryNameById(s.suggested_category_id) }}</td>
                 </tr>
               </tbody>
@@ -361,63 +346,76 @@ onMounted(async () => {
       </div>
     </div>
 
-    <AppModal v-model="showForm" :title="editing ? 'Modifica regola' : 'Nuova regola'">
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica regola' : 'Nuova regola'">
       <form @submit.prevent="onSubmit">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors
+            class="col-span-full"
+            :errors="fieldErrors"
+            :shown="['name', 'priority', 'match_type', 'pattern', 'applies_to_type', 'category_id']"
+          />
           <div class="md:col-span-2">
             <label class="label">Nome</label>
-            <input v-model="form.name" class="input" required maxlength="120" />
+            <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required maxlength="120" />
+            <FieldError :errors="fieldErrors" name="name" />
           </div>
           <div>
             <label class="label">Priorità</label>
-            <input v-model.number="form.priority" type="number" min="0" max="9999" class="input" />
+            <input
+              v-model.number="form.priority"
+              type="number"
+              min="0"
+              max="9999"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.priority }"
+            />
+            <FieldError :errors="fieldErrors" name="priority" />
           </div>
 
           <div>
-            <label class="label">Match</label>
-            <select v-model="form.match_type" class="input">
-              <option value="contains">contiene</option>
-              <option value="starts_with">inizia con</option>
-              <option value="equals">uguale a</option>
-              <option value="regex">regex</option>
+            <label class="label">Condizione</label>
+            <select v-model="form.match_type" class="input" :class="{ 'input-invalid': fieldErrors.match_type }">
+              <option v-for="(label, key) in RULE_MATCH_LABEL" :key="key" :value="key">{{ label }}</option>
             </select>
+            <FieldError :errors="fieldErrors" name="match_type" />
           </div>
           <div class="md:col-span-2">
             <label class="label">Pattern</label>
-            <input v-model="form.pattern" class="input" required maxlength="255" />
+            <input v-model="form.pattern" class="input" :class="{ 'input-invalid': fieldErrors.pattern }" required maxlength="255" />
+            <FieldError :errors="fieldErrors" name="pattern" />
           </div>
 
           <div>
             <label class="label">Si applica a</label>
-            <select v-model="form.applies_to_type" class="input">
-              <option value="any">tutte</option>
-              <option value="income">entrate</option>
-              <option value="expense">spese</option>
+            <select v-model="form.applies_to_type" class="input" :class="{ 'input-invalid': fieldErrors.applies_to_type }">
+              <option v-for="(label, key) in RULE_APPLIES_LABEL" :key="key" :value="key">{{ label }}</option>
             </select>
+            <FieldError :errors="fieldErrors" name="applies_to_type" />
           </div>
           <div class="md:col-span-2">
             <label class="label">Categoria</label>
-            <select v-model.number="form.category_id" class="input" required>
+            <select
+              v-model.number="form.category_id"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.category_id || (categoryMissing && !form.category_id) }"
+              required
+            >
               <option :value="null">— Seleziona —</option>
               <option v-for="c in filteredCategories" :key="c.id" :value="c.id">
-                {{ c.name }} ({{ c.type }})
+                {{ c.name }} ({{ CATEGORY_TYPE_LABEL[c.type] }})
               </option>
             </select>
+            <p v-if="categoryMissing && !form.category_id" class="field-error">Seleziona una categoria.</p>
+            <FieldError v-else :errors="fieldErrors" name="category_id" />
           </div>
 
           <div class="flex items-center gap-2">
             <input v-model="form.is_active" type="checkbox" id="rule-active" class="h-4 w-4" />
             <label for="rule-active" class="text-sm">Attiva</label>
           </div>
-
-          <div v-if="submitError" class="sm:col-span-2 md:col-span-3 text-sm text-red-600">
-            {{ submitError }}
-          </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="showForm = false">
-            Annulla
-          </button>
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
             {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
@@ -429,7 +427,7 @@ onMounted(async () => {
       <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per regola, troppi campi per il collasso label/valore generico (sotto md). -->
-      <ul v-else class="md:hidden divide-y divide-slate-100">
+      <ul v-else class="md:hidden divide-y divide-slate-100" :class="{ 'opacity-60': loading }">
         <li
           v-for="r in items"
           :key="r.id"
@@ -440,7 +438,7 @@ onMounted(async () => {
             <div class="min-w-0">
               <p class="font-medium text-slate-800 truncate">{{ r.name }}</p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
-                {{ matchTypeLabel(r.match_type) }}
+                {{ RULE_MATCH_LABEL[r.match_type] }}
                 <code class="ml-1 px-1 bg-slate-100 rounded text-xs">{{ r.pattern }}</code>
               </p>
               <p class="text-xs text-slate-500 mt-1 flex items-center gap-1 truncate">
@@ -449,14 +447,14 @@ onMounted(async () => {
                   class="inline-block w-2.5 h-2.5 rounded-full shrink-0"
                   :style="{ background: categoryColor(r) ?? undefined }"
                 />
-                {{ categoryLabel(r) }} · {{ appliesLabel(r.applies_to_type) }} · priorità {{ r.priority }}
+                {{ categoryLabel(r) }} · {{ RULE_APPLIES_LABEL[r.applies_to_type] }} · priorità {{ r.priority }}
               </p>
             </div>
             <div class="text-right shrink-0 flex flex-col items-end gap-2">
               <button
                 type="button"
                 class="text-xs px-2 py-1 rounded whitespace-nowrap"
-                :class="r.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'"
+                :class="r.is_active ? 'bg-income-100 text-income-700' : 'bg-slate-200 text-slate-600'"
                 @click="toggleActive(r)"
               >
                 {{ r.is_active ? 'attiva' : 'inattiva' }}
@@ -466,21 +464,23 @@ onMounted(async () => {
             </div>
           </div>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">
-          Nessuna regola. Creane una per categorizzare automaticamente le transazioni in import.
+        <li v-if="items.length === 0">
+          <EmptyState title="Non hai ancora creato regole di categorizzazione.">
+            <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea la prima regola</button>
+          </EmptyState>
         </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!(loading && !items.length)" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Priorità</th>
             <th>Nome</th>
             <th>Condizione</th>
-            <th>Si applica</th>
+            <th>Si applica a</th>
             <th>Categoria</th>
-            <th>Match</th>
+            <th class="text-right">Applicazioni</th>
             <th>Attiva</th>
             <th></th>
           </tr>
@@ -490,10 +490,10 @@ onMounted(async () => {
             <td>{{ r.priority }}</td>
             <td class="font-medium">{{ r.name }}</td>
             <td>
-              <span class="text-slate-500">{{ matchTypeLabel(r.match_type) }}</span>
+              <span class="text-slate-500">{{ RULE_MATCH_LABEL[r.match_type] }}</span>
               <code class="ml-1 px-1 bg-slate-100 rounded text-xs">{{ r.pattern }}</code>
             </td>
-            <td>{{ appliesLabel(r.applies_to_type) }}</td>
+            <td>{{ RULE_APPLIES_LABEL[r.applies_to_type] }}</td>
             <td>
               <span
                 v-if="categoryColor(r)"
@@ -502,12 +502,12 @@ onMounted(async () => {
               />
               {{ categoryLabel(r) }}
             </td>
-            <td>{{ r.times_applied }}</td>
+            <td class="text-right num">{{ r.times_applied }}</td>
             <td>
               <button
                 type="button"
                 class="text-xs px-2 py-1 rounded"
-                :class="r.is_active ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-600'"
+                :class="r.is_active ? 'bg-income-100 text-income-700' : 'bg-slate-200 text-slate-600'"
                 @click="toggleActive(r)"
               >
                 {{ r.is_active ? 'sì' : 'no' }}
@@ -518,8 +518,10 @@ onMounted(async () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="8" class="text-center text-slate-500 py-6">
-              Nessuna regola. Creane una per categorizzare automaticamente le transazioni in import.
+            <td colspan="8" class="whitespace-normal">
+              <EmptyState title="Non hai ancora creato regole di categorizzazione.">
+                <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea la prima regola</button>
+              </EmptyState>
             </td>
           </tr>
         </tbody>

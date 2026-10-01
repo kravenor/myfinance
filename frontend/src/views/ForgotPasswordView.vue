@@ -48,12 +48,12 @@ async function onSubmit() {
           <label class="label" for="email">Email</label>
           <input id="email" v-model="email" type="email" required class="input" />
         </div>
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+        <p v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</p>
         <button type="submit" class="btn-primary w-full" :disabled="loading">
           {{ loading ? 'Invio…' : 'Invia link di reset' }}
         </button>
         <p class="text-sm text-slate-600 text-center">
-          <RouterLink to="/login" class="text-indigo-600 hover:underline">Torna al login</RouterLink>
+          <RouterLink to="/login" class="text-primary-600 hover:underline">Torna al login</RouterLink>
         </p>
       </form>
     </div>

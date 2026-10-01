@@ -4,6 +4,10 @@ import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { CATEGORY_TYPE_LABEL } from '@/lib/labels'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Category, CategoryType } from '@/types/api'
@@ -19,6 +23,7 @@ const form = ref({
   type: 'expense' as CategoryType,
   parent_id: null as number | null,
 })
+const dirty = useFormDirty(form, showForm)
 
 function reset() {
   editing.value = null
@@ -74,33 +79,36 @@ onMounted(() => list({ per_page: 100 }))
       @click="showForm = true; reset()"
     >+</button>
 
-    <AppModal v-model="showForm" :title="editing ? 'Modifica categoria' : 'Nuova categoria'">
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica categoria' : 'Nuova categoria'">
       <form @submit.prevent="onSubmit">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
-          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <FormErrors class="col-span-full" :errors="fieldErrors" :shown="['name', 'type', 'parent_id']" />
           <div>
             <label class="label">Nome</label>
-            <input v-model="form.name" class="input" required />
+            <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required />
+            <FieldError :errors="fieldErrors" name="name" />
           </div>
           <div>
             <label class="label">Tipo</label>
-            <select v-model="form.type" class="input">
-              <option value="expense">expense</option>
-              <option value="income">income</option>
+            <select v-model="form.type" class="input" :class="{ 'input-invalid': fieldErrors.type }">
+              <option value="expense">{{ CATEGORY_TYPE_LABEL.expense }}</option>
+              <option value="income">{{ CATEGORY_TYPE_LABEL.income }}</option>
             </select>
+            <FieldError :errors="fieldErrors" name="type" />
           </div>
           <div>
-            <label class="label">Parent</label>
-            <select v-model="form.parent_id" class="input">
+            <label class="label">Categoria padre</label>
+            <select v-model="form.parent_id" class="input" :class="{ 'input-invalid': fieldErrors.parent_id }">
               <option :value="null">— Nessuno —</option>
               <option v-for="c in items.filter((c) => c.type === form.type && c.id !== editing?.id)" :key="c.id" :value="c.id">
                 {{ c.name }}
               </option>
             </select>
+            <FieldError :errors="fieldErrors" name="parent_id" />
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
             {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
@@ -110,26 +118,30 @@ onMounted(() => list({ per_page: 100 }))
 
     <div class="card table-responsive md:overflow-x-auto">
       <ListSkeleton v-if="loading && !items.length" />
-      <table v-else class="table">
+      <table v-else class="table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Nome</th>
             <th>Tipo</th>
-            <th>Parent</th>
+            <th>Categoria padre</th>
             <th></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="cat in items" :key="cat.id">
             <td data-label="Nome" class="font-medium">{{ cat.name }}</td>
-            <td data-label="Tipo" class="capitalize">{{ cat.type }}</td>
-            <td data-label="Parent">{{ items.find((c) => c.id === cat.parent_id)?.name ?? '—' }}</td>
+            <td data-label="Tipo">{{ CATEGORY_TYPE_LABEL[cat.type] }}</td>
+            <td data-label="Categoria padre">{{ items.find((c) => c.id === cat.parent_id)?.name ?? '—' }}</td>
             <td class="md:text-right actions-cell">
               <RowActions @edit="startEdit(cat)" @delete="onDelete(cat)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="4" class="text-center text-slate-500 py-6">Nessuna categoria.</td>
+            <td colspan="4" class="whitespace-normal">
+              <EmptyState title="Non hai ancora creato categorie.">
+                <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea la prima categoria</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

@@ -8,7 +8,12 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import FormErrors from '@/components/ui/FormErrors.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import Amount from '@/components/ui/Amount.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
+import { formatCurrency } from '@/lib/money'
 import { useToastStore } from '@/stores/toast'
+import { useAuthStore } from '@/stores/auth'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Budget, Category, Paginated } from '@/types/api'
 import { confirmAction } from '@/composables/useConfirm'
@@ -19,6 +24,9 @@ function budgetPeriod(year: number, month: number): string {
 
 const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<Budget>('budgets')
 const toast = useToastStore()
+const auth = useAuthStore()
+// Il backend somma le uscite senza conversione: gli importi sono nella valuta dell'utente.
+const currency = computed(() => auth.user?.currency ?? 'EUR')
 
 const categories = ref<Category[]>([])
 // Periodo di default: il ciclo finanziario corrente (vedi month_start_day).
@@ -49,6 +57,7 @@ const form = ref({
   month: filters.value.month,
   amount: '',
 })
+const dirty = useFormDirty(form, showForm)
 
 function reset() {
   editing.value = null
@@ -68,6 +77,11 @@ function startEdit(b: Budget) {
   showForm.value = true
 }
 
+function openNew() {
+  reset()
+  showForm.value = true
+}
+
 async function refresh() {
   await list({ year: filters.value.year, month: filters.value.month, per_page: 100 })
 }
@@ -80,7 +94,8 @@ async function onSubmit() {
       await create(form.value)
     }
   } catch {
-    // 422: riepilogo errori nella modale, i dati inseriti restano.
+    // 422: errori sotto i campi, il form resta aperto con i dati inseriti.
+    if (Object.keys(fieldErrors.value).length) toast.error('Controlla i campi evidenziati.')
     return
   }
   toast.success('Budget salvato.')
@@ -117,7 +132,7 @@ function status(b: Budget): 'ok' | 'warning' | 'exceeded' {
 }
 
 function barClass(b: Budget): string {
-  return { ok: 'bg-indigo-500', warning: 'bg-amber-500', exceeded: 'bg-red-500' }[status(b)]
+  return { ok: 'bg-primary-500', warning: 'bg-warning-500', exceeded: 'bg-danger-500' }[status(b)]
 }
 
 onMounted(async () => {
@@ -132,7 +147,7 @@ onMounted(async () => {
   <div class="space-y-4 pb-20 lg:pb-0">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <h1 class="text-xl sm:text-2xl font-semibold">Budget</h1>
-      <button class="btn-primary" @click="showForm = true; reset()">
+      <button class="btn-primary" @click="openNew()">
         Nuovo budget
       </button>
     </div>
@@ -142,7 +157,7 @@ onMounted(async () => {
       type="button"
       class="lg:hidden fixed bottom-5 right-5 z-20 w-14 h-14 rounded-full btn-primary shadow-lg text-2xl leading-none"
       aria-label="Nuovo budget"
-      @click="showForm = true; reset()"
+      @click="openNew()"
     >+</button>
 
     <div class="card flex items-center justify-between gap-2 p-2">
@@ -151,31 +166,35 @@ onMounted(async () => {
       <button type="button" class="icon-btn text-2xl leading-none text-slate-600 hover:bg-slate-100 focus:ring-primary-500" aria-label="Mese successivo" @click="shiftPeriod(1)">›</button>
     </div>
 
-    <AppModal v-model="showForm" :title="editing ? 'Modifica budget' : 'Nuovo budget'">
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica budget' : 'Nuovo budget'">
       <form @submit.prevent="onSubmit">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 px-4 py-4 sm:px-6">
-          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <FormErrors class="col-span-full" :errors="fieldErrors" :shown="['category_id', 'year', 'month', 'amount']" />
           <div>
             <label class="label">Categoria</label>
-            <select v-model.number="form.category_id" class="input" required>
+            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldErrors.category_id }" required>
               <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
             </select>
+            <FieldError :errors="fieldErrors" name="category_id" />
           </div>
           <div>
             <label class="label">Anno</label>
-            <input v-model.number="form.year" type="number" min="2000" max="2100" class="input" required />
+            <input v-model.number="form.year" type="number" min="2000" max="2100" class="input" :class="{ 'input-invalid': fieldErrors.year }" required />
+            <FieldError :errors="fieldErrors" name="year" />
           </div>
           <div>
             <label class="label">Mese</label>
-            <input v-model.number="form.month" type="number" min="1" max="12" class="input" required />
+            <input v-model.number="form.month" type="number" min="1" max="12" class="input" :class="{ 'input-invalid': fieldErrors.month }" required />
+            <FieldError :errors="fieldErrors" name="month" />
           </div>
           <div>
             <label class="label">Importo</label>
-            <input v-model="form.amount" type="number" step="0.01" class="input" required />
+            <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" class="input" :class="{ 'input-invalid': fieldErrors.amount }" required />
+            <FieldError :errors="fieldErrors" name="amount" />
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
             {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
@@ -203,14 +222,17 @@ onMounted(async () => {
             <span
               v-if="status(b) !== 'ok'"
               class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
-              :class="status(b) === 'exceeded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+              :class="status(b) === 'exceeded' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'"
             >{{ rawPercent(b) }}%</span>
           </div>
-          <p class="text-xs text-slate-500 mt-1.5">{{ b.spent ?? '0.00' }} / {{ b.amount }}</p>
+          <p class="text-xs text-slate-500 mt-1.5">
+            <span class="num">{{ formatCurrency(b.spent ?? 0, currency) }}</span> di
+            <span class="num">{{ formatCurrency(b.amount, currency) }}</span>
+          </p>
         </li>
         <li v-if="items.length === 0">
           <EmptyState :title="`Nessun budget per ${budgetPeriod(filters.year, filters.month)}.`">
-            <button type="button" class="btn-primary" @click="showForm = true; reset()">Nuovo budget</button>
+            <button type="button" class="btn-primary" @click="openNew()">Nuovo budget</button>
           </EmptyState>
         </li>
       </ul>
@@ -231,8 +253,8 @@ onMounted(async () => {
           <tr v-for="b in items" :key="b.id">
             <td class="font-medium">{{ categoryName(b.category_id) }}</td>
             <td>{{ budgetPeriod(b.year, b.month) }}</td>
-            <td class="text-right">{{ b.amount }}</td>
-            <td class="text-right">{{ b.spent ?? '0.00' }}</td>
+            <td class="text-right"><Amount :value="b.amount" :currency="currency" /></td>
+            <td class="text-right"><Amount :value="b.spent ?? 0" :currency="currency" /></td>
             <td>
               <div class="flex items-center gap-2">
                 <div class="flex-1 bg-slate-200 rounded h-2">
@@ -241,7 +263,7 @@ onMounted(async () => {
                 <span
                   v-if="status(b) !== 'ok'"
                   class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
-                  :class="status(b) === 'exceeded' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'"
+                  :class="status(b) === 'exceeded' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'"
                 >
                   {{ rawPercent(b) }}%
                 </span>
@@ -254,7 +276,7 @@ onMounted(async () => {
           <tr v-if="items.length === 0">
             <td colspan="6" class="whitespace-normal">
               <EmptyState :title="`Nessun budget per ${budgetPeriod(filters.year, filters.month)}.`">
-                <button type="button" class="btn-primary" @click="showForm = true; reset()">Nuovo budget</button>
+                <button type="button" class="btn-primary" @click="openNew()">Nuovo budget</button>
               </EmptyState>
             </td>
           </tr>

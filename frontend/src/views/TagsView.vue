@@ -4,6 +4,9 @@ import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import type { Tag } from '@/types/api'
@@ -15,6 +18,7 @@ const toast = useToastStore()
 const editing = ref<Tag | null>(null)
 const showForm = ref(false)
 const form = ref({ name: '', color: '' })
+const dirty = useFormDirty(form, showForm)
 
 function reset() {
   editing.value = null
@@ -71,21 +75,23 @@ onMounted(() => list())
       @click="showForm = true; reset()"
     >+</button>
 
-    <AppModal v-model="showForm" :title="editing ? 'Modifica tag' : 'Nuovo tag'">
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica tag' : 'Nuovo tag'">
       <form @submit.prevent="onSubmit">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
-          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <FormErrors class="col-span-full" :errors="fieldErrors" :shown="['name', 'color']" />
           <div class="md:col-span-2">
             <label class="label">Nome</label>
-            <input v-model="form.name" class="input" required maxlength="64" />
+            <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required maxlength="64" />
+            <FieldError :errors="fieldErrors" name="name" />
           </div>
           <div>
             <label class="label">Colore</label>
-            <input v-model="form.color" class="input" placeholder="#aabbcc" />
+            <input v-model="form.color" class="input" :class="{ 'input-invalid': fieldErrors.color }" placeholder="#aabbcc" />
+            <FieldError :errors="fieldErrors" name="color" />
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
             {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
@@ -95,7 +101,7 @@ onMounted(() => list())
 
     <div class="card table-responsive md:overflow-x-auto">
       <ListSkeleton v-if="loading && !items.length" />
-      <table v-else class="table">
+      <table v-else class="table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Nome</th>
@@ -115,7 +121,11 @@ onMounted(() => list())
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="3" class="text-center text-slate-500 py-6">Nessun tag.</td>
+            <td colspan="3" class="whitespace-normal">
+              <EmptyState title="Non hai ancora creato tag.">
+                <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea il primo tag</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

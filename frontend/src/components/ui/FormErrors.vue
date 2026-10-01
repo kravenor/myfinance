@@ -2,8 +2,13 @@
 import { computed } from 'vue'
 import type { FieldErrors } from '@/composables/useCrud'
 
-const props = defineProps<{ errors: FieldErrors }>()
-const messages = computed(() => Object.values(props.errors).flat())
+// Riepilogo degli errori 422 che non hanno un campo nel form (`shown` = campi con <FieldError>).
+const props = defineProps<{ errors: FieldErrors; shown?: string[] }>()
+const messages = computed(() =>
+  Object.entries(props.errors)
+    .filter(([key]) => !props.shown?.includes(key.split('.')[0]))
+    .flatMap(([, msgs]) => msgs),
+)
 </script>
 
 <template>
@@ -12,8 +17,7 @@ const messages = computed(() => Object.values(props.errors).flat())
     role="alert"
     class="rounded-md border border-danger-200 bg-danger-50 px-3 py-2 text-sm text-danger-700"
   >
-    <p class="font-medium">Correggi questi campi:</p>
-    <ul class="mt-1 list-disc pl-5">
+    <ul class="list-disc pl-5">
       <li v-for="m in messages" :key="m">{{ m }}</li>
     </ul>
   </div>

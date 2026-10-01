@@ -8,6 +8,8 @@ import RowActions from '@/components/ui/RowActions.vue'
 import Amount from '@/components/ui/Amount.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import FormErrors from '@/components/ui/FormErrors.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
 import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { formatCurrency } from '@/lib/money'
@@ -52,6 +54,7 @@ const form = ref({
   description: '',
   tag_ids: [] as number[],
 })
+const dirty = useFormDirty(form, showForm)
 
 function accountCurrency(id: number | null | undefined): string {
   if (!id) return ''
@@ -319,9 +322,14 @@ watch(() => route.query.new, () => {
       <span v-if="meta.total > 0"> · {{ meta.from }}–{{ meta.to }}</span>
     </p>
 
-    <AppModal v-model="showForm" :title="editing ? 'Modifica transazione' : 'Nuova transazione'">
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica transazione' : 'Nuova transazione'">
       <form @submit.prevent="onSubmit">
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 px-4 py-4 sm:px-6">
+          <FormErrors
+            class="col-span-full"
+            :errors="fieldErrors"
+            :shown="['account_id', 'transfer_account_id', 'category_id', 'amount', 'transfer_amount', 'occurred_at', 'description']"
+          />
           <div>
             <label class="label">Tipo</label>
             <select v-model="form.type" class="input">
@@ -404,7 +412,7 @@ watch(() => route.query.new, () => {
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
             {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
@@ -430,7 +438,7 @@ watch(() => route.query.new, () => {
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
                 {{ formatDate(tx.occurred_at) }} ·
-                {{ accountName(tx.account_id) }}<span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500">★</span>
+                {{ accountName(tx.account_id) }}<span v-if="isPrimaryAccount(tx.account_id)" class="text-warning-500">★</span>
                 <template v-if="tx.type === 'transfer'"> → {{ accountName(tx.transfer_account_id) }}</template>
                 <template v-else-if="tx.description && categoryName(tx.category_id)"> · {{ categoryName(tx.category_id) }}</template>
               </p>
@@ -484,7 +492,7 @@ watch(() => route.query.new, () => {
             <td>
               <span class="inline-flex items-center gap-2">
                 <span>{{ accountName(tx.account_id) }}</span>
-                <span v-if="isPrimaryAccount(tx.account_id)" class="text-amber-500" title="Conto principale">★</span>
+                <span v-if="isPrimaryAccount(tx.account_id)" class="text-warning-500" title="Conto principale">★</span>
               </span>
               <span v-if="tx.type === 'transfer'" class="text-slate-500"> → {{ accountName(tx.transfer_account_id) }}</span>
             </td>

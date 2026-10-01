@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api, ensureCsrf } from '@/lib/api'
+import { TX_TYPES, TX_TYPE_LABEL } from '@/lib/labels'
 import type { Account, Paginated } from '@/types/api'
 
 interface PreviewResult {
@@ -13,6 +14,16 @@ interface PreviewResult {
 }
 
 const FORMAT_LABELS: Record<string, string> = { csv: 'CSV', ofx: 'OFX', qif: 'QIF' }
+
+type MappingField = 'date' | 'amount' | 'description' | 'type' | 'category'
+const MAPPING_FIELD_LABEL: Record<MappingField, string> = {
+  date: 'Data',
+  amount: 'Importo',
+  description: 'Descrizione',
+  type: 'Tipo',
+  category: 'Categoria',
+}
+const MAPPING_FIELDS = Object.keys(MAPPING_FIELD_LABEL) as MappingField[]
 
 interface ImportResult {
   imported: number
@@ -200,9 +211,7 @@ onMounted(async () => {
           <label class="label">Tipo</label>
           <select v-model="exportFilters.type" class="input">
             <option value="">Tutti</option>
-            <option value="income">income</option>
-            <option value="expense">expense</option>
-            <option value="transfer">transfer</option>
+            <option v-for="t in TX_TYPES" :key="t" :value="t">{{ TX_TYPE_LABEL[t] }}</option>
           </select>
         </div>
         <div>
@@ -255,8 +264,8 @@ onMounted(async () => {
       <div v-if="preview" class="space-y-4">
         <template v-if="!preview.mapping_locked">
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-            <div v-for="field in ['date','amount','description','type','category'] as const" :key="field">
-              <label class="label capitalize">{{ field }}{{ ['date','amount'].includes(field) ? ' *' : '' }}</label>
+            <div v-for="field in MAPPING_FIELDS" :key="field">
+              <label class="label">{{ MAPPING_FIELD_LABEL[field] }}{{ ['date','amount'].includes(field) ? ' *' : '' }}</label>
               <select v-model="mapping[field]" class="input">
                 <option value="">— Nessuna —</option>
                 <option v-for="h in preview.headers" :key="h" :value="h">{{ h }}</option>
@@ -264,7 +273,7 @@ onMounted(async () => {
             </div>
           </div>
           <div>
-            <label class="label">Formato data (PHP date format)</label>
+            <label class="label">Formato data (sintassi PHP, es. d/m/Y)</label>
             <input v-model="dateFormat" class="input md:w-48" placeholder="Y-m-d" />
           </div>
         </template>
@@ -310,14 +319,14 @@ onMounted(async () => {
         </div>
       </div>
 
-      <p v-if="importError" class="text-sm text-red-600">{{ importError }}</p>
+      <p v-if="importError" role="alert" class="text-sm text-danger-600">{{ importError }}</p>
 
       <div v-if="importResult" class="card bg-slate-50 p-4 space-y-2">
         <p class="text-sm">
-          <span class="font-medium text-green-700">{{ importResult.imported }}</span> importate ·
-          <span class="font-medium text-sky-700">{{ importResult.auto_categorized }}</span> auto-categorizzate ·
+          <span class="font-medium text-income-700">{{ importResult.imported }}</span> importate ·
+          <span class="font-medium text-primary-700">{{ importResult.auto_categorized }}</span> auto-categorizzate ·
           <span class="font-medium text-slate-600">{{ importResult.duplicates }}</span> duplicate ignorate ·
-          <span class="font-medium text-amber-700">{{ importResult.skipped }}</span> saltate.
+          <span class="font-medium text-warning-700">{{ importResult.skipped }}</span> saltate.
         </p>
         <p class="text-xs text-slate-500">
           <RouterLink :to="{ name: 'categorization-rules' }" class="underline">

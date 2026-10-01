@@ -4,9 +4,14 @@ import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
+import FieldError from '@/components/ui/FieldError.vue'
+import EmptyState from '@/components/ui/EmptyState.vue'
+import Amount from '@/components/ui/Amount.vue'
+import { useFormDirty } from '@/composables/useFormDirty'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
-import { CURRENCIES, formatCurrency } from '@/lib/money'
+import { CURRENCIES } from '@/lib/money'
+import { ACCOUNT_TYPE_LABEL } from '@/lib/labels'
 import type { Account, AccountType } from '@/types/api'
 import { confirmAction } from '@/composables/useConfirm'
 
@@ -25,6 +30,7 @@ const form = ref({
   is_primary: false,
   notes: '',
 })
+const dirty = useFormDirty(form, showForm)
 
 function reset() {
   editing.value = null
@@ -102,25 +108,32 @@ onMounted(() => list())
       @click="showForm = true; reset()"
     >+</button>
 
-    <AppModal v-model="showForm" :title="editing ? 'Modifica conto' : 'Nuovo conto'">
+    <AppModal v-slot="{ close }" v-model="showForm" :dirty="dirty" :title="editing ? 'Modifica conto' : 'Nuovo conto'">
       <form @submit.prevent="onSubmit">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 px-4 py-4 sm:px-6">
-          <FormErrors :errors="fieldErrors" class="col-span-full" />
+          <FormErrors
+            class="col-span-full"
+            :errors="fieldErrors"
+            :shown="['name', 'type', 'currency', 'initial_balance', 'notes']"
+          />
           <div>
             <label class="label">Nome</label>
-            <input v-model="form.name" class="input" required />
+            <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required />
+            <FieldError :errors="fieldErrors" name="name" />
           </div>
           <div>
             <label class="label">Tipo</label>
-            <select v-model="form.type" class="input">
-              <option v-for="t in types" :key="t" :value="t">{{ t }}</option>
+            <select v-model="form.type" class="input" :class="{ 'input-invalid': fieldErrors.type }">
+              <option v-for="t in types" :key="t" :value="t">{{ ACCOUNT_TYPE_LABEL[t] }}</option>
             </select>
+            <FieldError :errors="fieldErrors" name="type" />
           </div>
           <div>
             <label class="label">Valuta</label>
-            <select v-model="form.currency" class="input" required>
+            <select v-model="form.currency" class="input" :class="{ 'input-invalid': fieldErrors.currency }" required>
               <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
             </select>
+            <FieldError :errors="fieldErrors" name="currency" />
           </div>
           <div class="flex items-center gap-2">
             <input id="is_primary" type="checkbox" v-model="form.is_primary" class="w-4 h-4" />
@@ -128,15 +141,23 @@ onMounted(() => list())
           </div>
           <div>
             <label class="label">Saldo iniziale</label>
-            <input v-model="form.initial_balance" type="number" step="0.01" class="input" />
+            <input
+              v-model="form.initial_balance"
+              type="number"
+              step="0.01"
+              class="input"
+              :class="{ 'input-invalid': fieldErrors.initial_balance }"
+            />
+            <FieldError :errors="fieldErrors" name="initial_balance" />
           </div>
           <div class="md:col-span-2">
             <label class="label">Note</label>
-            <textarea v-model="form.notes" class="input" rows="2"></textarea>
+            <textarea v-model="form.notes" class="input" :class="{ 'input-invalid': fieldErrors.notes }" rows="2"></textarea>
+            <FieldError :errors="fieldErrors" name="notes" />
           </div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="btn-secondary" @click="showForm = false">Annulla</button>
+          <button type="button" class="btn-secondary" @click="close">Annulla</button>
           <button type="submit" class="btn-primary" :disabled="submitting">
             {{ submitting ? 'Salvataggio…' : editing ? 'Salva' : 'Crea' }}
           </button>
@@ -148,13 +169,13 @@ onMounted(() => list())
       <ListSkeleton v-if="loading && !items.length" />
 
       <!-- Mobile: una card per conto (sotto md). -->
-      <ul v-else class="md:hidden divide-y divide-slate-100">
+      <ul v-else class="md:hidden divide-y divide-slate-100" :class="{ 'opacity-60': loading }">
         <li v-for="acc in items" :key="acc.id" class="p-4">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0 flex items-start gap-2">
               <button
                 type="button"
-                class="text-yellow-500 shrink-0 mt-0.5"
+                class="text-warning-500 shrink-0 mt-0.5"
                 :title="acc.is_primary ? 'Primario' : 'Imposta come primario'"
                 @click="setPrimary(acc)"
               >
@@ -170,20 +191,24 @@ onMounted(() => list())
                   {{ acc.name }}
                   <span v-if="acc.is_primary" class="text-xs text-slate-500 font-normal">(Principale)</span>
                 </p>
-                <p class="text-xs text-slate-500 mt-0.5 capitalize">{{ acc.type }} · {{ acc.currency }}</p>
+                <p class="text-xs text-slate-500 mt-0.5">{{ ACCOUNT_TYPE_LABEL[acc.type] }} · {{ acc.currency }}</p>
               </div>
             </div>
             <div class="text-right shrink-0">
-              <p class="font-semibold whitespace-nowrap">{{ formatCurrency(acc.initial_balance, acc.currency) }}</p>
+              <Amount class="block font-semibold whitespace-nowrap" :value="acc.initial_balance" :currency="acc.currency" />
               <RowActions class="mt-2 justify-end" @edit="startEdit(acc)" @delete="onDelete(acc)" />
             </div>
           </div>
         </li>
-        <li v-if="items.length === 0" class="p-6 text-center text-slate-500 text-sm">Nessun conto.</li>
+        <li v-if="items.length === 0">
+          <EmptyState title="Non hai ancora creato conti.">
+            <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea il primo conto</button>
+          </EmptyState>
+        </li>
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!(loading && !items.length)" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Nome</th>
@@ -199,7 +224,7 @@ onMounted(() => list())
               <span class="inline-flex items-center gap-2">
                 <button
                   type="button"
-                  class="text-yellow-500"
+                  class="text-warning-500"
                   :title="acc.is_primary ? 'Primario' : 'Imposta come primario'"
                   @click="setPrimary(acc)"
                 >
@@ -214,15 +239,19 @@ onMounted(() => list())
                 <span v-if="acc.is_primary" class="text-xs text-slate-500">(Principale)</span>
               </span>
             </td>
-            <td class="capitalize">{{ acc.type }}</td>
+            <td>{{ ACCOUNT_TYPE_LABEL[acc.type] }}</td>
             <td>{{ acc.currency }}</td>
-            <td class="text-right">{{ formatCurrency(acc.initial_balance, acc.currency) }}</td>
+            <td class="text-right"><Amount :value="acc.initial_balance" :currency="acc.currency" /></td>
             <td class="text-right">
               <RowActions @edit="startEdit(acc)" @delete="onDelete(acc)" />
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="5" class="text-center text-slate-500 py-6">Nessun conto.</td>
+            <td colspan="5" class="whitespace-normal">
+              <EmptyState title="Non hai ancora creato conti.">
+                <button type="button" class="btn-primary" @click="showForm = true; reset()">Crea il primo conto</button>
+              </EmptyState>
+            </td>
           </tr>
         </tbody>
       </table>

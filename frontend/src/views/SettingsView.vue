@@ -140,7 +140,9 @@ onMounted(async () => {
           </p>
         </div>
 
-        <p v-if="loading" class="text-sm text-slate-500">Caricamento…</p>
+        <div v-if="loading" class="space-y-3" aria-busy="true" aria-label="Caricamento">
+          <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded bg-slate-100" />
+        </div>
 
         <template v-else>
           <!-- Email -->
@@ -202,8 +204,8 @@ onMounted(async () => {
             <button type="submit" class="btn-primary" :disabled="saving">
               {{ saving ? 'Salvataggio…' : 'Salva' }}
             </button>
-            <span v-if="saved" class="text-sm text-green-600">Preferenze salvate.</span>
-            <span v-if="error" class="text-sm text-red-600">{{ error }}</span>
+            <span v-if="saved" role="status" class="text-sm text-income-700">Preferenze salvate.</span>
+            <span v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</span>
           </div>
         </template>
       </form>
@@ -250,8 +252,8 @@ onMounted(async () => {
           <button type="submit" class="btn-primary" :disabled="passwordSaving">
             {{ passwordSaving ? 'Salvataggio…' : 'Cambia password' }}
           </button>
-          <span v-if="passwordSaved" class="text-sm text-green-600">Password aggiornata.</span>
-          <span v-if="passwordError" class="text-sm text-red-600">{{ passwordError }}</span>
+          <span v-if="passwordSaved" role="status" class="text-sm text-income-700">Password aggiornata.</span>
+          <span v-if="passwordError" role="alert" class="text-sm text-danger-600">{{ passwordError }}</span>
         </div>
       </form>
     </div>
@@ -288,8 +290,8 @@ onMounted(async () => {
           <button type="submit" class="btn-primary" :disabled="dateSaving">
             {{ dateSaving ? 'Salvataggio…' : 'Salva' }}
           </button>
-          <span v-if="dateSaved" class="text-sm text-green-600">Formato salvato.</span>
-          <span v-if="dateError" class="text-sm text-red-600">{{ dateError }}</span>
+          <span v-if="dateSaved" role="status" class="text-sm text-income-700">Formato salvato.</span>
+          <span v-if="dateError" role="alert" class="text-sm text-danger-600">{{ dateError }}</span>
         </div>
       </form>
     </div>

@@ -49,7 +49,7 @@ async function onSubmit() {
     <form class="card w-full max-w-md p-6 space-y-4" @submit.prevent="onSubmit">
       <h1 class="text-xl font-semibold">Imposta nuova password</h1>
 
-      <p v-if="!token || !email" class="text-sm text-red-600">
+      <p v-if="!token || !email" role="alert" class="text-sm text-danger-600">
         Link non valido o incompleto. Richiedi un nuovo link di reset.
       </p>
 
@@ -72,14 +72,14 @@ async function onSubmit() {
             class="input"
           />
         </div>
-        <p v-if="error" class="text-sm text-red-600">{{ error }}</p>
+        <p v-if="error" role="alert" class="text-sm text-danger-600">{{ error }}</p>
         <button type="submit" class="btn-primary w-full" :disabled="loading">
           {{ loading ? 'Salvataggio…' : 'Reimposta password' }}
         </button>
       </template>
 
       <p class="text-sm text-slate-600 text-center">
-        <RouterLink to="/login" class="text-indigo-600 hover:underline">Torna al login</RouterLink>
+        <RouterLink to="/login" class="text-primary-600 hover:underline">Torna al login</RouterLink>
       </p>
     </form>
   </div>
