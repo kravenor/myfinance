@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\BackfillInstrumentPrices;
 use App\Console\Commands\FetchExchangeRates;
 use App\Console\Commands\FetchInstrumentPrices;
 use App\Console\Commands\RunRecurringTransactions;
@@ -15,4 +16,6 @@ Artisan::command('inspire', function () {
 Schedule::command(RunRecurringTransactions::class)->dailyAt('02:00');
 Schedule::command(FetchExchangeRates::class)->dailyAt('06:00');
 Schedule::command(FetchInstrumentPrices::class)->dailyAt('06:30');
+// Dopo il fetch giornaliero: riempie solo i buchi (holding nuovi, PAC inseriti a posteriori).
+Schedule::command(BackfillInstrumentPrices::class)->dailyAt('06:40');
 Schedule::command(ScanNotifications::class)->dailyAt('07:00');

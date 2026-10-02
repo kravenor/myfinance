@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\InstrumentPrice;
 use App\Models\InvestmentHolding;
+use App\Models\InvestmentTransaction;
 use App\Services\Prices\BorsaItalianaProvider;
 use App\Services\Prices\CoinGeckoProvider;
+use App\Services\Prices\HistoricalPriceProvider;
 use App\Services\Prices\PriceProvider;
 use App\Services\Prices\TeleborsaProvider;
 use App\Services\Prices\YahooFinanceProvider;
@@ -36,6 +38,58 @@ class InvestmentPriceFetcher
                 $total += $this->store($quotes);
             } catch (Throwable $e) {
                 report($e); // ponytail: un provider giù non deve far fallire gli altri
+            }
+        }
+
+        return $total;
+    }
+
+    /**
+     * Storico mensile dal mese del primo movimento a oggi, per i simboli il cui provider ha lo storico.
+     * Senza $force salta i simboli già coperti: così può girare ogni notte e scarica solo per
+     * holding nuovi o movimenti inseriti a posteriori.
+     *
+     * @param  list<string>  $only  limita a questi simboli (vuoto = tutti)
+     * @return int righe upsertate
+     */
+    public function backfill(array $only = [], bool $force = false): int
+    {
+        $firstMovement = InvestmentTransaction::withoutGlobalScopes()
+            ->join('investment_holdings', 'investment_holdings.id', '=', 'investment_transactions.investment_holding_id')
+            ->whereNotNull('investment_holdings.symbol')
+            ->groupBy('investment_holdings.symbol')
+            ->selectRaw('investment_holdings.symbol as symbol, MIN(investment_transactions.occurred_at) as first_at')
+            ->pluck('first_at', 'symbol');
+
+        $firstQuote = InstrumentPrice::query()
+            ->groupBy('symbol')
+            ->selectRaw('symbol, MIN(as_of) as first_at')
+            ->pluck('first_at', 'symbol');
+
+        $today = Carbon::today();
+        $total = 0;
+
+        foreach ($this->symbolsByProvider($only) as $providerKey => $symbols) {
+            $provider = $this->provider($providerKey);
+            if (! $provider instanceof HistoricalPriceProvider) {
+                continue; // Borsa Italiana, Teleborsa, CoinGecko: nessuno storico
+            }
+
+            foreach ($symbols as $symbol) {
+                if (! isset($firstMovement[$symbol])) {
+                    continue;
+                }
+                $from = Carbon::parse($firstMovement[$symbol])->startOfMonth();
+                $covered = isset($firstQuote[$symbol]) && Carbon::parse($firstQuote[$symbol])->lte($from->copy()->endOfMonth());
+                if ($covered && ! $force) {
+                    continue;
+                }
+
+                try {
+                    $total += $this->store($provider->history($symbol, $from, $today));
+                } catch (Throwable $e) {
+                    report($e); // un simbolo non risolvibile non deve fermare gli altri
+                }
             }
         }
 
