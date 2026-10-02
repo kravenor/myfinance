@@ -19,6 +19,7 @@ use App\Http\Controllers\ScenarioItemController;
 use App\Http\Controllers\TagController;
 use App\Http\Controllers\TransactionController;
 use App\Http\Controllers\TransactionImportExportController;
+use App\Http\Middleware\ScanNotificationsAfterWrite;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->name('auth.register');
@@ -36,7 +37,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');
 
     Route::get('notification-preferences', [NotificationPreferenceController::class, 'show'])->name('notification-preferences.show');
-    Route::put('notification-preferences', [NotificationPreferenceController::class, 'update'])->name('notification-preferences.update');
+    Route::put('notification-preferences', [NotificationPreferenceController::class, 'update'])->name('notification-preferences.update')
+        ->middleware(ScanNotificationsAfterWrite::class);
 
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');
@@ -63,21 +65,24 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('transactions/import/preview', [TransactionImportExportController::class, 'importPreview'])
         ->name('transactions.import.preview');
     Route::post('transactions/import', [TransactionImportExportController::class, 'importCommit'])
-        ->name('transactions.import.commit');
-    Route::apiResource('transactions', TransactionController::class);
+        ->name('transactions.import.commit')
+        ->middleware(ScanNotificationsAfterWrite::class);
+    Route::apiResource('transactions', TransactionController::class)->middleware(ScanNotificationsAfterWrite::class);
     Route::get('budgets/alerts', [BudgetController::class, 'alerts'])->name('budgets.alerts');
-    Route::apiResource('budgets', BudgetController::class);
+    Route::apiResource('budgets', BudgetController::class)->middleware(ScanNotificationsAfterWrite::class);
     Route::apiResource('recurring-transactions', RecurringTransactionController::class)
         ->parameter('recurring-transactions', 'recurring_transaction');
     Route::post('categorization-rules/apply', [CategorizationRuleController::class, 'apply'])
-        ->name('categorization-rules.apply');
+        ->name('categorization-rules.apply')
+        ->middleware(ScanNotificationsAfterWrite::class);
     Route::apiResource('categorization-rules', CategorizationRuleController::class)
         ->parameter('categorization-rules', 'categorization_rule');
     Route::post('transactions/import/preview-predictions', [TransactionImportExportController::class, 'importPreviewPredictions'])
         ->name('transactions.import.preview-predictions');
 
     Route::apiResource('savings-goals', SavingsGoalController::class)
-        ->parameter('savings-goals', 'savings_goal');
+        ->parameter('savings-goals', 'savings_goal')
+        ->middleware(ScanNotificationsAfterWrite::class);
 
     Route::apiResource('scenarios', ScenarioController::class);
     Route::apiResource('scenarios.items', ScenarioItemController::class)
