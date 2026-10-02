@@ -69,7 +69,7 @@ const donutData = () => ({
   datasets: [
     {
       data: categories.value.map((c) => parseFloat(c.total)),
-      backgroundColor: categories.value.map((_, i) => paletteColor(i)),
+      backgroundColor: categories.value.map((c, i) => c.category_color || paletteColor(i)),
       borderWidth: 0,
     },
   ],

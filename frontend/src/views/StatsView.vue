@@ -64,8 +64,8 @@ const trendData = computed(() => {
     datasets: trend.value.categories.map((c, i) => ({
       label: c.category_name,
       data: c.values.map((v) => parseFloat(v)),
-      borderColor: paletteColor(i),
-      backgroundColor: paletteColor(i),
+      borderColor: c.category_color || paletteColor(i),
+      backgroundColor: c.category_color || paletteColor(i),
       tension: 0.3,
       fill: false,
     })),

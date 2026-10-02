@@ -138,13 +138,14 @@ class ReportService
 
         arsort($totalPerCat);
         $categoryIds = array_slice(array_keys($totalPerCat), 0, $top);
-        $names = Category::query()->whereIn('id', $categoryIds)->pluck('name', 'id');
+        $categories = Category::query()->whereIn('id', $categoryIds)->get(['id', 'name', 'color'])->keyBy('id');
 
         return [
             'periods' => $monthsKeys,
             'categories' => collect($categoryIds)->map(fn ($cid) => [
                 'category_id' => $cid,
-                'category_name' => $names[$cid] ?? "#{$cid}",
+                'category_name' => $categories->get($cid)->name ?? "#{$cid}",
+                'category_color' => $categories->get($cid)?->color,
                 'values' => array_map(fn ($key) => $this->fmt($series[$cid][$key] ?? 0.0), $monthsKeys),
             ])->all(),
         ];
