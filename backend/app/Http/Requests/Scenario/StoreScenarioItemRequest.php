@@ -2,10 +2,12 @@
 
 namespace App\Http\Requests\Scenario;
 
+use App\Support\CategoryTypeCheck;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreScenarioItemRequest extends FormRequest
 {
@@ -39,5 +41,18 @@ class StoreScenarioItemRequest extends FormRequest
             'starts_on' => ['required', 'date'],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            if (! $validator->errors()->hasAny(['type', 'category_id'])) {
+                // Senza type la voce nasce come uscita (default del modello).
+                $error = CategoryTypeCheck::error($this->input('category_id'), $this->input('type', 'expense'));
+                if ($error !== null) {
+                    $validator->errors()->add('category_id', $error);
+                }
+            }
+        });
     }
 }

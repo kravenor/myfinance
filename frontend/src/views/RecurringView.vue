@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDate } from '@/lib/date'
 import ListSkeleton from '@/components/ui/ListSkeleton.vue'
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
@@ -13,7 +13,8 @@ import { useFormDirty } from '@/composables/useFormDirty'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import { CADENCE_LABEL, TX_TYPE_LABEL, TX_TYPES, cadenceText } from '@/lib/labels'
-import type { Account, Cadence, InvestmentHolding, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
+import { categoryOptions as buildCategoryOptions } from '@/lib/categories'
+import type { Account, Cadence, Category, InvestmentHolding, Paginated, RecurringTransaction, TransactionType } from '@/types/api'
 import { confirmAction } from '@/composables/useConfirm'
 
 const { items, loading, submitting, fieldErrors, list, create, update, destroy } = useCrud<RecurringTransaction>('recurring-transactions')
@@ -28,6 +29,7 @@ const editing = ref<RecurringTransaction | null>(null)
 const showForm = ref(false)
 const form = ref({
   account_id: 0,
+  category_id: null as number | null,
   transfer_account_id: null as number | null,
   investment_holding_id: null as number | null,
   investment_fees: '',
@@ -42,11 +44,20 @@ const form = ref({
 })
 const dirty = useFormDirty(form, showForm)
 
+const categories = ref<Category[]>([])
+const categoryOptions = computed(() => buildCategoryOptions(categories.value, form.value.type))
+// Cambiando tipo, una categoria del tipo precedente non è più valida.
+watch(categoryOptions, (opts) => {
+  if (form.value.category_id !== null && !opts.some((o) => o.id === form.value.category_id)) form.value.category_id = null
+})
+const categoryName = (id: number | null) => (id ? (categories.value.find((c) => c.id === id)?.name ?? '') : '')
+
 function reset() {
   editing.value = null
   fieldErrors.value = {}
   form.value = {
     account_id: accounts.value.find((a) => a.is_primary)?.id ?? accounts.value[0]?.id ?? 0,
+    category_id: null,
     transfer_account_id: null,
     investment_holding_id: null,
     investment_fees: '',
@@ -66,6 +77,7 @@ function startEdit(r: RecurringTransaction) {
   fieldErrors.value = {}
   form.value = {
     account_id: r.account_id,
+    category_id: r.category_id,
     transfer_account_id: r.transfer_account_id,
     investment_holding_id: r.investment_holding_id,
     investment_fees: parseFloat(r.investment_fees) > 0 ? r.investment_fees : '',
@@ -99,6 +111,7 @@ function isPrimaryAccount(id: number | null): boolean {
 async function onSubmit() {
   const payload: Record<string, unknown> = {
     account_id: form.value.account_id,
+    category_id: form.value.type === 'transfer' ? null : form.value.category_id,
     type: form.value.type,
     amount: form.value.amount,
     cadence: form.value.cadence,
@@ -137,12 +150,14 @@ async function onDelete(r: RecurringTransaction) {
 }
 
 onMounted(async () => {
-  const [a, h] = await Promise.all([
+  const [a, h, c] = await Promise.all([
     api.get<Paginated<Account>>('/accounts', { params: { per_page: 100 } }),
     api.get<Paginated<InvestmentHolding>>('/investment-holdings', { params: { per_page: 100 } }),
+    api.get<Paginated<Category>>('/categories', { params: { per_page: 200 } }),
   ])
   accounts.value = a.data.data
   holdings.value = h.data.data
+  categories.value = c.data.data
   form.value.account_id = accounts.value[0]?.id ?? 0
   await list()
 })
@@ -174,7 +189,7 @@ onMounted(async () => {
           <FormErrors
             class="col-span-full"
             :errors="fieldErrors"
-            :shown="['type', 'account_id', 'transfer_account_id', 'cadence', 'interval', 'amount', 'investment_holding_id', 'investment_fees', 'starts_on', 'ends_on', 'description', 'is_active']"
+            :shown="['type', 'account_id', 'transfer_account_id', 'category_id', 'cadence', 'interval', 'amount', 'investment_holding_id', 'investment_fees', 'starts_on', 'ends_on', 'description', 'is_active']"
           />
           <div>
             <label class="label">Tipo</label>
@@ -200,6 +215,15 @@ onMounted(async () => {
             </select>
             <p id="hint-transfer-account" class="field-hint">Se ha un'altra valuta, l'importo viene convertito al cambio del giorno di ogni esecuzione.</p>
             <FieldError :errors="fieldErrors" name="transfer_account_id" />
+          </div>
+          <div v-else>
+            <label class="label">Categoria</label>
+            <select v-model.number="form.category_id" class="input" :class="{ 'input-invalid': fieldErrors.category_id }" aria-describedby="hint-category">
+              <option :value="null">— Nessuna —</option>
+              <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.label }}</option>
+            </select>
+            <p id="hint-category" class="field-hint">Viene copiata su ogni transazione generata ed è quella che Previsioni usa per stimare le uscite.</p>
+            <FieldError :errors="fieldErrors" name="category_id" />
           </div>
           <div>
             <label class="label">Cadenza</label>
@@ -287,7 +311,7 @@ onMounted(async () => {
                 >●</span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
-                {{ TX_TYPE_LABEL[r.type] }} · {{ accountName(r.account_id) }}<span v-if="isPrimaryAccount(r.account_id)" class="text-warning-500">★</span>
+                {{ TX_TYPE_LABEL[r.type] }}<template v-if="categoryName(r.category_id)"> · {{ categoryName(r.category_id) }}</template> · {{ accountName(r.account_id) }}<span v-if="isPrimaryAccount(r.account_id)" class="text-warning-500">★</span>
                 <template v-if="r.type === 'transfer'"> → {{ accountName(r.transfer_account_id) }}</template>
               </p>
               <p class="text-xs text-slate-500 mt-0.5">
@@ -323,7 +347,10 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="r in items" :key="r.id">
-            <td>{{ r.description ?? '—' }}</td>
+            <td>
+              {{ r.description ?? '—' }}
+              <span v-if="categoryName(r.category_id)" class="block text-xs text-slate-500">{{ categoryName(r.category_id) }}</span>
+            </td>
             <td>{{ TX_TYPE_LABEL[r.type] }}</td>
             <td>
               <span class="inline-flex items-center gap-2">

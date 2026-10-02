@@ -206,7 +206,7 @@ onMounted(async () => {
               aria-describedby="hint-budget-threshold"
             />
             <p id="hint-budget-threshold" class="field-hint">
-              Un budget va «in allerta» quando la spesa raggiunge questa percentuale ed è «sforato» dal 100%. Vale anche per i budget mostrati in Dashboard.
+              Un budget va «in allerta» quando la spesa raggiunge questa percentuale ed è «sforato» dal 100%. Vale per notifiche, Dashboard e pagina Budget.
             </p>
           </div>
 
@@ -224,7 +224,7 @@ onMounted(async () => {
       <form class="space-y-5" @submit.prevent="onPasswordSubmit">
         <div>
           <h2 class="font-medium">Password</h2>
-          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account.</p>
+          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account. Questo dispositivo resta collegato; gli altri, dopo 2 ore di inattività, ti chiederanno di accedere di nuovo.</p>
         </div>
 
         <div>
