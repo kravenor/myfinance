@@ -103,5 +103,13 @@ return [
     */
     'notifications' => [
         'mail' => (bool) env('FINANCE_NOTIFY_MAIL', true),
+        // Host dei servizi push dei browser: il server invia richieste solo verso questi
+        // (l'endpoint arriva dal client, senza elenco sarebbe una SSRF verso la rete interna).
+        'push_hosts' => [
+            'fcm.googleapis.com',          // Chrome, Edge, Android
+            'updates.push.services.mozilla.com', // Firefox
+            'web.push.apple.com',          // Safari, iOS
+            '.notify.windows.com',         // Edge legacy (sottodomini)
+        ],
     ],
 ];

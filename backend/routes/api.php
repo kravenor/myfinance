@@ -11,6 +11,7 @@ use App\Http\Controllers\InvestmentHoldingController;
 use App\Http\Controllers\InvestmentTransactionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationPreferenceController;
+use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SavingsGoalController;
@@ -39,6 +40,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notification-preferences', [NotificationPreferenceController::class, 'show'])->name('notification-preferences.show');
     Route::put('notification-preferences', [NotificationPreferenceController::class, 'update'])->name('notification-preferences.update')
         ->middleware(ScanNotificationsAfterWrite::class);
+
+    Route::get('push-subscriptions/key', [PushSubscriptionController::class, 'key'])->name('push-subscriptions.key');
+    Route::post('push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
+    Route::delete('push-subscriptions', [PushSubscriptionController::class, 'destroy'])->name('push-subscriptions.destroy');
+    Route::post('push-subscriptions/test', [PushSubscriptionController::class, 'test'])->name('push-subscriptions.test');
 
     Route::get('notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('notifications/read-all', [NotificationController::class, 'markAllRead'])->name('notifications.read-all');

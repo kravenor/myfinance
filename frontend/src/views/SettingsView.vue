@@ -6,6 +6,8 @@ import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import { useThemeStore, type ThemePreference } from '@/stores/theme'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import { disablePush, enablePush, pushState, sendTestPush, type PushState } from '@/lib/push'
+import { useToastStore } from '@/stores/toast'
 import type { NotificationPreferences, User } from '@/types/api'
 
 const auth = useAuthStore()
@@ -123,7 +125,34 @@ async function onSubmit() {
   }
 }
 
+// Notifiche push sul dispositivo corrente (una sottoscrizione per browser).
+const toast = useToastStore()
+const push = ref<PushState | null>(null)
+const pushBusy = ref(false)
+const PUSH_HINT: Record<Exclude<PushState, 'on' | 'off'>, string> = {
+  unsupported: 'Questo browser non supporta le notifiche push.',
+  'ios-not-installed':
+    'Su iPhone e iPad aggiungi prima Finance alla schermata Home (Condividi → Aggiungi alla schermata Home) e aprila da lì. Serve iOS 16.4 o successivo.',
+  'no-worker': 'Disponibili nell\'app pubblicata: in sviluppo il service worker non è attivo.',
+  'no-server-key': 'Il server non ha ancora le chiavi per le notifiche push (VAPID).',
+  denied: 'Hai bloccato le notifiche per questo sito: riattivale dalle impostazioni del browser.',
+}
+
+async function runPush(action: () => Promise<PushState | void>, done?: string) {
+  pushBusy.value = true
+  try {
+    const next = await action()
+    if (next) push.value = next
+    if (done) toast.success(done)
+  } catch {
+    toast.error('Operazione non riuscita. Riprova.')
+  } finally {
+    pushBusy.value = false
+  }
+}
+
 onMounted(async () => {
+  pushState().then((st) => (push.value = st)).catch(() => (push.value = 'unsupported'))
   dateFormat.value = auth.user?.date_format ?? DEFAULT_DATE_FORMAT
   monthStartDay.value = auth.user?.month_start_day ?? 1
   try {
@@ -307,6 +336,34 @@ onMounted(async () => {
         </div>
       </form>
     </div>
+
+    <section class="card p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 class="font-medium">Notifiche su questo dispositivo</h2>
+        <p class="text-sm text-slate-500 mt-1">
+          Ricevi gli avvisi anche ad app chiusa, come le notifiche delle altre app. Si attivano dispositivo per dispositivo.
+        </p>
+      </div>
+      <p v-if="push === null" class="text-sm text-slate-500">Verifica in corso…</p>
+      <p v-else-if="push !== 'on' && push !== 'off'" class="text-sm text-slate-600">{{ PUSH_HINT[push] }}</p>
+      <div v-else class="flex flex-wrap items-center gap-3">
+        <span class="inline-flex items-center gap-2 text-sm" :class="push === 'on' ? 'text-income-700' : 'text-slate-600'">
+          <span class="h-2 w-2 rounded-full" :class="push === 'on' ? 'bg-income-500' : 'bg-slate-400'" aria-hidden="true" />
+          {{ push === 'on' ? 'Attive su questo dispositivo' : 'Non attive su questo dispositivo' }}
+        </span>
+        <button v-if="push === 'off'" type="button" class="btn-primary" :disabled="pushBusy" @click="runPush(enablePush, 'Notifiche attivate.')">
+          Attiva
+        </button>
+        <template v-else>
+          <button type="button" class="btn-secondary" :disabled="pushBusy" @click="runPush(sendTestPush, 'Notifica di prova inviata.')">
+            Invia una prova
+          </button>
+          <button type="button" class="btn-secondary" :disabled="pushBusy" @click="runPush(disablePush, 'Notifiche disattivate su questo dispositivo.')">
+            Disattiva
+          </button>
+        </template>
+      </div>
+    </section>
 
     <section class="card p-4 sm:p-6 space-y-4">
       <div>
