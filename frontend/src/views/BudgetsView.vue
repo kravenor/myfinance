@@ -27,6 +27,8 @@ const toast = useToastStore()
 const auth = useAuthStore()
 // Il backend somma le uscite senza conversione: gli importi sono nella valuta dell'utente.
 const currency = computed(() => auth.user?.currency ?? 'EUR')
+// Stessa soglia di allerta di Dashboard e notifiche (Impostazioni).
+const threshold = computed(() => auth.user?.notification_preferences?.budget_threshold ?? 80)
 
 const categories = ref<Category[]>([])
 // Periodo di default: il ciclo finanziario corrente (vedi month_start_day).
@@ -127,7 +129,7 @@ function progress(b: Budget): number {
 function status(b: Budget): 'ok' | 'warning' | 'exceeded' {
   const p = rawPercent(b)
   if (p >= 100) return 'exceeded'
-  if (p >= 80) return 'warning'
+  if (p >= threshold.value) return 'warning'
   return 'ok'
 }
 
@@ -195,7 +197,7 @@ onMounted(async () => {
           <div>
             <label class="label">Importo</label>
             <input v-model="form.amount" type="number" inputmode="decimal" step="0.01" class="input" :class="{ 'input-invalid': fieldErrors.amount }" aria-describedby="hint-amount" required />
-            <p id="hint-amount" class="field-hint">Il tetto di spesa del mese: dall'80% la barra diventa ambra, dal 100% rossa.</p>
+            <p id="hint-amount" class="field-hint">Il tetto di spesa del mese: dal {{ threshold }}% (soglia delle Impostazioni) la barra diventa ambra, dal 100% rossa.</p>
             <FieldError :errors="fieldErrors" name="amount" />
           </div>
         </div>
