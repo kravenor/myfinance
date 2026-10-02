@@ -227,6 +227,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **API**: tutte le rotte sotto `/api`, versionate `routes/api.php`
 - **Validazione**: Form Request, mai inline nel controller
 - **Response**: API Resources, niente array grezzi
+- **«Ricordami» e logout**: `users.remember_token` è unico per utente e condiviso dai dispositivi. Il logout usa `logoutCurrentDevice()` (mai `logout()`, che rigenera il token e scollega tutti gli altri dispositivi, PWA compresa); il cambio password rigenera il token e ri-emette il cookie solo per il dispositivo corrente se lo aveva. Analisi in [REMEMBER-ME-ANALYSIS](docs/analysis/REMEMBER-ME-ANALYSIS.md).
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
 - **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
 - **Categoria coerente col tipo**: transazioni e ricorrenti validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
