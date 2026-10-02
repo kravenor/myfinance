@@ -59,6 +59,9 @@ export const router = createRouter({
         { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
       ],
     },
+    // Pubbliche per chiunque: niente meta.guest (rimbalzerebbe chi è loggato) né requiresAuth.
+    { path: '/privacy', name: 'privacy', component: () => import('@/views/PrivacyView.vue') },
+    { path: '/cookie', name: 'cookie', component: () => import('@/views/CookieView.vue') },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
 })

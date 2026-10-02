@@ -48,6 +48,20 @@
   .num {
     @apply tabular-nums whitespace-nowrap;
   }
+  /* Testo lungo delle pagine legali (niente plugin typography). */
+  .legal h2 {
+    @apply mt-8 text-lg font-semibold text-slate-900;
+  }
+  .legal p,
+  .legal ul {
+    @apply mt-3 text-sm leading-relaxed text-slate-700;
+  }
+  .legal ul {
+    @apply list-disc space-y-1 pl-5;
+  }
+  .legal a {
+    @apply text-primary-600 underline;
+  }
   .page-desc {
     @apply mt-1 max-w-3xl text-sm text-slate-500;
   }

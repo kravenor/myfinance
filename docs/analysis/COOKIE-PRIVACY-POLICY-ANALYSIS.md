@@ -5,6 +5,13 @@
 > consenso (Linee guida Garante Privacy 10/06/2021, §4 — obbligo di sola informativa).
 > Nessuna modifica al backend, nessuna migration.
 
+> **Aggiornamento 2026-10-02 (implementazione):** il cookie di sessione è `finance_session`
+> (`SESSION_COOKIE`, non `laravel_session`); `remember_web_*` dura **400 giorni** (576.000 minuti,
+> default di `SessionGuard`, non 5 anni); in `localStorage` ci sono `menu.hidden` (voci di menu
+> nascoste) e `theme` (tema chiaro/scuro), mentre i filtri report ora stanno nell'URL; tra le fonti
+> lato server si aggiunge Teleborsa (certificati). I link legali stanno in fondo alla sidebar invece
+> che nel `<main>`, per non toccare le altezze delle view. Dati del titolare in `src/lib/legal.ts`.
+
 ## 1. Flusso attuale
 
 - **Rotte SPA** ([frontend/src/router/index.ts](../../frontend/src/router/index.ts)): 4 rotte `meta.guest`

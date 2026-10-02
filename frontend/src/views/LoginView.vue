@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import LegalLinks from '@/components/LegalLinks.vue'
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -58,6 +59,7 @@ async function onSubmit() {
         Non hai un account?
         <RouterLink to="/register" class="text-primary-600 hover:underline">Registrati</RouterLink>
       </p>
+      <LegalLinks class="border-t border-slate-200 pt-4" />
     </form>
   </div>
 </template>
