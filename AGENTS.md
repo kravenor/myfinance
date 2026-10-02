@@ -31,6 +31,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 | CSS | TailwindCSS | — |
 | DB | MySQL | 8.4 |
 | Cache/Queue | Redis | 7 |
+| Notifiche push | laravel-notification-channels/webpush (su minishlink/web-push) | 13.x |
 | Web server | Nginx | 1.27 |
 | PHP runtime | PHP-FPM | 8.3 (Alpine) |
 | Node runtime | Node | 20 (Alpine) |
@@ -89,7 +90,7 @@ Finance/
 │   ├── postcss.config.js
 │   ├── tsconfig.json
 │   ├── index.html         # meta PWA (manifest, theme-color, apple-touch-icon)
-│   ├── public/            # asset statici serviti a root: manifest.webmanifest, icon-192/512.png, sw.js
+│   ├── public/            # asset statici serviti a root: manifest.webmanifest, icon-192/512.png, sw.js (installabilità + push)
 │   └── src/
 │       ├── main.ts            # bootstrap (Pinia + Router) + registrazione service worker (solo prod)
 │       ├── App.vue            # root + onMounted fetchMe
@@ -97,6 +98,7 @@ Finance/
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── lib/date.ts        # formatDate/formatDateWith/formatMonth + financialMonthStart/Range (vedi §6)
+│       ├── lib/push.ts        # Web Push sul dispositivo: stato, attiva/disattiva, prova
 │       ├── lib/legal.ts       # dati del titolare e fornitori mostrati in Privacy/Cookie policy
 │       ├── lib/categories.ts  # categoryOptions(categories, type): opzioni di select ad albero (Transazioni, Ricorrenti)
 │       ├── lib/labels.ts      # TX_TYPE_LABEL / TX_TYPES (etichette italiane dei tipi transazione)
@@ -469,7 +471,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 L'app si installa sulla home screen e parte a schermo pieno (`display: standalone`). Tutto statico in `frontend/public/`, servito da Vite in dev e copiato in `dist/` dalla build:
 - `manifest.webmanifest` — nome, `start_url` `/`, `theme_color` `#ffffff` (come la topbar bianca, così la barra di stato Android si fonde con l'header; in dark mode il `meta theme-color` passa a `#0f172a` a runtime), `background_color` `#f8fafc`, icone 192/512 + una `maskable`.
 - `icon-192.png` / `icon-512.png` — **segnaposto** generati a mano (barre bianche su fondo indigo, full-bleed perché le maskable vengono ritagliate dall'OS): sostituibili con un'icona vera senza toccare altro.
-- `sw.js` — service worker **vuoto di proposito**, registrato solo in produzione da [main.ts](frontend/src/main.ts). Serve unicamente al criterio di installabilità di Chrome (manifest + handler `fetch`), che altrimenti non offre "Installa app" su Android; iOS installa col solo manifest. Nessuna cache: un'app di dati vive di richieste fresche, e una cache offline darebbe solo saldi vecchi da debuggare.
+- `sw.js` — service worker registrato solo in produzione da [main.ts](frontend/src/main.ts): handler `fetch` vuoto (criterio di installabilità di Chrome, che altrimenti non offre "Installa app" su Android; iOS installa col solo manifest) e handler **`push`** (mostra la notifica e manda `notifications:refresh` alle finestre aperte, che ricaricano lista e badge) e **`notificationclick`** (porta in primo piano o apre l'app sull'`url` della notifica). Nessuna cache: un'app di dati vive di richieste fresche, e una cache offline darebbe solo saldi vecchi da debuggare. In sviluppo non c'è SW, quindi le push si provano solo sulla build di produzione.
 - [index.html](frontend/index.html) — `theme-color`, `manifest`, `apple-touch-icon` e i meta `apple-mobile-web-app-*` (iOS non legge il manifest per lo schermo pieno).
 - [docker/nginx/prod.conf](docker/nginx/prod.conf) — `location = /manifest.webmanifest` con `default_type application/manifest+json`: nginx non conosce quell'estensione e lo servirebbe come `application/octet-stream`, con Chrome che ignora il manifest. Va corretto in una location dedicata perché un blocco `types { }` nel `server` sostituirebbe l'intera mappa MIME.
 
@@ -790,7 +792,7 @@ Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (
 ### Canali & config
 - `database` sempre attivo (lista in-app). `mail` attivo se il kill-switch globale `finance.notifications.mail` (env `FINANCE_NOTIFY_MAIL`, default true) **e** la preferenza utente `email` sono entrambi on. In dev `MAIL_MAILER=log` → email nel log; in prod configurare SMTP.
 - La selezione canali è centralizzata nel trait [ChannelsFromPreferences](backend/app/Notifications/Concerns/ChannelsFromPreferences.php) (`via()` condiviso dalle notification).
-- Niente web-push (VAPID/service worker) in questa fase: possibile estensione futura.
+- **Web Push** ([analisi](docs/analysis/NOTIFICATIONS-ANALYSIS.md), passo 2): canale `WebPushChannel` aggiunto da `ChannelsFromPreferences` se ci sono le chiavi VAPID e l'utente ha almeno una sottoscrizione; il messaggio (`toWebPush`, nel trait) riusa titolo/testo/url di `toArray` e usa la chiave di dedup come `tag`. Sottoscrizioni nella tabella `push_subscriptions` della libreria (trait `HasPushSubscriptions` su `User`), una per browser; quelle scadute (404/410) le cancella la libreria. **SSRF**: l'endpoint arriva dal client e il server ci invia richieste, quindi `StorePushSubscriptionRequest` accetta solo `https` verso gli host in `finance.notifications.push_hosts` (FCM, Mozilla, Apple, `.notify.windows.com`). Frontend: [lib/push.ts](frontend/src/lib/push.ts) (stato, attiva/disattiva, prova; `syncPush()` all'avvio di AppLayout reinvia la sottoscrizione esistente, perché il browser può rinnovarla da solo e il server terrebbe quella scaduta) e card «Notifiche su questo dispositivo» in Impostazioni; su iOS serve la PWA installata (16.4+). **Deploy**: chiavi VAPID per ambiente con `php artisan webpush:vapid --show` → `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` (mailto) in `.env.production`, poi `migrate`; senza chiavi il canale resta spento. Cambiare le chiavi invalida tutte le sottoscrizioni.
 
 ### Notification classes
 [BudgetThresholdNotification](backend/app/Notifications/BudgetThresholdNotification.php) e [SavingsGoalRiskNotification](backend/app/Notifications/SavingsGoalRiskNotification.php) implementano [Dedupable](backend/app/Notifications/Contracts/Dedupable.php) (`dedupKey()`). `toArray` espone `{key, type (budget|savings_goal), level, title, message, url}`; `toMail` produce una MailMessage con action verso la SPA.
@@ -803,6 +805,10 @@ Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{go
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
 |--------|------|------|
+| GET | `/api/push-subscriptions/key` | `{public_key}` VAPID (null = push non configurate) |
+| POST | `/api/push-subscriptions` | `{endpoint, keys: {p256dh, auth}, content_encoding}` → 204; endpoint di un altro utente viene riassegnato (stesso browser, nuovo account) |
+| DELETE | `/api/push-subscriptions` | `{endpoint}`, solo le proprie → 204 |
+| POST | `/api/push-subscriptions/test` | Push di prova (`TestPushNotification`, non salvata in-app); 422 senza sottoscrizioni |
 | GET | `/api/notifications` | Ultime 50 + `unread_count` |
 | POST | `/api/notifications/read-all` | Segna tutte come lette, ritorna `unread_count: 0` |
 | POST | `/api/notifications/{id}/read` | Segna come letta, ritorna `unread_count` aggiornato |

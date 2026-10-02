@@ -6,6 +6,7 @@ import { useNotificationStore } from '@/stores/notifications'
 import { NAV_GROUPS, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import AppIcon from '@/components/ui/AppIcon.vue'
 import LegalLinks from '@/components/LegalLinks.vue'
+import { syncPush } from '@/lib/push'
 
 const auth = useAuthStore()
 const notifications = useNotificationStore()
@@ -54,11 +55,21 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+// Il service worker avvisa all'arrivo di una push: lista e badge si aggiornano senza ricaricare.
+function onWorkerMessage(e: MessageEvent) {
+  if (e.data?.type === 'notifications:refresh') notifications.fetch().catch(() => {})
+}
+
 onMounted(() => {
   notifications.fetch().catch(() => {})
+  syncPush().catch(() => {})
   window.addEventListener('keydown', onKeydown)
+  navigator.serviceWorker?.addEventListener('message', onWorkerMessage)
 })
-onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown)
+  navigator.serviceWorker?.removeEventListener('message', onWorkerMessage)
+})
 
 const currentLabel = computed(() => NAV_ITEMS.find((n) => n.name === route.name)?.label ?? 'Finance')
 const initial = computed(() => (auth.user?.name || auth.user?.email || '?').charAt(0).toUpperCase())

@@ -48,11 +48,17 @@ import { LEGAL } from '@/lib/legal'
         Al fornitore del servizio email ({{ LEGAL.mail }}), solo per inviarti email che riguardano il tuo account:
         reimpostazione della password e avvisi su budget e obiettivi, se li hai attivati.
       </li>
+      <li>
+        Se attivi le notifiche su un dispositivo, al servizio push del tuo browser (Google per Chrome, Edge e Android,
+        Mozilla per Firefox, Apple per Safari e iOS, Microsoft per Windows), che le consegna. Il contenuto viaggia
+        cifrato e quel servizio non può leggerlo; vede solo l'indirizzo tecnico del dispositivo. Puoi disattivarle in
+        qualsiasi momento da Impostazioni.
+      </li>
     </ul>
     <p>
       Per tassi di cambio e quotazioni il server interroga fonti pubbliche di dati di mercato (Frankfurter/BCE, Yahoo
       Finance, CoinGecko, Borsa Italiana, Teleborsa). A queste fonti arrivano solo codici di valute e di strumenti
-      finanziari (es. un ticker o un ISIN), mai dati che ti identificano. Il tuo browser non contatta servizi esterni.
+      finanziari (es. un ticker o un ISIN), mai dati che ti identificano. Il tuo browser non contatta altri servizi esterni, salvo il servizio push se attivi le notifiche.
     </p>
 
     <h2>Per quanto tempo</h2>
