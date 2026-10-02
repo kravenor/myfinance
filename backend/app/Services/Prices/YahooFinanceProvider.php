@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Http;
  * restituisce direttamente la valuta di quotazione. Il `symbol` dell'holding
  * dev'essere il symbol Yahoo (es. CSSPX.MI per Borsa Italiana, SXR8.DE per XETRA).
  */
-class YahooFinanceProvider implements PriceProvider
+class YahooFinanceProvider implements HistoricalPriceProvider, PriceProvider
 {
     public function fetch(array $symbols): array
     {
@@ -55,5 +55,48 @@ class YahooFinanceProvider implements PriceProvider
         }
 
         return $out;
+    }
+
+    public function history(string $symbol, Carbon $from, Carbon $to): array
+    {
+        $base = rtrim((string) config('finance.prices.yahoo.url'), '/');
+        $timeout = (int) config('finance.prices.yahoo.timeout', 15);
+
+        $response = Http::timeout($timeout)
+            ->withHeaders(['User-Agent' => 'Mozilla/5.0'])
+            ->acceptJson()
+            ->get($base.'/v8/finance/chart/'.rawurlencode($symbol), [
+                'period1' => $from->copy()->startOfDay()->timestamp,
+                'period2' => $to->copy()->endOfDay()->timestamp,
+                'interval' => '1d',
+            ]);
+
+        $result = $response->successful() ? $response->json('chart.result.0') : null;
+        $currency = data_get($result, 'meta.currency');
+        if (! is_array($result) || ! is_string($currency) || $currency === '') {
+            return [];
+        }
+
+        // Timestamp = apertura della borsa: con l'offset del mercato il giorno è quello locale.
+        $offset = (int) data_get($result, 'meta.gmtoffset', 0);
+        $closes = (array) data_get($result, 'indicators.quote.0.close', []);
+
+        // Ultima chiusura valida di ogni mese (i giorni senza scambi hanno close null).
+        $byMonth = [];
+        foreach ((array) data_get($result, 'timestamp', []) as $i => $ts) {
+            $close = $closes[$i] ?? null;
+            if (! is_numeric($ts) || ! is_numeric($close)) {
+                continue;
+            }
+            $date = Carbon::createFromTimestampUTC((int) $ts + $offset);
+            $byMonth[$date->format('Y-m')] = [
+                'symbol' => $symbol,
+                'price' => (float) $close,
+                'currency' => strtoupper($currency),
+                'as_of' => $date->toDateString(),
+            ];
+        }
+
+        return array_values($byMonth);
     }
 }

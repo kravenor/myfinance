@@ -70,7 +70,7 @@ Finance/
 │   │   ├── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
 │   │   └── Prices/             # PriceProvider (interfaccia) + Yahoo/CoinGecko/BorsaItaliana/TeleborsaProvider + YahooSymbolLookup
 │   ├── app/Notifications/  # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
-│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), ScanNotifications (`notifications:scan`)
+│   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), BackfillInstrumentPrices (`prices:backfill`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
 │   ├── app/Support/       # FinancialMonth (confini del "mese finanziario", vedi §6)
 │   ├── database/migrations/
@@ -302,6 +302,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Restyling UI/UX ([analisi](docs/analysis/UI-UX-REDESIGN-ANALYSIS.md)): design token semantici, dark mode, form in modale con errori per campo e avviso modifiche non salvate, menu a gruppi, nuova Dashboard, filtri in URL, aiuto contestuale, nuove pagine Categorie e Report, messaggi backend in italiano (`lang/it`), scorciatoie `N` e `/`
 - [x] **Estensione** — Coerenza dati ([analisi](docs/analysis/DATA-CONSISTENCY-ANALYSIS.md)): risparmiato degli obiettivi convertito nella valuta dell'obiettivo, dedup CSV via `external_id`, regole mai sui giroconti, categoria coerente col tipo (`CategoryTypeCheck`); diagnosi pre-rilascio in `scripts/diagnose-data-consistency.sql`
 - [x] **Estensione** — Privacy e cookie policy ([analisi](docs/analysis/COOKIE-PRIVACY-POLICY-ANALYSIS.md)): pagine pubbliche `/privacy` e `/cookie`, link in login, registrazione e sidebar, nessun banner (solo cookie tecnici)
+- [x] **Estensione** — Storico quotazioni (ADR 0002 U1): `prices:backfill` mensile via Yahoo dal primo movimento, solo i buchi, schedulato dopo `prices:fetch`
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -772,7 +773,8 @@ Ogni scrittura sul registro ricalcola la posizione nella stessa transazione DB. 
 - Symbol non in forma ISIN → nessuna richiesta. Certificato scaduto/senza scambi → pagina senza `Prezzo di riferimento`, symbol omesso (resta l'ultimo prezzo noto o quello manuale). 1 richiesta per ISIN, ~130 KB di HTML.
 
 - Config [config/finance.php](backend/config/finance.php) sezione `prices`: mappa `asset_type`→provider, URL/timeout per provider, `vs_currency` (CoinGecko). Nessuna API key necessaria (Yahoo è keyless, CoinGecko gira sulla free tier senza key, Borsa Italiana e Teleborsa sono scraping pubblico). Sono **API non ufficiali/free per uso personale/non commerciale** (cfr. [ADR 0001](docs/adr/0001-ordine-autofetch-vs-multitenant.md) per il conflitto licenza↔multi-tenant). Nota storica: EODHD era la scelta iniziale (D2) ma il suo free tier copre **solo i mercati USA** (EU → 404, verificato live), da cui lo switch a Yahoo.
-- Comando `php artisan prices:fetch [--symbol=]`, schedulato giornalmente alle **06:30** in [routes/console.php](backend/routes/console.php). Backfill storico non implementato (il real-time dà solo l'ultimo prezzo).
+- Comando `php artisan prices:fetch [--symbol=]`, schedulato giornalmente alle **06:30** in [routes/console.php](backend/routes/console.php).
+- **Storico** ([analisi](docs/analysis/PRICE-HISTORY-BACKFILL-ANALYSIS.md), ADR 0002 U1): `php artisan prices:backfill [--symbol=] [--force]` (`make prices-backfill`), schedulato alle **06:40**. Per i provider che implementano [HistoricalPriceProvider](backend/app/Services/Prices/HistoricalPriceProvider.php) (oggi solo Yahoo) salva **un punto al mese** (ultima chiusura del mese) dal mese del primo movimento a oggi. Senza `--force` salta i simboli già coperti (prima quota `<=` fine del mese del primo movimento): di notte costa una query per simbolo e scarica solo per holding nuovi o PAC inseriti a posteriori. Borsa Italiana, Teleborsa e CoinGecko non hanno storico: lì i mesi senza quota ripiegano sul costo medio dell'epoca.
 
 ### Net worth & patrimonio
 [ReportService::rawAccountBalances()](backend/app/Services/ReportService.php): per i conti `investment` il saldo (nella valuta del conto) è il **valore di mercato delle holding** (`investmentMarketValues()`, ogni holding convertita dalla sua valuta a quella del conto), **ignorando** il saldo transazionale. La conversione a valuta base segue il flusso esistente. Ricade quindi su `summary`, `cumulativeBalance`, `netWorth` e sul forecast.
