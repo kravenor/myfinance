@@ -65,6 +65,11 @@ async function onSubmit() {
         Hai già un account?
         <RouterLink to="/login" class="text-primary-600 hover:underline">Accedi</RouterLink>
       </p>
+      <p class="border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
+        Creando l'account dichiari di aver letto
+        l'<RouterLink :to="{ name: 'privacy' }" class="underline hover:text-slate-700">informativa sulla privacy</RouterLink>
+        e la <RouterLink :to="{ name: 'cookie' }" class="underline hover:text-slate-700">cookie policy</RouterLink>.
+      </p>
     </form>
   </div>
 </template>

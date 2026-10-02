@@ -97,6 +97,7 @@ Finance/
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── lib/date.ts        # formatDate/formatDateWith/formatMonth + financialMonthStart/Range (vedi §6)
+│       ├── lib/legal.ts       # dati del titolare e fornitori mostrati in Privacy/Cookie policy
 │       ├── lib/labels.ts      # TX_TYPE_LABEL / TX_TYPES (etichette italiane dei tipi transazione)
 │       ├── lib/chartTheme.ts  # palette e colori unici dei grafici Chart.js
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
@@ -112,6 +113,7 @@ Finance/
 │       ├── composables/useFormDirty.ts # modifiche non salvate di un form in modale
 │       ├── router/index.ts    # routes lazy + guard requiresAuth/guest
 │       ├── components/AppLayout.vue
+│       ├── components/LegalPage.vue + LegalLinks.vue  # layout delle pagine legali pubbliche e link (login, registrazione, sidebar)
 │       ├── components/ui/     # RowActions.vue (pulsanti icona per riga), Amount.vue (importo con segno/colore/cifre tabulari), AppModal.vue (`<dialog>` nativo), AppIcon.vue + icons.ts (path Heroicons outline inline, MIT), FieldError.vue + FormErrors.vue (errori 422 per campo / senza campo), EmptyState.vue, ListSkeleton.vue, SegmentedControl.vue (scelta tra poche opzioni: schede, tipo, periodo), BreakdownList.vue (classifica con quota e barra), ToastHost.vue e ConfirmHost.vue (montati in App.vue)
 │       └── views/             # Login, Register, ForgotPassword, ResetPassword, Dashboard, Accounts, Categories, Tags, CategorizationRules, Transactions, Budgets, SavingsGoals, Investments, Recurring, Reports, Stats, Forecast, ImportExport, Notifications, Settings
 │
@@ -245,6 +247,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Etichette**: nessun valore enum dell'API in UI. Mappe uniche in [labels.ts](frontend/src/lib/labels.ts): `TX_TYPE_LABEL`, `CATEGORY_TYPE_LABEL`, `ACCOUNT_TYPE_LABEL`, `ASSET_TYPE_LABEL`, `INVESTMENT_SIDE_LABEL`, `RULE_MATCH_LABEL`, `RULE_APPLIES_LABEL`, `RECURRENCE_LABEL`, `CADENCE_LABEL` + `cadenceText(interval, cadence)` ("ogni 2 mesi"), `SCENARIO_CADENCE_LABEL`, `NOTIFICATION_LEVEL_LABEL`. Nelle `<select>` il value resta quello API.
 - **Feedback ed errori**: `useCrud` espone `submitting` (disabilitare il submit, testo "Salvataggio…") e `fieldErrors` (422, per campo); `create`/`update` rilanciano l'errore, la view lo intercetta lasciando il form aperto con i dati. Esito delle azioni con `useToastStore().success/error/info`. [api.ts](frontend/src/lib/api.ts) ha un interceptor di risposta: 419 → nuovo cookie CSRF e un retry, 401 su rotta protetta → logout lato client + redirect a login, rete/5xx → toast generico (nessun dettaglio tecnico). Le view non devono duplicare questi toast.
 - **Dark mode e tema**: i colori Tailwind `slate`, `surface` (sfondo di card/input/modali, al posto di `white`) e i token semantici puntano a variabili RGB in [theme.css](frontend/src/theme.css), invertite da `:root.dark` (`darkMode: 'class'`): le view non usano classi `dark:`. Regole: sfondo di superficie sempre `bg-surface` (mai `bg-white`), overlay/backdrop `bg-black/…` (`black` e `white` non si invertono, `text-white` resta per il testo su pulsanti pieni); in scuro i token 600/700 diventano chiari per il testo, quindi `.btn-primary`, `.btn-danger` e `bg-primary-600` hanno un override a fondo `style.css`. Preferenza Automatico/Chiaro/Scuro in Impostazioni → [stores/theme.ts](frontend/src/stores/theme.ts) (`localStorage` `theme`, assente = sistema), applicata prima del primo paint da uno script inline in `index.html`; aggiorna anche `meta theme-color` e i default di Chart.js (`syncChartTheme`).
+- **Informative legali**: [PrivacyView](frontend/src/views/PrivacyView.vue) e [CookieView](frontend/src/views/CookieView.vue) descrivono dati, cookie, `localStorage` e servizi esterni **reali**. Chi aggiunge un cookie, una chiave di `localStorage`, un servizio esterno (anche lato server) o un nuovo dato personale aggiorna le due pagine e `LEGAL.updatedAt` in [legal.ts](frontend/src/lib/legal.ts). Un cookie non tecnico (es. analytics) rende obbligatorio il banner di consenso.
 - **Aiuto contestuale** (sempre visibile, mai tooltip al passaggio del mouse): ogni pagina ha sotto l'`<h1>` un `<p class="page-desc">` con lo scopo in una frase; i campi non ovvi hanno `<p id="hint-<chiave>" class="field-hint">` sotto l'input, collegato con `aria-describedby`; le pagine con concetti non intuitivi (Regole, Import, Obiettivi, Previsioni, Investimenti) hanno un `<details class="help-panel"><summary>Come funziona</summary><ul>…</ul></details>` chiuso di default con 2-4 punti. Testi in seconda persona, concreti sull'effetto, verificati sul comportamento reale del backend.
 - **Scorciatoie** (listener in AppLayout, inattive mentre si scrive o con una modale aperta): `N` nuova transazione, `/` focus sul primo `input[type=search]` della pagina; dichiarate con `aria-keyshortcuts` e indicate accanto al comando.
 - **Filtri, caricamento, stati vuoti**: i filtri di lista usano [useQueryFilters](frontend/src/composables/useQueryFilters.ts) (valori stringa, default esclusi dall'URL, debounce 300ms, nessun pulsante "Filtra"): Transazioni, Budget (`?period=YYYY-MM` con frecce mese precedente/successivo) e Report. Le liste mostrano `<ListSkeleton>` solo al primo caricamento (`loading && !items.length`), nei ricaricamenti restano visibili in `opacity-60`. Lista vuota con `<EmptyState title="…" :filtered="isFiltered" @reset="…">` + CTA nello slot: con filtri attivi mostra "Nessun risultato con questi filtri" e "Azzera filtri". Testo informativo mai sotto `text-slate-500` (contrasto AA).
@@ -296,6 +299,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Grafico versato vs valore per singolo holding: `?holding=` su `/investments/history` restringe la collection di holding in [InvestmentHistoryService](backend/app/Services/InvestmentHistoryService.php); select nell'header del grafico in [InvestmentsView](frontend/src/views/InvestmentsView.vue), l'XIRR in testata resta di portafoglio. Accanto, select di periodo (6 mesi / 1, 3, 5 anni / tutto) filtrata lato client sui punti già caricati. Upgrade U6 (e U7 lato client) dell'[ADR 0002](docs/adr/0002-registro-movimenti-investimenti.md)
 - [x] **Estensione** — Restyling UI/UX ([analisi](docs/analysis/UI-UX-REDESIGN-ANALYSIS.md)): design token semantici, dark mode, form in modale con errori per campo e avviso modifiche non salvate, menu a gruppi, nuova Dashboard, filtri in URL, aiuto contestuale, nuove pagine Categorie e Report, messaggi backend in italiano (`lang/it`), scorciatoie `N` e `/`
 - [x] **Estensione** — Coerenza dati ([analisi](docs/analysis/DATA-CONSISTENCY-ANALYSIS.md)): risparmiato degli obiettivi convertito nella valuta dell'obiettivo, dedup CSV via `external_id`, regole mai sui giroconti, categoria coerente col tipo (`CategoryTypeCheck`); diagnosi pre-rilascio in `scripts/diagnose-data-consistency.sql`
+- [x] **Estensione** — Privacy e cookie policy ([analisi](docs/analysis/COOKIE-PRIVACY-POLICY-ANALYSIS.md)): pagine pubbliche `/privacy` e `/cookie`, link in login, registrazione e sidebar, nessun banner (solo cookie tecnici)
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -438,7 +442,8 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | Path | View | Note |
 |------|------|------|
 | `/login` | LoginView | precompila `demo@finance.local` / `password` per il seed locale |
-| `/register` | RegisterView | conferma password obbligatoria |
+| `/register` | RegisterView | conferma password obbligatoria; frase informativa con link a privacy e cookie policy (nessuna checkbox: la base giuridica è il contratto) |
+| `/privacy`, `/cookie` | PrivacyView, CookieView | pagine legali **pubbliche per tutti** (né `guest` né `requiresAuth`), prima del catch-all |
 | `/` | DashboardView | KPI del mese con confronto, ultime 5 transazioni, budget in allerta, conti, grafici |
 | `/accounts` | AccountsView | CRUD inline |
 | `/categories` | CategoriesView | CRUD + parent select filtrato per type |

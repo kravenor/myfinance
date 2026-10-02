@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notifications'
 import { NAV_GROUPS, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import LegalLinks from '@/components/LegalLinks.vue'
 
 const auth = useAuthStore()
 const notifications = useNotificationStore()
@@ -122,6 +123,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
           Esci
         </button>
       </div>
+      <LegalLinks class="border-t border-slate-200 px-3 py-3" />
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">
