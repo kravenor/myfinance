@@ -141,6 +141,7 @@ Finance/
 |----------|-----------|------------|---------------|-------|
 | `nginx` | `finance_nginx` | `${APP_PORT:-8080}` | 80 | Entry point HTTP, reverse-proxy a Vite + FastCGI a PHP |
 | `php` | `finance_php` | — | 9000 | PHP-FPM, Laravel |
+| `queue` | `finance_queue` | — | — | Worker della coda (`queue:listen`, rilegge il codice a ogni job): email e push delle notifiche. Usa l'immagine `finance-php` del servizio `php` |
 | `node` | `finance_node` | — | 5173 | Vite dev server (proxato da nginx) |
 | `mysql` | `finance_mysql` | `${DB_PORT:-3306}` | 3306 | Database |
 | `redis` | `finance_redis` | — | 6379 | Cache, queue, sessioni |
@@ -798,9 +799,16 @@ Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (
 [BudgetThresholdNotification](backend/app/Notifications/BudgetThresholdNotification.php), [SavingsGoalRiskNotification](backend/app/Notifications/SavingsGoalRiskNotification.php) e, dal passo 3 dell'[analisi](docs/analysis/NOTIFICATIONS-ANALYSIS.md), [PacInstallmentNotification](backend/app/Notifications/PacInstallmentNotification.php) (dal runner delle ricorrenti, dopo il commit: una per esecuzione anche con più rate arretrate, `warning` se il prezzo è stimato o le quote mancano), [StalePriceNotification](backend/app/Notifications/StalePriceNotification.php) (strumento con quantità > 0 e provider automatico senza quote da `NotificationScanner::STALE_PRICE_DAYS` = 7 giorni, contati dalla creazione se mai quotato), [LargeExpenseNotification](backend/app/Notifications/LargeExpenseNotification.php) (uscite create negli ultimi 2 giorni e datate negli ultimi 7, oltre la soglia in valuta base) e [MonthlySummaryNotification](backend/app/Notifications/MonthlySummaryNotification.php) (primi 7 giorni del mese finanziario, da `ReportService::periodComparison`). Tutte implementano [Dedupable](backend/app/Notifications/Contracts/Dedupable.php) (`dedupKey()`) e si inviano con `User::notifyOnce()` (salta se la chiave esiste già). Il trait `ChannelsFromPreferences` dà `via()`, `toWebPush()` e un `toMail()` generico dai testi di `toArray` (sovrascrivibile); importi nei testi con `App\Support\Money` (formato italiano), date con il `date_format` dell'utente (`FormatsForUser`). `toArray` espone `{key, type (budget|savings_goal), level, title, message, url}`; `toMail` produce una MailMessage con action verso la SPA.
 
 ### Scanner & schedule
-[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`forgetUser` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
+[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. **In tempo reale**: il middleware terminabile [ScanNotificationsAfterWrite](backend/app/Http/Middleware/ScanNotificationsAfterWrite.php) esegue `scan()` dell'utente **dopo l'invio della risposta** a ogni scrittura riuscita (non GET, 2xx) su `transactions`, `budgets`, `savings-goals`, `transactions/import`, `categorization-rules/apply` e `notification-preferences`: una scansione per richiesta, anche per un import di centinaia di righe. Nuove rotte che cambiano spese, budget o obiettivi vanno agganciate allo stesso middleware in `routes/api.php`. La scansione schedulata resta per i cambi dovuti al tempo e alle ricorrenti notturne. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`forgetUser` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
 
 Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{goalId}:{yyyy-mm}` → una notifica per stato/periodo (warning→exceeded o behind→overdue generano una nuova notifica).
+
+### Coda, notifiche nascoste, pulizia (passo 4)
+- Le 6 notifiche di avviso sono `ShouldQueue`; `viaConnections()` nel trait tiene il canale `database` su `sync`, quindi la riga in-app esiste subito (dedup immediata) mentre email e push passano dal worker. Sul VPS c'è il servizio `queue`, in sviluppo il servizio `queue` del `docker-compose.yml`. Nei test `QUEUE_CONNECTION=sync`.
+- «Elimina» non cancella: imposta `notifications.dismissed_at` (e `read_at`); lista, conteggio e «segna tutte come lette» ignorano le nascoste, `notifyOnce()` le vede ancora → una notifica eliminata non torna alla scansione successiva.
+- `notifications:prune [--days=180]`, schedulato la domenica alle 03:30: cancella le notifiche più vecchie (le chiavi di dedup contengono il periodo, oltre 180 giorni non servono).
+- Badge: AppLayout ricarica le notifiche ogni 5 minuti a pagina visibile, al ritorno in primo piano e all'arrivo di una push.
+- **Email**: `POST /api/notification-preferences/test-email` (throttle 5/min) invia subito una prova con `notifyNow` all'indirizzo delle notifiche; con `MAIL_MAILER=log` risponde 422 spiegandolo; un errore SMTP va nel log e all'utente arriva un messaggio generico. Pulsante «Invia email di prova» in Impostazioni. SMTP OVH in `.env.production`: `MAIL_MAILER=smtp`, `MAIL_SCHEME=smtps`, `MAIL_HOST=ssl0.ovh.net`, `MAIL_PORT=465`, `MAIL_USERNAME`/`MAIL_PASSWORD` della casella, `MAIL_FROM_ADDRESS` dello stesso dominio; poi ricreare `php`, `scheduler` e `queue` (l'`env_file` si legge all'avvio).
 
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
@@ -812,7 +820,8 @@ Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{go
 | GET | `/api/notifications` | Ultime 50 + `unread_count` |
 | POST | `/api/notifications/read-all` | Segna tutte come lette, ritorna `unread_count: 0` |
 | POST | `/api/notifications/{id}/read` | Segna come letta, ritorna `unread_count` aggiornato |
-| DELETE | `/api/notifications/{id}` | 204 |
+| DELETE | `/api/notifications/{id}` | Nasconde (`dismissed_at`), 204 |
+| POST | `/api/notification-preferences/test-email` | Email di prova sincrona; 422 se `MAIL_MAILER=log` o se l'invio fallisce |
 
 ### Preferenze (per-utente)
 Colonna JSON `users.notification_preferences` (cast `array`); default in `User::NOTIFICATION_DEFAULTS`, esposti via `User::notificationPreferences()` / `notificationPreference($key)`:

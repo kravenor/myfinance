@@ -7,10 +7,11 @@ use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Concerns\FormatsForUser;
 use App\Notifications\Contracts\Dedupable;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /** Strumento in portafoglio senza quotazioni recenti: provider rotto o simbolo sbagliato. */
-class StalePriceNotification extends Notification implements Dedupable
+class StalePriceNotification extends Notification implements Dedupable, ShouldQueue
 {
     use ChannelsFromPreferences, FormatsForUser, Queueable;
 

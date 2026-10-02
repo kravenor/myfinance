@@ -8,10 +8,11 @@ use App\Notifications\Concerns\FormatsForUser;
 use App\Notifications\Contracts\Dedupable;
 use App\Support\Money;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /** Uscita oltre la soglia scelta in Impostazioni (importo già convertito nella valuta base). */
-class LargeExpenseNotification extends Notification implements Dedupable
+class LargeExpenseNotification extends Notification implements Dedupable, ShouldQueue
 {
     use ChannelsFromPreferences, FormatsForUser, Queueable;
 

@@ -38,6 +38,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');
 
     Route::get('notification-preferences', [NotificationPreferenceController::class, 'show'])->name('notification-preferences.show');
+    Route::post('notification-preferences/test-email', [NotificationPreferenceController::class, 'testEmail'])
+        ->middleware('throttle:5,1')->name('notification-preferences.test-email');
     Route::put('notification-preferences', [NotificationPreferenceController::class, 'update'])->name('notification-preferences.update')
         ->middleware(ScanNotificationsAfterWrite::class);
 

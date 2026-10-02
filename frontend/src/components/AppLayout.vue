@@ -60,15 +60,27 @@ function onWorkerMessage(e: MessageEvent) {
   if (e.data?.type === 'notifications:refresh') notifications.fetch().catch(() => {})
 }
 
+// Badge aggiornato anche con l'app aperta a lungo (la PWA resta in background per ore):
+// ogni 5 minuti a pagina visibile e subito quando torna in primo piano.
+const REFRESH_MS = 5 * 60 * 1000
+let refreshTimer: ReturnType<typeof setInterval> | undefined
+function refreshNotifications() {
+  if (document.visibilityState === 'visible') notifications.fetch().catch(() => {})
+}
+
 onMounted(() => {
   notifications.fetch().catch(() => {})
   syncPush().catch(() => {})
   window.addEventListener('keydown', onKeydown)
   navigator.serviceWorker?.addEventListener('message', onWorkerMessage)
+  document.addEventListener('visibilitychange', refreshNotifications)
+  refreshTimer = setInterval(refreshNotifications, REFRESH_MS)
 })
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeydown)
   navigator.serviceWorker?.removeEventListener('message', onWorkerMessage)
+  document.removeEventListener('visibilitychange', refreshNotifications)
+  clearInterval(refreshTimer)
 })
 
 const currentLabel = computed(() => NAV_ITEMS.find((n) => n.name === route.name)?.label ?? 'Finance')

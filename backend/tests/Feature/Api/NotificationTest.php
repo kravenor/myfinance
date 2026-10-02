@@ -12,6 +12,7 @@ use App\Notifications\BudgetThresholdNotification;
 use App\Services\NotificationScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class NotificationTest extends TestCase
@@ -152,5 +153,49 @@ class NotificationTest extends TestCase
             'percent' => 150.0,
             'status' => 'exceeded',
         ];
+    }
+
+    public function test_dismissed_notification_disappears_and_is_not_recreated(): void
+    {
+        $user = User::factory()->create();
+        $this->exceededBudget($user);
+        $this->actingAs($user);
+        app(NotificationScanner::class)->scan($user);
+        $id = $user->notifications()->first()->id;
+
+        $this->deleteJson("/api/notifications/{$id}")->assertNoContent();
+
+        $this->getJson('/api/notifications')->assertOk()->assertJsonCount(0, 'data')->assertJsonPath('unread_count', 0);
+        // Prima l'eliminazione cancellava la riga e la scansione successiva la ricreava.
+        $this->assertSame(0, app(NotificationScanner::class)->scan($user));
+        $this->assertSame(1, $user->notifications()->count());
+    }
+
+    public function test_in_app_is_written_immediately_while_email_waits_for_the_worker(): void
+    {
+        config(['finance.notifications.mail' => true, 'queue.default' => 'database']);
+        $user = User::factory()->create();
+        $alert = ['budget_id' => 1, 'category_id' => 1, 'category_name' => 'Spesa', 'category_color' => null, 'year' => 2026, 'month' => 5, 'amount' => '100.00', 'spent' => '90.00', 'percent' => 90.0, 'status' => 'warning'];
+
+        $user->notifyOnce(new BudgetThresholdNotification($alert));
+
+        $this->assertSame(1, $user->notifications()->count()); // canale database sincrono: la dedup la vede subito
+        $this->assertSame(1, DB::table('jobs')->count());        // l'email aspetta il worker
+        $this->assertFalse($user->notifyOnce(new BudgetThresholdNotification($alert)));
+    }
+
+    public function test_prune_deletes_only_notifications_older_than_the_limit(): void
+    {
+        $user = User::factory()->create();
+        $alert = fn (int $id) => new BudgetThresholdNotification(['budget_id' => $id, 'category_id' => 1, 'category_name' => 'Spesa', 'category_color' => null, 'year' => 2026, 'month' => 5, 'amount' => '100.00', 'spent' => '90.00', 'percent' => 90.0, 'status' => 'warning']);
+
+        $this->travelTo('2026-01-01');
+        $user->notifyOnce($alert(1));
+        $this->travelTo('2026-08-01'); // 212 giorni dopo la prima
+        $user->notifyOnce($alert(2));
+
+        $this->artisan('notifications:prune')->assertSuccessful();
+
+        $this->assertSame(['budget:warning:2:2026-5'], $user->notifications()->get()->pluck('data.key')->all());
     }
 }
