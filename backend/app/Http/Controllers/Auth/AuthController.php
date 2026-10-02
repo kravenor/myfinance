@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Support\FinancialMonth;
 use Database\Seeders\CategorySeeder;
 use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Auth\SessionGuard;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -108,9 +109,18 @@ class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
+        /** @var SessionGuard $guard */
+        $guard = Auth::guard('web');
+        $remembered = $request->cookies->has($guard->getRecallerName());
+
+        // Nuovo remember_token: gli altri dispositivi perdono il «Ricordami» alla scadenza della loro sessione.
         $user->forceFill([
             'password' => Hash::make($request->validated('password')),
+            'remember_token' => Str::random(60),
         ])->save();
+
+        // Questo dispositivo resta collegato e, se usava «Ricordami», riceve il cookie con il token nuovo.
+        $guard->login($user, $remembered);
 
         return response()->json(['message' => 'Password aggiornata.']);
     }
@@ -132,7 +142,11 @@ class AuthController extends Controller
 
     public function logout(Request $request): Response
     {
-        Auth::guard('web')->logout();
+        // Solo questo dispositivo: logout() rigenererebbe il remember_token, unico per utente,
+        // e farebbe perdere il «Ricordami» a tutti gli altri dispositivi (es. la PWA).
+        /** @var SessionGuard $guard */
+        $guard = Auth::guard('web');
+        $guard->logoutCurrentDevice();
         Auth::guard('sanctum')->forgetUser();
 
         if ($request->hasSession()) {

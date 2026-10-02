@@ -224,7 +224,7 @@ onMounted(async () => {
       <form class="space-y-5" @submit.prevent="onPasswordSubmit">
         <div>
           <h2 class="font-medium">Password</h2>
-          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account.</p>
+          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account. Questo dispositivo resta collegato; gli altri, dopo 2 ore di inattività, ti chiederanno di accedere di nuovo.</p>
         </div>
 
         <div>
