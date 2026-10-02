@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Account;
 use App\Models\Category;
 use App\Models\InvestmentHolding;
+use App\Models\InvestmentTransaction;
 use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
@@ -25,7 +26,11 @@ class ReportService
     public function __construct(
         private readonly CurrencyConverter $converter,
         private readonly InvestmentPriceResolver $priceResolver,
+        private readonly HoldingPositionRecalculator $positions,
     ) {}
+
+    /** @var Collection<int, Collection<int, InvestmentTransaction>>|null movimenti per holding, caricati una volta per richiesta */
+    private ?Collection $movementsByHolding = null;
 
     /**
      * Income, expense, net nel range + saldo per conto.
@@ -538,13 +543,38 @@ class ReportService
         $holdings = InvestmentHolding::query()->whereIn('account_id', $investmentIds)->get();
         $this->priceResolver->hydrate($holdings, $upTo);
 
+        // Nel passato la quantità di oggi non vale: posizione ricostruita dal registro a quella data
+        // e, senza quotazione, costo medio di allora (stessa regola di InvestmentHistoryService, ADR 0002 D7).
+        $past = $upTo->lt(Carbon::today());
+        $movements = $past ? $this->movementsByHolding() : null;
+
         foreach ($holdings as $h) {
+            // Holding senza registro (dati non migrati): resta il calcolo sulla quantità corrente.
+            if ($past && isset($movements[$h->id])) {
+                $position = $this->positions->positionAt($movements[$h->id], $upTo);
+                $value = $position['quantity'] > 0
+                    ? $position['quantity'] * ($h->resolvedPrice() ?? $position['cost_basis'] / $position['quantity'])
+                    : 0.0;
+            } else {
+                $value = $h->marketValue();
+            }
+
             $accountCurrency = $currencies[$h->account_id] ?? $h->currency;
             $values[$h->account_id] = ($values[$h->account_id] ?? 0.0)
-                + $this->converter->convert($h->marketValue(), $h->currency, $accountCurrency, $upTo);
+                + $this->converter->convert($value, $h->currency, $accountCurrency, $upTo);
         }
 
         return $values;
+    }
+
+    /** @return Collection<int, Collection<int, InvestmentTransaction>> */
+    private function movementsByHolding(): Collection
+    {
+        return $this->movementsByHolding ??= InvestmentTransaction::query()
+            ->orderBy('occurred_at')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('investment_holding_id');
     }
 
     /**
