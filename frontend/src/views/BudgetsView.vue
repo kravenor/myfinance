@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import AppModal from '@/components/ui/AppModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
+import CategoryDot from '@/components/ui/CategoryDot.vue'
 import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import FormErrors from '@/components/ui/FormErrors.vue'
@@ -109,6 +110,10 @@ async function onSubmit() {
 async function onDelete(b: Budget) {
   if (!(await confirmAction('Eliminare il budget?'))) return
   await destroy(b.id)
+}
+
+function categoryColor(id: number): string | null {
+  return categories.value.find((c) => c.id === id)?.color ?? null
 }
 
 function categoryName(id: number): string {
@@ -218,7 +223,10 @@ onMounted(async () => {
         <li v-for="b in items" :key="b.id" class="p-4">
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
-              <p class="font-medium text-slate-800 truncate">{{ categoryName(b.category_id) }}</p>
+              <p class="flex min-w-0 items-center gap-1.5 font-medium text-slate-800">
+                <CategoryDot :color="categoryColor(b.category_id)" />
+                <span class="truncate">{{ categoryName(b.category_id) }}</span>
+              </p>
               <p class="text-xs text-slate-500 mt-0.5">{{ budgetPeriod(b.year, b.month) }}</p>
             </div>
             <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
@@ -259,7 +267,12 @@ onMounted(async () => {
         </thead>
         <tbody class="divide-y divide-slate-100">
           <tr v-for="b in items" :key="b.id">
-            <td class="font-medium">{{ categoryName(b.category_id) }}</td>
+            <td class="font-medium">
+              <span class="inline-flex items-center gap-1.5">
+                <CategoryDot :color="categoryColor(b.category_id)" />
+                {{ categoryName(b.category_id) }}
+              </span>
+            </td>
             <td>{{ budgetPeriod(b.year, b.month) }}</td>
             <td class="text-right"><Amount :value="b.amount" :currency="currency" /></td>
             <td class="text-right"><Amount :value="b.spent ?? 0" :currency="currency" /></td>

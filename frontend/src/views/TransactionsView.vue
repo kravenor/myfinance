@@ -6,6 +6,7 @@ import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
 import RowActions from '@/components/ui/RowActions.vue'
 import Amount from '@/components/ui/Amount.vue'
+import CategoryDot from '@/components/ui/CategoryDot.vue'
 import AppModal from '@/components/ui/AppModal.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
@@ -94,6 +95,10 @@ function accountName(id: number | null | undefined): string {
 function isPrimaryAccount(id: number | null | undefined): boolean {
   if (!id) return false
   return !!accounts.value.find((a) => a.id === id && a.is_primary)
+}
+
+function categoryColor(id: number | null | undefined): string | null {
+  return id ? (categories.value.find((c) => c.id === id)?.color ?? null) : null
 }
 
 function categoryName(id: number | null | undefined): string {
@@ -450,8 +455,11 @@ watch(() => route.query.new, () => {
         >
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <p class="font-medium text-slate-800 truncate">
-                {{ tx.description || categoryName(tx.category_id) || (tx.type === 'transfer' ? 'Trasferimento' : '—') }}
+              <p class="flex min-w-0 items-center gap-1.5 font-medium text-slate-800">
+                <CategoryDot v-if="categoryName(tx.category_id)" :color="categoryColor(tx.category_id)" />
+                <span class="truncate">
+                  {{ tx.description || categoryName(tx.category_id) || (tx.type === 'transfer' ? TX_TYPE_LABEL.transfer : '—') }}
+                </span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
                 {{ formatDate(tx.occurred_at) }} ·
@@ -493,6 +501,7 @@ watch(() => route.query.new, () => {
             <th>Tipo</th>
             <th>Conto</th>
             <th>Descrizione</th>
+            <th>Categoria</th>
             <th>Tag</th>
             <th class="text-right">Importo</th>
             <th></th>
@@ -520,6 +529,13 @@ watch(() => route.query.new, () => {
               @click="toggleDescription(tx.id)"
             >{{ tx.description ?? '—' }}</td>
             <td>
+              <span v-if="categoryName(tx.category_id)" class="inline-flex items-center gap-1.5">
+                <CategoryDot :color="categoryColor(tx.category_id)" />
+                {{ categoryName(tx.category_id) }}
+              </span>
+              <span v-else class="text-slate-500">—</span>
+            </td>
+            <td>
               <span v-if="tx.tags && tx.tags.length" class="flex flex-wrap gap-1">
                 <span
                   v-for="t in tx.tags"
@@ -542,7 +558,7 @@ watch(() => route.query.new, () => {
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="7" class="whitespace-normal">
+            <td colspan="8" class="whitespace-normal">
               <EmptyState title="Non hai ancora registrato transazioni." :filtered="isFiltered" @reset="resetFilters()">
                 <button type="button" class="btn-primary" @click="openNew()">Registra la prima</button>
               </EmptyState>

@@ -64,8 +64,8 @@ class AdvancedReportTest extends TestCase
     {
         $user = User::factory()->create();
         $account = Account::factory()->for($user)->create();
-        $food = Category::factory()->for($user)->create(['name' => 'Food', 'type' => 'expense']);
-        $transport = Category::factory()->for($user)->create(['name' => 'Transport', 'type' => 'expense']);
+        $food = Category::factory()->for($user)->create(['name' => 'Food', 'type' => 'expense', 'color' => '#ef4444']);
+        $transport = Category::factory()->for($user)->create(['name' => 'Transport', 'type' => 'expense', 'color' => null]);
 
         Transaction::factory()->for($user)->for($account, 'account')->for($food, 'category')->create([
             'type' => 'expense', 'amount' => 100, 'occurred_at' => '2026-03-10',
@@ -85,6 +85,8 @@ class AdvancedReportTest extends TestCase
             ->assertJsonPath('data.periods.0', '2026-03')
             ->assertJsonCount(2, 'data.categories')
             ->assertJsonPath('data.categories.0.category_name', 'Food')
+            ->assertJsonPath('data.categories.0.category_color', '#ef4444')
+            ->assertJsonPath('data.categories.1.category_color', null)
             ->assertJsonPath('data.categories.0.values.0', '100.00')
             ->assertJsonPath('data.categories.0.values.2', '50.00')
             ->assertJsonPath('data.categories.1.category_name', 'Transport');
