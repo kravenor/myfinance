@@ -33,3 +33,7 @@ Branch di riferimento: `master`.
 - **Reset password via email**: invariato, rigenera già il token.
 - **iOS**: la PWA installata ha cookie separati da Safari; non è un bug dell'app.
 - **Cookie policy** ("fino a 400 giorni, o fino all'uscita"): ora corretta dispositivo per dispositivo.
+
+## 5. Aggiornamento — i command schedulati
+
+Dopo il primo fix è emersa la causa principale: `notifications:scan` (ogni mattina alle 07:00) e `rules:apply` impersonano ogni utente con `Auth::loginUsingId()` e chiudevano l'iterazione con `Auth::logout()`, che **rigenera il `remember_token`**. Ogni mattina tutti i dispositivi con «Ricordami» perdevano il token e tornavano al login alla prima scadenza della sessione: ecco perché la PWA «si scollegava da sola». Fix (branch `fix/commands-remember-token`): `Auth::forgetUser()`, che azzera l'utente del guard senza toccare sessione né token; test `test_background_commands_keep_the_remember_token` in `RememberMeTest`.

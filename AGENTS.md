@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-01**
-Fase corrente: **Estensione — Restyling UI/UX + coerenza dati (COMPLETATA)**
+Ultimo aggiornamento: **2026-10-02**
+Fase corrente: **Estensione — Notifiche (in analisi)**; completati restyling UI/UX, coerenza dati, privacy/cookie, «Ricordami», patrimonio storico, storico quotazioni (U1), colori categorie
 
 ---
 
@@ -230,7 +230,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **API**: tutte le rotte sotto `/api`, versionate `routes/api.php`
 - **Validazione**: Form Request, mai inline nel controller
 - **Response**: API Resources, niente array grezzi
-- **«Ricordami» e logout**: `users.remember_token` è unico per utente e condiviso dai dispositivi. Il logout usa `logoutCurrentDevice()` (mai `logout()`, che rigenera il token e scollega tutti gli altri dispositivi, PWA compresa); il cambio password rigenera il token e ri-emette il cookie solo per il dispositivo corrente se lo aveva. Analisi in [REMEMBER-ME-ANALYSIS](docs/analysis/REMEMBER-ME-ANALYSIS.md).
+- **«Ricordami» e logout**: `users.remember_token` è unico per utente e condiviso dai dispositivi. Il logout usa `logoutCurrentDevice()` (mai `logout()`, che rigenera il token e scollega tutti gli altri dispositivi, PWA compresa); i command che impersonano gli utenti (`notifications:scan`, `rules:apply`) chiudono ogni iterazione con `Auth::forgetUser()` per lo stesso motivo; il cambio password rigenera il token e ri-emette il cookie solo per il dispositivo corrente se lo aveva. Analisi in [REMEMBER-ME-ANALYSIS](docs/analysis/REMEMBER-ME-ANALYSIS.md).
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
 - **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
 - **Categoria coerente col tipo**: transazioni, ricorrenti e voci degli scenari validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
@@ -541,7 +541,7 @@ File:
 - [docker/nginx/Dockerfile.prod](docker/nginx/Dockerfile.prod) — multi-stage: stage 1 builda la SPA (`npm ci && npm run build`), stage 2 nginx serve `dist/` + proxy FastCGI verso PHP.
 - [docker/nginx/prod.conf](docker/nginx/prod.conf) — SPA fallback su `index.html`, cache 30d su `/assets/*` (asset Vite hash-immutable), API routing identico al dev.
 - [docker-compose.prod.yml](docker-compose.prod.yml) — servizi `nginx`, `php`, `scheduler` (`php artisan schedule:work`), `mysql`, `redis`. Volume `laravel_app` condiviso tra php/nginx/scheduler (read-only su nginx). Niente container `node` in prod.
-- [.env.production.example](.env.production.example) — template (rinominare in `.env.production`).
+- [.env.production.example](.env.production.example) — template: su ogni host (VPS, Raspberry) si copia in `.env.production` e si compila. **`.env.production` non è nel repository** (`.gitignore`, de-tracciato il 2026-10-02: conteneva la configurazione del Raspberry con i segreti in chiaro): ogni host ha il suo, con dominio, segreti e chiavi VAPID.
 
 Target Makefile: `make prod-build`, `make prod-up`, `make prod-down`.
 
@@ -564,7 +564,7 @@ Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.v
 
 **Log**: `php`, `scheduler` e `queue` montano il volume `laravel_logs` su `storage/logs`, quindi i log sopravvivono ai deploy. Con `LOG_STACK=daily` in `.env.production` c'è un file `laravel-YYYY-MM-DD.log` al giorno, tenuto 14 giorni (`LOG_DAILY_DAYS`). Lettura: `docker exec finance_vps_php tail -n 100 storage/logs/laravel-$(date +%F).log` (lo scheduler scrive nello stesso volume, es. i warning di `prices:fetch`).
 
-Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte dopo una CI verde su `master` e via SSH esegue `git pull` → `up -d --build` → **backup** → **`artisan migrate --force`**. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
+Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte dopo una CI verde su `master` e via SSH esegue `git pull` → `up -d --build` → **backup** → **`artisan migrate --force`**. Attorno al pull salva e ripristina `.env.production` (con `trap` su `EXIT`, quindi anche se il deploy fallisce): il file dell'host non viene mai toccato da git. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
 
 ### HTTPS
 Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.
@@ -653,7 +653,7 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
 - [TransactionImportService::import()](backend/app/Services/TransactionImportService.php) usa il matcher come **fallback** quando il mapping CSV non risolve già la categoria. Ritorno arricchito con `auto_categorized`.
 - La validazione regex avviene a livello di FormRequest (`Store/UpdateCategorizationRuleRequest`): pattern malformato → `422` con errore su `pattern`.
 - [CategorizationRuleApplier](backend/app/Services/CategorizationRuleApplier.php): applica le regole alle transazioni esistenti (filtri `only_uncategorized` default true, `account_id`, `from`, `to`). `chunk(500)`, aggiornamento in batch raggruppato per `category_id`, `times_applied` incrementato solo in commit (non dry-run). Dry-run non scrive nulla e ritorna `matched` + `by_rule` + `sample`.
-- Comando artisan `php artisan rules:apply [--dry-run] [--only-uncategorized=true] [--user=] [--account=] [--from=] [--to=]`: itera sugli utenti con `Auth::loginUsingId` + `Auth::logout` tra iterazioni per non fare leak del global scope.
+- Comando artisan `php artisan rules:apply [--dry-run] [--only-uncategorized=true] [--user=] [--account=] [--from=] [--to=]`: itera sugli utenti con `Auth::loginUsingId` + `Auth::forgetUser()` tra iterazioni per non fare leak del global scope (mai `Auth::logout()`, vedi «Ricordami e logout» in §6).
 
 ### Frontend
 - [CategorizationRulesView.vue](frontend/src/views/CategorizationRulesView.vue) (`/categorization-rules` in sidebar tra Tag e Budget) — CRUD inline, select categoria filtrata per `applies_to_type`, swatch colore, toggle attiva, contatore `times_applied`. Bottone "Applica alle transazioni esistenti" → modale con filtri (only_uncategorized/conto/range) → dry-run (tabella `by_rule` + sample) → conferma commit con reload lista.
@@ -796,7 +796,7 @@ Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (
 [BudgetThresholdNotification](backend/app/Notifications/BudgetThresholdNotification.php) e [SavingsGoalRiskNotification](backend/app/Notifications/SavingsGoalRiskNotification.php) implementano [Dedupable](backend/app/Notifications/Contracts/Dedupable.php) (`dedupKey()`). `toArray` espone `{key, type (budget|savings_goal), level, title, message, url}`; `toMail` produce una MailMessage con action verso la SPA.
 
 ### Scanner & schedule
-[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. **In tempo reale**: il middleware terminabile [ScanNotificationsAfterWrite](backend/app/Http/Middleware/ScanNotificationsAfterWrite.php) esegue `scan()` dell'utente **dopo l'invio della risposta** a ogni scrittura riuscita (non GET, 2xx) su `transactions`, `budgets`, `savings-goals`, `transactions/import`, `categorization-rules/apply` e `notification-preferences`: una scansione per richiesta, anche per un import di centinaia di righe. Nuove rotte che cambiano spese, budget o obiettivi vanno agganciate allo stesso middleware in `routes/api.php`. La scansione schedulata resta per i cambi dovuti al tempo e alle ricorrenti notturne. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`logout` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
+[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`forgetUser` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
 
 Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{goalId}:{yyyy-mm}` → una notifica per stato/periodo (warning→exceeded o behind→overdue generano una nuova notifica).
 

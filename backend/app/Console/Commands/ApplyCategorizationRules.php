@@ -37,7 +37,9 @@ class ApplyCategorizationRules extends Command
                 'to' => $this->option('to'),
             ], $dryRun);
 
-            Auth::logout(); // evita leak di scope tra utenti
+            // Evita leak di scope tra utenti. Non logout(): rigenererebbe il remember_token
+            // e farebbe perdere il «Ricordami» a tutti i dispositivi dell'utente.
+            Auth::forgetUser();
 
             $this->line("User {$userId}: matched={$result['matched']}, updated={$result['updated']}");
             if ($result['by_rule'] !== []) {
