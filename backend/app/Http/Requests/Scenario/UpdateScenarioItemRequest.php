@@ -2,10 +2,13 @@
 
 namespace App\Http\Requests\Scenario;
 
+use App\Models\ScenarioItem;
+use App\Support\CategoryTypeCheck;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateScenarioItemRequest extends FormRequest
 {
@@ -41,5 +44,21 @@ class UpdateScenarioItemRequest extends FormRequest
             'starts_on' => ['sometimes', 'required', 'date'],
             'ends_on' => ['sometimes', 'nullable', 'date', 'after_or_equal:starts_on'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function ($validator) {
+            if ($validator->errors()->hasAny(['type', 'category_id'])) {
+                return;
+            }
+            /** @var ScenarioItem $item */
+            $item = $this->route('item');
+            $categoryId = $this->has('category_id') ? $this->input('category_id') : $item->category_id;
+            $error = CategoryTypeCheck::error($categoryId, $this->input('type', $item->type));
+            if ($error !== null) {
+                $validator->errors()->add('category_id', $error);
+            }
+        });
     }
 }

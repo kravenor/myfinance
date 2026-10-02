@@ -15,6 +15,7 @@ import { useQueryFilters } from '@/composables/useQueryFilters'
 import { formatCurrency } from '@/lib/money'
 import { FALLBACK_TAG_COLOR } from '@/lib/chartTheme'
 import { TX_TYPE_LABEL, TX_TYPES } from '@/lib/labels'
+import { categoryOptions as buildCategoryOptions } from '@/lib/categories'
 import { useToastStore } from '@/stores/toast'
 import type { Account, Category, Paginated, Tag, Transaction, TransactionType } from '@/types/api'
 import { confirmAction } from '@/composables/useConfirm'
@@ -76,29 +77,7 @@ function toggleTag(id: number) {
   else form.value.tag_ids.splice(i, 1)
 }
 
-// Categorie del tipo corrente, ordinate ad albero (parent → figli indentati).
-const categoryOptions = computed<{ id: number; label: string }[]>(() => {
-  if (form.value.type === 'transfer') return []
-  const type = form.value.type as 'income' | 'expense'
-  const list = categories.value.filter((c) => c.type === type)
-  const ids = new Set(list.map((c) => c.id))
-  const byParent = new Map<number | null, Category[]>()
-  for (const c of list) {
-    const key = c.parent_id
-    if (!byParent.has(key)) byParent.set(key, [])
-    byParent.get(key)!.push(c)
-  }
-  const sortFn = (a: Category, b: Category) => a.sort_order - b.sort_order || a.name.localeCompare(b.name)
-  const out: { id: number; label: string }[] = []
-  const walk = (cat: Category, depth: number) => {
-    out.push({ id: cat.id, label: '   '.repeat(depth) + (depth ? '↳ ' : '') + cat.name })
-    for (const ch of (byParent.get(cat.id) ?? []).slice().sort(sortFn)) walk(ch, depth + 1)
-  }
-  // root = senza parent, o con parent di tipo diverso (non presente nella lista filtrata)
-  const roots = list.filter((c) => c.parent_id == null || !ids.has(c.parent_id)).sort(sortFn)
-  for (const r of roots) walk(r, 0)
-  return out
-})
+const categoryOptions = computed(() => buildCategoryOptions(categories.value, form.value.type))
 
 // Cambiando tipo, una categoria del tipo precedente non è più valida: meglio azzerarla che lasciarla nascosta.
 watch(categoryOptions, (opts) => {

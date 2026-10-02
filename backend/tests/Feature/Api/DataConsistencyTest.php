@@ -7,6 +7,7 @@ use App\Models\CategorizationRule;
 use App\Models\Category;
 use App\Models\ExchangeRate;
 use App\Models\SavingsGoal;
+use App\Models\Scenario;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -124,6 +125,45 @@ class DataConsistencyTest extends TestCase
                 'account_id' => $account->id, 'category_id' => $income->id, 'type' => 'expense',
                 'amount' => 50, 'cadence' => 'monthly', 'interval' => 1, 'starts_on' => '2026-05-01',
             ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('category_id');
+    }
+
+    public function test_recurring_saves_matching_category(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $expense = Category::factory()->for($user)->create(['type' => 'expense']);
+
+        $this->actingAs($user)
+            ->postJson('/api/recurring-transactions', [
+                'account_id' => $account->id, 'category_id' => $expense->id, 'type' => 'expense',
+                'amount' => 50, 'cadence' => 'monthly', 'interval' => 1, 'starts_on' => '2026-05-01',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.category_id', $expense->id);
+    }
+
+    public function test_scenario_item_category_must_match_type(): void
+    {
+        $user = User::factory()->create();
+        $scenario = Scenario::factory()->for($user)->create();
+        $expense = Category::factory()->for($user)->create(['type' => 'expense']);
+        $base = ['amount' => 100, 'cadence' => 'monthly', 'starts_on' => '2026-06-01', 'category_id' => $expense->id];
+
+        $this->actingAs($user)
+            ->postJson("/api/scenarios/{$scenario->id}/items", $base + ['type' => 'income'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('category_id');
+
+        // Senza type la voce è un'uscita: la categoria di uscita è valida.
+        $itemId = $this->actingAs($user)
+            ->postJson("/api/scenarios/{$scenario->id}/items", $base)
+            ->assertCreated()
+            ->json('data.id');
+
+        $this->actingAs($user)
+            ->patchJson("/api/scenarios/{$scenario->id}/items/{$itemId}", ['type' => 'income'])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('category_id');
     }

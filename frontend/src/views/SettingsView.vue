@@ -206,7 +206,7 @@ onMounted(async () => {
               aria-describedby="hint-budget-threshold"
             />
             <p id="hint-budget-threshold" class="field-hint">
-              Un budget va «in allerta» quando la spesa raggiunge questa percentuale ed è «sforato» dal 100%. Vale anche per i budget mostrati in Dashboard.
+              Un budget va «in allerta» quando la spesa raggiunge questa percentuale ed è «sforato» dal 100%. Vale per notifiche, Dashboard e pagina Budget.
             </p>
           </div>
 

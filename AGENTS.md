@@ -97,6 +97,7 @@ Finance/
 │       ├── lib/api.ts         # axios client (withCredentials, withXSRFToken, ensureCsrf)
 │       ├── lib/money.ts       # formatCurrency (Intl, locale it-IT) + CURRENCIES (lista valute)
 │       ├── lib/date.ts        # formatDate/formatDateWith/formatMonth + financialMonthStart/Range (vedi §6)
+│       ├── lib/categories.ts  # categoryOptions(categories, type): opzioni di select ad albero (Transazioni, Ricorrenti)
 │       ├── lib/labels.ts      # TX_TYPE_LABEL / TX_TYPES (etichette italiane dei tipi transazione)
 │       ├── lib/chartTheme.ts  # palette e colori unici dei grafici Chart.js
 │       ├── types/api.ts       # tipi: User, Account, Category, Tag, Transaction, Budget, RecurringTransaction, Paginated
@@ -229,7 +230,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Response**: API Resources, niente array grezzi
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
 - **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
-- **Categoria coerente col tipo**: transazioni e ricorrenti validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
+- **Categoria coerente col tipo**: transazioni, ricorrenti e voci degli scenari validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
 - **Messaggi in italiano**: `APP_LOCALE=it` con traduzioni in `backend/lang/it/` (`validation.php`, `auth.php`, `passwords.php`). `validation.php` contiene solo le regole usate dalle Form Request (le chiavi mancanti ricadono sull'inglese del framework) e la mappa `attributes` campo → nome leggibile: un nuovo campo in una Form Request va aggiunto lì, una nuova regola pure.
 - **Code style**: Laravel Pint (preset `laravel`)
 - **Test**: PHPUnit / Pest, feature test per ogni endpoint. Test DB su SQLite in-memory (vedi `phpunit.xml`).
@@ -444,8 +445,8 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 | `/categories` | CategoriesView | CRUD + parent select filtrato per type |
 | `/tags` | TagsView | CRUD + swatch colore |
 | `/transactions` | TransactionsView | CRUD + filtri (conto, type, range date, ricerca descrizione, tag), paginazione (prev/next), supporto transfer. Tag associabili nel form (chip multi-selezione → `tag_ids`) e mostrati come badge colorati in tabella |
-| `/budgets` | BudgetsView | filtro anno/mese, progresso barra con `spent / amount` |
-| `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active` |
+| `/budgets` | BudgetsView | periodo con frecce mese, progresso barra con `spent / amount`; ambra dalla soglia `notification_preferences.budget_threshold` (la stessa di Dashboard e notifiche), rosso dal 100% |
+| `/recurring` | RecurringView | CRUD ricorrenti, mostra `next_run_at` e flag `is_active`. Categoria (non per i giroconti) copiata dal runner su ogni transazione generata e usata da Previsioni per le uscite ricorrenti |
 
 ### Menu / sidebar (AppLayout)
 - Le voci del menu hanno fonte unica in [stores/menu.ts](frontend/src/stores/menu.ts) (`NAV_ITEMS`, con `group` e `icon`; ordine dei gruppi in `NAV_GROUPS`: Panoramica, Movimenti, Pianificazione, Patrimonio, Analisi, Configurazione). Un gruppo senza voci visibili non viene mostrato. I `name` sono le rotte e le chiavi di `menu.hidden`: non rinominarli.
