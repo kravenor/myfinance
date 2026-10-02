@@ -18,10 +18,8 @@ backend/node_modules/
 backend/.env
 backend/storage/*.key
 backend/storage/framework/cache/data/
-backend/storage/framework/sessions/
-backend/storage/framework/testing/
-backend/storage/framework/views/
-backend/storage/logs/
+# sessions/, testing/, views/ e logs/ hanno un .gitignore che ne ignora il contenuto ma tiene
+# la cartella: senza, un clone pulito (la CI) non ha dove compilare le viste delle email.
 backend/bootstrap/cache/*.php
 backend/public/storage
 backend/public/hot
