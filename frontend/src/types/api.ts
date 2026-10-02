@@ -4,6 +4,11 @@ export interface NotificationPreferences {
   budget: boolean
   savings_goals: boolean
   budget_threshold: number
+  pac: boolean
+  stale_prices: boolean
+  monthly_summary: boolean
+  large_expense: boolean
+  large_expense_threshold: number
 }
 
 export interface User {

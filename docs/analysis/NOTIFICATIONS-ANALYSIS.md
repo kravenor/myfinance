@@ -51,6 +51,14 @@ Candidati, ognuno con un toggle in Impostazioni e la stessa dedup:
 
 ## 3. Dettaglio dei fix
 
+### Passo 3 — scelte fatte in implementazione
+- Dedup comune in `User::notifyOnce()` (scanner e runner).
+- **Rata PAC**: notifica dal runner dopo il commit della transazione; «stimato» = nessuna quotazione disponibile (ripiego su prezzo manuale o costo medio).
+- **Quotazioni ferme**: solo strumenti con quantità > 0 e provider automatico; senza quote si conta dalla creazione dell'holding; chiave per episodio (`price-stale:{id}:{ultima data}`).
+- **Spesa importante**: spenta di default; uscite create da ≤ 2 giorni e datate negli ultimi 7 (un import di estratti vecchi non genera avvisi); conversione in valuta base al cambio della data.
+- **Riepilogo mensile**: `periodComparison` (solo totali, niente saldi) nei primi 7 giorni del mese finanziario; saltato se il mese chiuso non ha movimenti; link al Report del periodo.
+- Importi formattati con `NumberFormatter` it_IT (spazio non separabile prima del simbolo, migliaia raggruppate anche a 4 cifre).
+
 Dettagli implementativi per passo nelle sezioni dei commit; scelte trasversali:
 - Un branch per passo, in ordine; ogni passo è rilasciabile da solo.
 - Dedup invariata come concetto (chiave per stato/periodo); con il passo 4 diventa robusta all'eliminazione.

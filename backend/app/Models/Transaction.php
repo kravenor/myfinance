@@ -24,6 +24,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $description
  * @property string|null $notes
  * @property string|null $external_id
+ * @property-read Category|null $category
  */
 class Transaction extends Model
 {

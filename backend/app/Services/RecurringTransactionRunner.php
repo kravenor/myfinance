@@ -7,6 +7,8 @@ use App\Models\InvestmentHolding;
 use App\Models\InvestmentTransaction;
 use App\Models\RecurringTransaction;
 use App\Models\Transaction;
+use App\Models\User;
+use App\Notifications\PacInstallmentNotification;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -52,7 +54,9 @@ class RecurringTransactionRunner
             ? InvestmentHolding::withoutGlobalScopes()->find($recurring->investment_holding_id)
             : null;
 
-        DB::transaction(function () use ($recurring, $holding, $until, &$count) {
+        $lastBuy = null;
+
+        DB::transaction(function () use ($recurring, $holding, $until, &$count, &$lastBuy) {
             while ($recurring->is_active && $recurring->next_run_at->lte($until)) {
                 $occurredAt = $recurring->next_run_at->copy();
 
@@ -71,7 +75,7 @@ class RecurringTransactionRunner
                 ]);
 
                 if ($holding) {
-                    $this->recordInvestmentBuy($recurring, $holding, $occurredAt);
+                    $lastBuy = $this->recordInvestmentBuy($recurring, $holding, $occurredAt);
                 }
 
                 $recurring->last_run_at = $occurredAt;
@@ -91,7 +95,32 @@ class RecurringTransactionRunner
             }
         });
 
+        // Dopo il commit: se la transazione fallisce non parte nessun avviso.
+        if ($holding && $count > 0) {
+            $this->notifyPac($recurring, $holding, $count, $lastBuy);
+        }
+
         return $count;
+    }
+
+    /** @param  array{quantity: float, price: float, estimated: bool}|null  $lastBuy  null = quote non calcolabili */
+    private function notifyPac(RecurringTransaction $recurring, InvestmentHolding $holding, int $count, ?array $lastBuy): void
+    {
+        $user = User::query()->find($recurring->user_id);
+        if (! $user || ! $user->notificationPreference('pac')) {
+            return;
+        }
+
+        $user->notifyOnce(new PacInstallmentNotification([
+            'recurring_id' => $recurring->id,
+            'holding' => $holding->name,
+            'count' => $count,
+            'last_date' => $recurring->last_run_at->toDateString(),
+            'quantity' => $lastBuy['quantity'] ?? null,
+            'price' => $lastBuy['price'] ?? null,
+            'currency' => $holding->currency,
+            'estimated' => $lastBuy['estimated'] ?? false,
+        ]));
     }
 
     /**
@@ -99,13 +128,17 @@ class RecurringTransactionRunner
      * dall'importo versato al netto dei costi e dalla quotazione del giorno,
      * come nel form dei movimenti.
      */
-    private function recordInvestmentBuy(RecurringTransaction $recurring, InvestmentHolding $holding, Carbon $occurredAt): void
+    /**
+     * @return array{quantity: float, price: float, estimated: bool}|null null se le quote non sono calcolabili
+     */
+    private function recordInvestmentBuy(RecurringTransaction $recurring, InvestmentHolding $holding, Carbon $occurredAt): ?array
     {
-        $price = $this->prices->priceFor($holding, $occurredAt) ?? $holding->effectivePrice();
+        $quoted = $this->prices->priceFor($holding, $occurredAt);
+        $price = $quoted ?? $holding->effectivePrice();
         if ($price <= 0) {
             // ponytail: senza prezzo le quote non sono calcolabili: resta solo il
             // movimento di cassa, l'utente registra l'acquisto a mano.
-            return;
+            return null;
         }
 
         $amount = (float) $recurring->amount;
@@ -118,7 +151,7 @@ class RecurringTransactionRunner
         // I costi sono già dentro l'importo della rata: comprano quote solo i soldi che restano.
         $invested = $amount - $fees;
         if ($invested <= 0) {
-            return;
+            return null;
         }
 
         InvestmentTransaction::withoutGlobalScopes()->create([
@@ -131,6 +164,8 @@ class RecurringTransactionRunner
             'fees' => number_format($fees, 2, '.', ''),
             'notes' => $recurring->description,
         ]);
+
+        return ['quantity' => $invested / $price, 'price' => $price, 'estimated' => $quoted === null];
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Notifications\Contracts\Dedupable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -30,6 +31,12 @@ class User extends Authenticatable
         'budget' => true,
         'savings_goals' => true,
         'budget_threshold' => 80,
+        'pac' => true,
+        'stale_prices' => true,
+        'monthly_summary' => true,
+        // Spento finché non si sceglie una soglia: con un default qualsiasi sarebbe rumoroso.
+        'large_expense' => false,
+        'large_expense_threshold' => 500,
     ];
 
     /** @var array<string, mixed> */
@@ -77,6 +84,21 @@ class User extends Authenticatable
     public function notificationPreference(string $key): mixed
     {
         return $this->notificationPreferences()[$key] ?? null;
+    }
+
+    /**
+     * Invia solo se l'utente non ha già una notifica con la stessa chiave (anche letta):
+     * una per stato e periodo, che arrivi dalla scansione, da una scrittura o dal runner.
+     */
+    public function notifyOnce(Notification&Dedupable $notification): bool
+    {
+        if ($this->notifications()->where('data->key', $notification->dedupKey())->exists()) {
+            return false;
+        }
+
+        $this->notify($notification);
+
+        return true;
     }
 
     /**

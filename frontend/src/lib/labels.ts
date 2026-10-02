@@ -93,4 +93,5 @@ export const NOTIFICATION_LEVEL_LABEL: Record<string, string> = {
   warning: 'In allerta',
   overdue: 'Scaduto',
   behind: 'In ritardo',
+  info: 'Info',
 }
