@@ -541,7 +541,7 @@ File:
 - [docker/nginx/Dockerfile.prod](docker/nginx/Dockerfile.prod) — multi-stage: stage 1 builda la SPA (`npm ci && npm run build`), stage 2 nginx serve `dist/` + proxy FastCGI verso PHP.
 - [docker/nginx/prod.conf](docker/nginx/prod.conf) — SPA fallback su `index.html`, cache 30d su `/assets/*` (asset Vite hash-immutable), API routing identico al dev.
 - [docker-compose.prod.yml](docker-compose.prod.yml) — servizi `nginx`, `php`, `scheduler` (`php artisan schedule:work`), `mysql`, `redis`. Volume `laravel_app` condiviso tra php/nginx/scheduler (read-only su nginx). Niente container `node` in prod.
-- [.env.production.example](.env.production.example) — template (rinominare in `.env.production`).
+- [.env.production.example](.env.production.example) — template: su ogni host (VPS, Raspberry) si copia in `.env.production` e si compila. **`.env.production` non è nel repository** (`.gitignore`, de-tracciato il 2026-10-02: conteneva la configurazione del Raspberry con i segreti in chiaro): ogni host ha il suo, con dominio, segreti e chiavi VAPID.
 
 Target Makefile: `make prod-build`, `make prod-up`, `make prod-down`.
 
@@ -564,7 +564,7 @@ Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.v
 
 **Log**: `php`, `scheduler` e `queue` montano il volume `laravel_logs` su `storage/logs`, quindi i log sopravvivono ai deploy. Con `LOG_STACK=daily` in `.env.production` c'è un file `laravel-YYYY-MM-DD.log` al giorno, tenuto 14 giorni (`LOG_DAILY_DAYS`). Lettura: `docker exec finance_vps_php tail -n 100 storage/logs/laravel-$(date +%F).log` (lo scheduler scrive nello stesso volume, es. i warning di `prices:fetch`).
 
-Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte dopo una CI verde su `master` e via SSH esegue `git pull` → `up -d --build` → **backup** → **`artisan migrate --force`**. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
+Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte dopo una CI verde su `master` e via SSH esegue `git pull` → `up -d --build` → **backup** → **`artisan migrate --force`**. Attorno al pull salva e ripristina `.env.production` (con `trap` su `EXIT`, quindi anche se il deploy fallisce): il file dell'host non viene mai toccato da git. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
 
 ### HTTPS
 Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.
