@@ -60,4 +60,15 @@ class RememberMeTest extends TestCase
             ->assertOk()
             ->assertCookieMissing($this->recaller());
     }
+
+    public function test_background_commands_keep_the_remember_token(): void
+    {
+        $user = User::factory()->create(['remember_token' => 'token-del-telefono']);
+
+        // notifications:scan gira ogni mattina: prima rigenerava il token di tutti gli utenti.
+        $this->artisan('notifications:scan')->assertSuccessful();
+        $this->artisan('rules:apply --dry-run')->assertSuccessful();
+
+        $this->assertSame('token-del-telefono', $user->fresh()->remember_token);
+    }
 }

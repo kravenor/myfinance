@@ -2,6 +2,8 @@
 .env
 .env.local
 .env.*.local
+# Configurazione di produzione: una per host (VPS, Raspberry), mai nel repository.
+/.env.production
 
 # OS
 .DS_Store
