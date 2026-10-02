@@ -37,6 +37,26 @@ services:
     networks:
       - finance
 
+  # Worker della coda: email e push delle notifiche (sul VPS è il servizio `queue`).
+  # queue:listen rilegge il codice a ogni job, così in sviluppo non serve riavviarlo.
+  queue:
+    # Stessa immagine del servizio php (costruita da lui): niente seconda build identica.
+    image: finance-php
+    pull_policy: never
+    container_name: finance_queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: ["php", "artisan", "queue:listen", "--tries=3"]
+    volumes:
+      - ./backend:/var/www/html:cached
+    depends_on:
+      php:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - finance
+
   node:
     build:
       context: ./frontend

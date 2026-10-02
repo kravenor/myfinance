@@ -5,10 +5,11 @@ namespace App\Notifications;
 use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class BudgetThresholdNotification extends Notification implements Dedupable
+class BudgetThresholdNotification extends Notification implements Dedupable, ShouldQueue
 {
     use ChannelsFromPreferences, Queueable;
 

@@ -51,6 +51,14 @@ Candidati, ognuno con un toggle in Impostazioni e la stessa dedup:
 
 ## 3. Dettaglio dei fix
 
+### Passo 4 — scelte fatte in implementazione
+- Notifiche nascoste con `dismissed_at` (migration), non cancellate; la dedup le vede.
+- Badge: intervallo di 5 minuti solo a pagina visibile + `visibilitychange` + messaggio del service worker.
+- Email di prova sincrona (`notifyNow`), esito leggibile: 422 esplicito con `MAIL_MAILER=log`, errori SMTP nel log.
+- `ShouldQueue` + `viaConnections(['database' => 'sync'])`: verificato con la coda `database` nei test e dal vivo col worker di sviluppo.
+- Worker di sviluppo con l'immagine `finance-php` esistente: una nuova build dell'immagine php fallisce su macOS (`GID=20` già usato in Alpine), problema separato da sistemare nel Dockerfile.
+- `notifications:prune` settimanale, 180 giorni.
+
 ### Passo 3 — scelte fatte in implementazione
 - Dedup comune in `User::notifyOnce()` (scanner e runner).
 - **Rata PAC**: notifica dal runner dopo il commit della transazione; «stimato» = nessuna quotazione disponibile (ripiego su prezzo manuale o costo medio).

@@ -8,9 +8,11 @@ use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\BudgetThresholdNotification;
+use App\Notifications\TestEmailNotification;
 use App\Services\NotificationScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class NotificationPreferenceTest extends TestCase
@@ -118,5 +120,22 @@ class NotificationPreferenceTest extends TestCase
         app(NotificationScanner::class)->scan($user);
 
         $this->assertSame(1, $user->notifications()->where('data->level', 'warning')->count());
+    }
+
+    public function test_test_email_reports_log_mailer_and_sends_with_smtp(): void
+    {
+        $user = User::factory()->create(['email' => 'mario@example.test']);
+
+        config(['mail.default' => 'log']);
+        $this->actingAs($user)->postJson('/api/notification-preferences/test-email')
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Il server scrive le email nel log (MAIL_MAILER=log): per ora non arrivano a nessuno.');
+
+        config(['mail.default' => 'array']);
+        Notification::fake();
+        $this->actingAs($user)->postJson('/api/notification-preferences/test-email')
+            ->assertOk()
+            ->assertJsonPath('message', 'Email di prova inviata a mario@example.test.');
+        Notification::assertSentTo($user, TestEmailNotification::class);
     }
 }

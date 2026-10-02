@@ -35,6 +35,17 @@ trait ChannelsFromPreferences
         return $channels;
     }
 
+    /**
+     * Le notifiche sono ShouldQueue: email e push passano dal worker (un SMTP lento non blocca
+     * scansione né richiesta), la riga in-app si scrive subito così la dedup la vede all'istante.
+     *
+     * @return array<string, string>
+     */
+    public function viaConnections(): array
+    {
+        return ['database' => 'sync'];
+    }
+
     /** Email con gli stessi testi della notifica in-app (le notifiche possono definirne una propria). */
     public function toMail(object $notifiable): MailMessage
     {

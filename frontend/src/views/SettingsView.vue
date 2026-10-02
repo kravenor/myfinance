@@ -135,6 +135,23 @@ async function onSubmit() {
   }
 }
 
+// Email di prova: dice subito se l'invio funziona (o se il server le scrive solo nel log).
+const testingEmail = ref(false)
+const testEmailResult = ref<{ ok: boolean; text: string } | null>(null)
+async function sendTestEmail() {
+  testingEmail.value = true
+  testEmailResult.value = null
+  try {
+    const { data } = await api.post<{ message: string }>('/notification-preferences/test-email')
+    testEmailResult.value = { ok: true, text: data.message }
+  } catch (e: unknown) {
+    const message = (e as { response?: { data?: { message?: string } } }).response?.data?.message
+    testEmailResult.value = { ok: false, text: message ?? 'Invio non riuscito.' }
+  } finally {
+    testingEmail.value = false
+  }
+}
+
 // Notifiche push sul dispositivo corrente (una sottoscrizione per browser).
 const toast = useToastStore()
 const push = ref<PushState | null>(null)
@@ -211,6 +228,15 @@ onMounted(async () => {
               aria-describedby="hint-email-address"
             />
             <p id="hint-email-address" class="field-hint">Lascia vuoto per usare l'email dell'account.</p>
+            <div class="mt-2 flex flex-wrap items-center gap-3">
+              <button type="button" class="btn-secondary" :disabled="testingEmail" @click="sendTestEmail">
+                {{ testingEmail ? 'Invio…' : 'Invia email di prova' }}
+              </button>
+              <span v-if="testEmailResult" :role="testEmailResult.ok ? 'status' : 'alert'" class="text-sm" :class="testEmailResult.ok ? 'text-income-700' : 'text-danger-600'">
+                {{ testEmailResult.text }}
+              </span>
+            </div>
+            <p class="field-hint">Salva prima un indirizzo diverso: la prova va a quello salvato.</p>
           </div>
 
           <hr class="border-slate-100" />

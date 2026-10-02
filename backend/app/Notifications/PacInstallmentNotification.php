@@ -7,13 +7,14 @@ use App\Notifications\Concerns\FormatsForUser;
 use App\Notifications\Contracts\Dedupable;
 use App\Support\Money;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 
 /**
  * Esito delle rate PAC registrate dal runner per una ricorrente: una notifica per esecuzione,
  * anche se recupera più rate arretrate. Avviso se il prezzo è stimato o se le quote mancano.
  */
-class PacInstallmentNotification extends Notification implements Dedupable
+class PacInstallmentNotification extends Notification implements Dedupable, ShouldQueue
 {
     use ChannelsFromPreferences, FormatsForUser, Queueable;
 

@@ -6,11 +6,12 @@ use App\Models\SavingsGoal;
 use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
-class SavingsGoalRiskNotification extends Notification implements Dedupable
+class SavingsGoalRiskNotification extends Notification implements Dedupable, ShouldQueue
 {
     use ChannelsFromPreferences, Queueable;
 

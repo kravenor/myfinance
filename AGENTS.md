@@ -141,6 +141,7 @@ Finance/
 |----------|-----------|------------|---------------|-------|
 | `nginx` | `finance_nginx` | `${APP_PORT:-8080}` | 80 | Entry point HTTP, reverse-proxy a Vite + FastCGI a PHP |
 | `php` | `finance_php` | — | 9000 | PHP-FPM, Laravel |
+| `queue` | `finance_queue` | — | — | Worker della coda (`queue:listen`, rilegge il codice a ogni job): email e push delle notifiche. Usa l'immagine `finance-php` del servizio `php` |
 | `node` | `finance_node` | — | 5173 | Vite dev server (proxato da nginx) |
 | `mysql` | `finance_mysql` | `${DB_PORT:-3306}` | 3306 | Database |
 | `redis` | `finance_redis` | — | 6379 | Cache, queue, sessioni |
@@ -802,6 +803,13 @@ Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (
 
 Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{goalId}:{yyyy-mm}` → una notifica per stato/periodo (warning→exceeded o behind→overdue generano una nuova notifica).
 
+### Coda, notifiche nascoste, pulizia (passo 4)
+- Le 6 notifiche di avviso sono `ShouldQueue`; `viaConnections()` nel trait tiene il canale `database` su `sync`, quindi la riga in-app esiste subito (dedup immediata) mentre email e push passano dal worker. Sul VPS c'è il servizio `queue`, in sviluppo il servizio `queue` del `docker-compose.yml`. Nei test `QUEUE_CONNECTION=sync`.
+- «Elimina» non cancella: imposta `notifications.dismissed_at` (e `read_at`); lista, conteggio e «segna tutte come lette» ignorano le nascoste, `notifyOnce()` le vede ancora → una notifica eliminata non torna alla scansione successiva.
+- `notifications:prune [--days=180]`, schedulato la domenica alle 03:30: cancella le notifiche più vecchie (le chiavi di dedup contengono il periodo, oltre 180 giorni non servono).
+- Badge: AppLayout ricarica le notifiche ogni 5 minuti a pagina visibile, al ritorno in primo piano e all'arrivo di una push.
+- **Email**: `POST /api/notification-preferences/test-email` (throttle 5/min) invia subito una prova con `notifyNow` all'indirizzo delle notifiche; con `MAIL_MAILER=log` risponde 422 spiegandolo; un errore SMTP va nel log e all'utente arriva un messaggio generico. Pulsante «Invia email di prova» in Impostazioni. SMTP OVH in `.env.production`: `MAIL_MAILER=smtp`, `MAIL_SCHEME=smtps`, `MAIL_HOST=ssl0.ovh.net`, `MAIL_PORT=465`, `MAIL_USERNAME`/`MAIL_PASSWORD` della casella, `MAIL_FROM_ADDRESS` dello stesso dominio; poi ricreare `php`, `scheduler` e `queue` (l'`env_file` si legge all'avvio).
+
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
 |--------|------|------|
@@ -812,7 +820,8 @@ Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{go
 | GET | `/api/notifications` | Ultime 50 + `unread_count` |
 | POST | `/api/notifications/read-all` | Segna tutte come lette, ritorna `unread_count: 0` |
 | POST | `/api/notifications/{id}/read` | Segna come letta, ritorna `unread_count` aggiornato |
-| DELETE | `/api/notifications/{id}` | 204 |
+| DELETE | `/api/notifications/{id}` | Nasconde (`dismissed_at`), 204 |
+| POST | `/api/notification-preferences/test-email` | Email di prova sincrona; 422 se `MAIL_MAILER=log` o se l'invio fallisce |
 
 ### Preferenze (per-utente)
 Colonna JSON `users.notification_preferences` (cast `array`); default in `User::NOTIFICATION_DEFAULTS`, esposti via `User::notificationPreferences()` / `notificationPreference($key)`:

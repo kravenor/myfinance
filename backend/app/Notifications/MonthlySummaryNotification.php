@@ -6,11 +6,12 @@ use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
 use App\Support\Money;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
 /** Riepilogo del mese finanziario appena chiuso, con il confronto col precedente. */
-class MonthlySummaryNotification extends Notification implements Dedupable
+class MonthlySummaryNotification extends Notification implements Dedupable, ShouldQueue
 {
     use ChannelsFromPreferences, Queueable;
 
