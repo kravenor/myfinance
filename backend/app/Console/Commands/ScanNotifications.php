@@ -29,7 +29,9 @@ class ScanNotifications extends Command
             $sent = $scanner->scan($user);
             $total += $sent;
 
-            Auth::logout(); // evita leak di scope tra utenti
+            // Evita leak di scope tra utenti. Non logout(): rigenererebbe il remember_token
+            // e farebbe perdere il «Ricordami» a tutti i dispositivi dell'utente.
+            Auth::forgetUser();
 
             if ($sent > 0) {
                 $this->line("User {$userId}: {$sent} notifiche inviate.");

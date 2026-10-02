@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-01**
-Fase corrente: **Estensione — Restyling UI/UX + coerenza dati (COMPLETATA)**
+Ultimo aggiornamento: **2026-10-02**
+Fase corrente: **Estensione — Notifiche (in analisi)**; completati restyling UI/UX, coerenza dati, privacy/cookie, «Ricordami», patrimonio storico, storico quotazioni (U1), colori categorie
 
 ---
 
@@ -230,7 +230,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **API**: tutte le rotte sotto `/api`, versionate `routes/api.php`
 - **Validazione**: Form Request, mai inline nel controller
 - **Response**: API Resources, niente array grezzi
-- **«Ricordami» e logout**: `users.remember_token` è unico per utente e condiviso dai dispositivi. Il logout usa `logoutCurrentDevice()` (mai `logout()`, che rigenera il token e scollega tutti gli altri dispositivi, PWA compresa); il cambio password rigenera il token e ri-emette il cookie solo per il dispositivo corrente se lo aveva. Analisi in [REMEMBER-ME-ANALYSIS](docs/analysis/REMEMBER-ME-ANALYSIS.md).
+- **«Ricordami» e logout**: `users.remember_token` è unico per utente e condiviso dai dispositivi. Il logout usa `logoutCurrentDevice()` (mai `logout()`, che rigenera il token e scollega tutti gli altri dispositivi, PWA compresa); i command che impersonano gli utenti (`notifications:scan`, `rules:apply`) chiudono ogni iterazione con `Auth::forgetUser()` per lo stesso motivo; il cambio password rigenera il token e ri-emette il cookie solo per il dispositivo corrente se lo aveva. Analisi in [REMEMBER-ME-ANALYSIS](docs/analysis/REMEMBER-ME-ANALYSIS.md).
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
 - **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
 - **Categoria coerente col tipo**: transazioni, ricorrenti e voci degli scenari validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
@@ -653,7 +653,7 @@ Inoltre `summary` ora include `saving_rate` = `(income - expense) / income * 100
 - [TransactionImportService::import()](backend/app/Services/TransactionImportService.php) usa il matcher come **fallback** quando il mapping CSV non risolve già la categoria. Ritorno arricchito con `auto_categorized`.
 - La validazione regex avviene a livello di FormRequest (`Store/UpdateCategorizationRuleRequest`): pattern malformato → `422` con errore su `pattern`.
 - [CategorizationRuleApplier](backend/app/Services/CategorizationRuleApplier.php): applica le regole alle transazioni esistenti (filtri `only_uncategorized` default true, `account_id`, `from`, `to`). `chunk(500)`, aggiornamento in batch raggruppato per `category_id`, `times_applied` incrementato solo in commit (non dry-run). Dry-run non scrive nulla e ritorna `matched` + `by_rule` + `sample`.
-- Comando artisan `php artisan rules:apply [--dry-run] [--only-uncategorized=true] [--user=] [--account=] [--from=] [--to=]`: itera sugli utenti con `Auth::loginUsingId` + `Auth::logout` tra iterazioni per non fare leak del global scope.
+- Comando artisan `php artisan rules:apply [--dry-run] [--only-uncategorized=true] [--user=] [--account=] [--from=] [--to=]`: itera sugli utenti con `Auth::loginUsingId` + `Auth::forgetUser()` tra iterazioni per non fare leak del global scope (mai `Auth::logout()`, vedi «Ricordami e logout» in §6).
 
 ### Frontend
 - [CategorizationRulesView.vue](frontend/src/views/CategorizationRulesView.vue) (`/categorization-rules` in sidebar tra Tag e Budget) — CRUD inline, select categoria filtrata per `applies_to_type`, swatch colore, toggle attiva, contatore `times_applied`. Bottone "Applica alle transazioni esistenti" → modale con filtri (only_uncategorized/conto/range) → dry-run (tabella `by_rule` + sample) → conferma commit con reload lista.
@@ -796,7 +796,7 @@ Notifiche **in-app** (canale `database` di Laravel, sempre attivo) + **email** (
 [BudgetThresholdNotification](backend/app/Notifications/BudgetThresholdNotification.php) e [SavingsGoalRiskNotification](backend/app/Notifications/SavingsGoalRiskNotification.php) implementano [Dedupable](backend/app/Notifications/Contracts/Dedupable.php) (`dedupKey()`). `toArray` espone `{key, type (budget|savings_goal), level, title, message, url}`; `toMail` produce una MailMessage con action verso la SPA.
 
 ### Scanner & schedule
-[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`logout` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
+[NotificationScanner::scan(User)](backend/app/Services/NotificationScanner.php): usa [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (mese corrente) e [SavingsGoalProgressService](backend/app/Services/SavingsGoalProgressService.php) (goal attivi con `target_date`, stato `behind`/`overdue`); invia una notifica solo se `data->key` non è già presente per l'utente. Command `php artisan notifications:scan [--user=]` itera gli utenti (`Auth::loginUsingId`/`forgetUser` come `rules:apply`), schedulato alle **07:00** in [routes/console.php](backend/routes/console.php).
 
 Chiavi di dedup: `budget:{status}:{budgetId}:{year}-{month}`, `goal:{status}:{goalId}:{yyyy-mm}` → una notifica per stato/periodo (warning→exceeded o behind→overdue generano una nuova notifica).
 
