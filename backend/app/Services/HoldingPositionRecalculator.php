@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\InvestmentHolding;
 use App\Models\InvestmentTransaction;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -26,11 +27,6 @@ class HoldingPositionRecalculator
      */
     public function recalculate(InvestmentHolding $holding): void
     {
-        $quantity = 0.0;
-        $costBasis = 0.0;
-        $realized = 0.0;
-        $netInvested = 0.0;
-
         // ponytail: l'intero registro in memoria. Un PAC decennale fa ~120 righe;
         // se un holding arrivasse a decine di migliaia di movimenti, passare a chunk.
         /** @var Collection<int, InvestmentTransaction> $movements */
@@ -39,7 +35,37 @@ class HoldingPositionRecalculator
             ->orderBy('id')
             ->get();
 
+        $position = $this->positionAt($movements, null, strict: true);
+
+        $holding->forceFill([
+            'quantity' => $position['quantity'],
+            'avg_cost' => $position['quantity'] > 0 ? $position['cost_basis'] / $position['quantity'] : 0.0,
+            'realized_pl' => round($position['realized'], 2),
+            'net_invested' => round($position['net_invested'], 2),
+        ])->save();
+    }
+
+    /**
+     * Posizione ricostruita dai movimenti (già ordinati per data) fino a $upTo incluso, o tutti se null.
+     * Unica implementazione della regola del costo medio: la usano il ricalcolo e i report storici.
+     *
+     * @param  iterable<InvestmentTransaction>  $movements
+     * @return array{quantity: float, cost_basis: float, realized: float, net_invested: float}
+     *
+     * @throws ValidationException con $strict, se una vendita supera le quote possedute
+     */
+    public function positionAt(iterable $movements, ?Carbon $upTo = null, bool $strict = false): array
+    {
+        $quantity = 0.0;
+        $costBasis = 0.0;
+        $realized = 0.0;
+        $netInvested = 0.0;
+
         foreach ($movements as $movement) {
+            if ($upTo !== null && $movement->occurred_at->gt($upTo)) {
+                break;
+            }
+
             $moved = (float) $movement->quantity;
             $cash = $movement->cashFlow();
 
@@ -61,7 +87,7 @@ class HoldingPositionRecalculator
                 continue;
             }
 
-            if ($moved - $quantity > 1e-8) {
+            if ($strict && $moved - $quantity > 1e-8) {
                 throw ValidationException::withMessages([
                     'quantity' => "Il registro venderebbe più quote di quante ne risultino possedute al {$movement->occurred_at->format('d/m/Y')}.",
                 ]);
@@ -79,12 +105,7 @@ class HoldingPositionRecalculator
             $costBasis = 0.0;
         }
 
-        $holding->forceFill([
-            'quantity' => $quantity,
-            'avg_cost' => $quantity > 0 ? $costBasis / $quantity : 0.0,
-            'realized_pl' => round($realized, 2),
-            'net_invested' => round($netInvested, 2),
-        ])->save();
+        return ['quantity' => $quantity, 'cost_basis' => $costBasis, 'realized' => $realized, 'net_invested' => $netInvested];
     }
 
     /** Registra il movimento di apertura di un holding creato con una posizione già in essere. */
