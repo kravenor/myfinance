@@ -22,6 +22,11 @@ class UpdateNotificationPreferencesRequest extends FormRequest
             'budget' => ['sometimes', 'boolean'],
             'savings_goals' => ['sometimes', 'boolean'],
             'budget_threshold' => ['sometimes', 'numeric', 'min:1', 'max:100'],
+            'pac' => ['sometimes', 'boolean'],
+            'stale_prices' => ['sometimes', 'boolean'],
+            'monthly_summary' => ['sometimes', 'boolean'],
+            'large_expense' => ['sometimes', 'boolean'],
+            'large_expense_threshold' => ['sometimes', 'numeric', 'min:1', 'max:1000000'],
         ];
     }
 }

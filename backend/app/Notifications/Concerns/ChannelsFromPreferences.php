@@ -3,6 +3,7 @@
 namespace App\Notifications\Concerns;
 
 use App\Models\User;
+use Illuminate\Notifications\Messages\MailMessage;
 use NotificationChannels\WebPush\WebPushChannel;
 use NotificationChannels\WebPush\WebPushMessage;
 
@@ -32,6 +33,17 @@ trait ChannelsFromPreferences
         }
 
         return $channels;
+    }
+
+    /** Email con gli stessi testi della notifica in-app (le notifiche possono definirne una propria). */
+    public function toMail(object $notifiable): MailMessage
+    {
+        $data = $this->toArray($notifiable);
+
+        return (new MailMessage)
+            ->subject($data['title'])
+            ->line($data['message'])
+            ->action('Apri Finance', url($data['url']));
     }
 
     /** Push con gli stessi testi della notifica in-app; il tag evita doppioni sul dispositivo. */

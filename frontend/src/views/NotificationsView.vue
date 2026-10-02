@@ -43,7 +43,7 @@ onMounted(() => store.fetch())
           </span>
         </h1>
         <p class="page-desc">
-          Avvisi su budget in allerta e obiettivi in ritardo o scaduti, controllati appena registri una spesa o modifichi un budget, e di nuovo ogni mattina: lo stesso avviso non si ripete nel mese.
+          Avvisi su budget, obiettivi, rate PAC, quotazioni ferme, spese importanti e riepilogo mensile: arrivano appena cambiano i dati e con il controllo di ogni mattina, una volta per periodo. Scegli quali ricevere in Impostazioni.
         </p>
       </div>
       <button

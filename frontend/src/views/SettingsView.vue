@@ -30,6 +30,11 @@ const form = ref<NotificationPreferences>({
   budget: true,
   savings_goals: true,
   budget_threshold: 80,
+  pac: true,
+  stale_prices: true,
+  monthly_summary: true,
+  large_expense: false,
+  large_expense_threshold: 500,
 })
 
 const loading = ref(true)
@@ -101,6 +106,11 @@ function hydrate(prefs: NotificationPreferences) {
     budget: prefs.budget,
     savings_goals: prefs.savings_goals,
     budget_threshold: prefs.budget_threshold,
+    pac: prefs.pac,
+    stale_prices: prefs.stale_prices,
+    monthly_summary: prefs.monthly_summary,
+    large_expense: prefs.large_expense,
+    large_expense_threshold: prefs.large_expense_threshold,
   }
 }
 
@@ -221,6 +231,49 @@ onMounted(async () => {
               <span class="block text-xs text-slate-500">Obiettivi in ritardo o scaduti.</span>
             </span>
           </label>
+          <label class="flex items-start gap-3">
+            <input v-model="form.pac" type="checkbox" class="w-4 h-4 mt-0.5" />
+            <span>
+              <span class="font-medium text-sm">Rate PAC</span>
+              <span class="block text-xs text-slate-500">Dopo ogni rata registrata: quote comprate, o avviso se il prezzo è stimato o mancano le quote.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-3">
+            <input v-model="form.stale_prices" type="checkbox" class="w-4 h-4 mt-0.5" />
+            <span>
+              <span class="font-medium text-sm">Quotazioni ferme</span>
+              <span class="block text-xs text-slate-500">Uno strumento in portafoglio non riceve quotazioni da più di 7 giorni.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-3">
+            <input v-model="form.monthly_summary" type="checkbox" class="w-4 h-4 mt-0.5" />
+            <span>
+              <span class="font-medium text-sm">Riepilogo mensile</span>
+              <span class="block text-xs text-slate-500">A inizio mese: entrate, uscite e risparmio del mese appena chiuso.</span>
+            </span>
+          </label>
+          <label class="flex items-start gap-3">
+            <input v-model="form.large_expense" type="checkbox" class="w-4 h-4 mt-0.5" />
+            <span>
+              <span class="font-medium text-sm">Spese importanti</span>
+              <span class="block text-xs text-slate-500">Quando registri o importi un'uscita oltre la soglia qui sotto.</span>
+            </span>
+          </label>
+          <div :class="{ 'opacity-50 pointer-events-none': !form.large_expense }">
+            <label class="label" for="large-expense-threshold">Soglia spesa importante ({{ auth.user?.currency ?? 'EUR' }})</label>
+            <input
+              id="large-expense-threshold"
+              v-model.number="form.large_expense_threshold"
+              type="number"
+              min="1"
+              step="1"
+              class="input w-40"
+              aria-describedby="hint-large-expense"
+            />
+            <p id="hint-large-expense" class="field-hint">
+              Nella tua valuta principale: le uscite in altre valute vengono convertite al cambio del giorno.
+            </p>
+          </div>
 
           <!-- Soglia -->
           <div :class="{ 'opacity-50 pointer-events-none': !form.budget }">
