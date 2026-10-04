@@ -9,6 +9,7 @@ RUN apk add --no-cache \
     curl \
     unzip \
     icu-dev \
+    icu-data-full \
     libzip-dev \
     oniguruma-dev \
     libpng-dev \
