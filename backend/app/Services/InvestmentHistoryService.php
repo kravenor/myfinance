@@ -26,7 +26,7 @@ class InvestmentHistoryService
     public function __construct(private readonly CurrencyConverter $converter) {}
 
     /**
-     * Con $holdingId la serie (e l'XIRR) è di quel solo holding; lo scope
+     * Con $holdingId la serie (e XIRR/TWR) è di quel solo holding; lo scope
      * utente vale comunque, un id altrui dà una serie vuota.
      *
      * @return array<string, mixed>
@@ -49,7 +49,7 @@ class InvestmentHistoryService
         $first = $movements->flatten()->first()?->occurred_at;
 
         if ($first === null) {
-            return ['base_currency' => $base, 'points' => [], 'xirr_pct' => null];
+            return ['base_currency' => $base, 'points' => [], 'xirr_pct' => null, 'twr_pct' => null];
         }
 
         $quotes = $this->quotesBySymbol($holdings);
@@ -62,11 +62,15 @@ class InvestmentHistoryService
         $invested = 0.0;
         $flows = [];
         $marketValue = 0.0;
+        $growth = 1.0;
+        $periodStart = $first;
 
         $points = [];
         $today = Carbon::today();
 
         foreach ($this->monthEnds($first, $today) as $at) {
+            $periodFlows = [];
+
             foreach ($holdings as $id => $holding) {
                 $cursor[$id] ??= 0;
                 $quantity[$id] ??= 0.0;
@@ -83,6 +87,7 @@ class InvestmentHistoryService
                     // non a quello del punto della serie: è cassa già uscita.
                     $inBase = $this->converter->convert($cash, $holding->currency, $base, $movement->occurred_at);
                     $flows[] = [$movement->occurred_at, $movement->side === 'sell' ? $inBase : -$inBase];
+                    $periodFlows[] = [$movement->occurred_at, $movement->side === 'sell' ? -$inBase : $inBase];
 
                     // Costo puro: cassa immessa che non compra quote.
                     if ($movement->side === 'fee') {
@@ -106,6 +111,7 @@ class InvestmentHistoryService
                 }
             }
 
+            $startValue = $marketValue;
             $marketValue = 0.0;
 
             foreach ($holdings as $id => $holding) {
@@ -124,6 +130,9 @@ class InvestmentHistoryService
                 );
             }
 
+            $growth *= 1 + $this->dietzReturn($startValue, $marketValue, $periodFlows, $periodStart, $at);
+            $periodStart = $at;
+
             $points[] = [
                 'month' => $at->format('Y-m'),
                 'as_of' => $at->toDateString(),
@@ -135,7 +144,51 @@ class InvestmentHistoryService
 
         $flows[] = [$today, $marketValue];
 
-        return ['base_currency' => $base, 'points' => $points, 'xirr_pct' => $this->xirrPct($flows, $first, $today)];
+        return [
+            'base_currency' => $base,
+            'points' => $points,
+            'xirr_pct' => $this->xirrPct($flows, $first, $today),
+            'twr_pct' => $this->annualizedPct($growth, $first, $today),
+        ];
+    }
+
+    /**
+     * Rendimento del periodo con Modified Dietz: il guadagno al netto dei
+     * versamenti, diviso il capitale medio pesato per i giorni in cui è
+     * rimasto investito. Concatenando i periodi si ottiene il TWR, che
+     * misura lo strumento e non il tempismo dei versamenti.
+     *
+     * ponytail: TWR approssimato a periodi mensili; esatto solo valutando il portafoglio a ogni data di movimento.
+     *
+     * @param  list<array{0: Carbon, 1: float}>  $contributions  positivi i versamenti, negativi i rientri
+     */
+    private function dietzReturn(float $startValue, float $endValue, array $contributions, Carbon $from, Carbon $to): float
+    {
+        $days = max(1.0, $from->diffInDays($to));
+        $net = 0.0;
+        $weighted = 0.0;
+
+        foreach ($contributions as [$at, $amount]) {
+            $net += $amount;
+            $weighted += $amount * $at->diffInDays($to) / $days;
+        }
+
+        $capital = $startValue + $weighted;
+
+        // Portafoglio svuotato o mai riempito nel periodo: non c'è capitale su cui misurare.
+        return $capital > 0 ? ($endValue - $startValue - $net) / $capital : 0.0;
+    }
+
+    /** Crescita cumulata portata su base annua; null sotto l'anno, come l'XIRR. */
+    private function annualizedPct(float $growth, Carbon $first, Carbon $today): ?string
+    {
+        $days = $first->diffInDays($today);
+
+        if ($days < 365 || $growth <= 0) {
+            return null;
+        }
+
+        return $this->fmt(($growth ** (365 / $days) - 1) * 100);
     }
 
     /**

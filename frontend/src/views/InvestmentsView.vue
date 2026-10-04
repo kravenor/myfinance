@@ -341,6 +341,7 @@ onMounted(async () => {
         <li>Ogni mattina la quotazione arriva da sola in base al tipo (Yahoo Finance per azioni, ETF e fondi, CoinGecko per le crypto, Borsa Italiana o Teleborsa per obbligazioni e certificati); senza quotazione vale il prezzo corrente inserito a mano, altrimenti il carico.</li>
         <li>Il P/L latente è il valore attuale meno il costo delle quote che hai ancora; il P/L realizzato nasce solo da vendite e costi e lo trovi nel registro movimenti.</li>
         <li>L'annualizzato (XIRR) è il rendimento medio per anno che tiene conto di quando hai versato ogni importo: compare dopo almeno un anno dal primo movimento.</li>
+        <li>Il TWR misura quanto hanno reso gli strumenti, ignorando quando e quanto hai versato: se è più alto dell'XIRR, i versamenti sono arrivati in momenti sfavorevoli; se è più basso, in momenti favorevoli.</li>
       </ul>
     </details>
 
@@ -385,6 +386,10 @@ onMounted(async () => {
         <p v-if="history?.xirr_pct" class="text-xs text-slate-500 mt-1" title="Rendimento money-weighted (XIRR) dal primo movimento, calcolato da almeno un anno di storico">
           Annualizzato:
           <span :class="plClass(history.xirr_pct)">{{ parseFloat(history.xirr_pct) > 0 ? '+' : '' }}{{ history.xirr_pct }}%</span>
+        </p>
+        <p v-if="history?.twr_pct" class="text-xs text-slate-500 mt-1" title="Rendimento time-weighted (TWR) dal primo movimento: misura gli strumenti, non il momento in cui hai versato">
+          Strumenti (TWR):
+          <span :class="plClass(history.twr_pct)">{{ parseFloat(history.twr_pct) > 0 ? '+' : '' }}{{ history.twr_pct }}%</span>
         </p>
         <p class="text-xs text-slate-500 mt-1">Valore meno costo delle quote ancora in portafoglio, vendite escluse.</p>
       </div>
