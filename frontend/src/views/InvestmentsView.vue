@@ -542,8 +542,8 @@ onMounted(async () => {
     <div v-if="(history?.points.length ?? 0) > 1" class="card p-4">
       <div class="flex flex-wrap items-baseline justify-between gap-3 mb-2">
         <h2 class="font-semibold text-slate-800">Versato vs valore</h2>
-        <div class="flex flex-wrap gap-2">
-          <select v-model="chartHolding" class="input w-auto max-w-full" aria-label="Posizione del grafico" @change="loadHoldingHistory">
+        <div class="flex flex-wrap gap-2 min-w-0 max-w-full">
+          <select v-model="chartHolding" class="input w-auto max-w-full min-w-0" aria-label="Posizione del grafico" @change="loadHoldingHistory">
             <option :value="null">Tutto il portafoglio</option>
             <option v-for="h in items" :key="h.id" :value="h.id">{{ h.name }}</option>
           </select>
