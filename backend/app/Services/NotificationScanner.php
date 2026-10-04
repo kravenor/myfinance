@@ -14,6 +14,8 @@ use App\Notifications\SavingsGoalRiskNotification;
 use App\Notifications\StalePriceNotification;
 use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Auth;
+use LogicException;
 
 class NotificationScanner
 {
@@ -36,6 +38,12 @@ class NotificationScanner
      */
     public function scan(User $user): int
     {
+        // Le query sotto filtrano via UserScope (Auth::id()), non via $user: senza questo
+        // controllo un chiamante non autenticato notificherebbe $user con i dati di tutti.
+        if ((int) Auth::id() !== (int) $user->id) {
+            throw new LogicException('NotificationScanner::scan() richiede $user autenticato.');
+        }
+
         $sent = 0;
         $now = Carbon::now();
         $prefs = $user->notificationPreferences();

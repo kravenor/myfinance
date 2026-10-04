@@ -2,7 +2,7 @@ FROM php:8.3-fpm-alpine AS base
 
 RUN apk add --no-cache \
     bash git curl unzip \
-    icu-dev libzip-dev oniguruma-dev libpng-dev libjpeg-turbo-dev freetype-dev \
+    icu-dev icu-data-full libzip-dev oniguruma-dev libpng-dev libjpeg-turbo-dev freetype-dev \
     mysql-client autoconf g++ make linux-headers
 
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg \

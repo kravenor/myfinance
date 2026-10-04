@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-02**
+Ultimo aggiornamento: **2026-10-04**
 Fase corrente: **Estensione — Notifiche (in analisi)**; completati restyling UI/UX, coerenza dati, privacy/cookie, «Ricordami», patrimonio storico, storico quotazioni (U1), colori categorie
 
 ---
@@ -235,7 +235,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Response**: API Resources, niente array grezzi
 - **«Ricordami» e logout**: `users.remember_token` è unico per utente e condiviso dai dispositivi. Il logout usa `logoutCurrentDevice()` (mai `logout()`, che rigenera il token e scollega tutti gli altri dispositivi, PWA compresa); i command che impersonano gli utenti (`notifications:scan`, `rules:apply`) chiudono ogni iterazione con `Auth::forgetUser()` per lo stesso motivo; il cambio password rigenera il token e ri-emette il cookie solo per il dispositivo corrente se lo aveva. Analisi in [REMEMBER-ME-ANALYSIS](docs/analysis/REMEMBER-ME-ANALYSIS.md).
 - **Auth**: Sanctum SPA cookie (no token bearer per il frontend principale). Nei controller proteggere `session()` con `$request->hasSession()` per supportare client non-stateful e test.
-- **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`.
+- **Scoping**: modelli di dominio usano il trait `App\Models\Concerns\BelongsToUser` che applica `UserScope` (filtra per `Auth::id()` se autenticato) e auto-popola `user_id` in creazione. Le policy estendono `App\Policies\OwnedByUserPolicy`. Lo scope è *fail-open*: senza utente autenticato (console, coda, tinker) non filtra nulla, quindi i command che leggono dati di dominio fanno `Auth::loginUsingId` per utente. Mai `DB::table()` sulle tabelle di dominio e mai `withoutGlobalScopes()` senza rimettere a mano il filtro su `user_id` (o partire da un ID già validato come dell'utente). `TenantIsolationTest` verifica che i dati di un altro utente non cambino nessuna risposta GET: un nuovo endpoint di lettura va aggiunto alla sua lista `URLS`.
 - **Categoria coerente col tipo**: transazioni, ricorrenti e voci degli scenari validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
 - **Messaggi in italiano**: `APP_LOCALE=it` con traduzioni in `backend/lang/it/` (`validation.php`, `auth.php`, `passwords.php`). `validation.php` contiene solo le regole usate dalle Form Request (le chiavi mancanti ricadono sull'inglese del framework) e la mappa `attributes` campo → nome leggibile: un nuovo campo in una Form Request va aggiunto lì, una nuova regola pure.
 - **Code style**: Laravel Pint (preset `laravel`)
