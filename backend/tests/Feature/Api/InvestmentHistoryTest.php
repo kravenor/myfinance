@@ -156,6 +156,37 @@ class InvestmentHistoryTest extends TestCase
         $this->assertLessThan(15.0, $xirr);
     }
 
+    public function test_twr_ignores_the_timing_of_contributions(): void
+    {
+        $this->travelTo('2026-01-01');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $holding = $this->holding($user);
+
+        // Stessi movimenti del caso XIRR: lo strumento ha reso il 10% e il TWR deve dire 10%,
+        // qualunque sia il momento in cui è entrata la seconda metà.
+        $this->movement($user, $holding, ['occurred_at' => '2025-01-01', 'quantity' => 5, 'price' => 100]);
+        $this->movement($user, $holding, ['occurred_at' => '2025-07-02', 'quantity' => 5, 'price' => 100]);
+        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
+
+        $twr = (float) $this->actingAs($user)->getJson('/api/investments/history')->json('twr_pct');
+
+        $this->assertEqualsWithDelta(10.0, $twr, 0.01);
+    }
+
+    public function test_twr_is_null_under_one_year(): void
+    {
+        $this->travelTo('2026-03-15');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $holding = $this->holding($user);
+        $this->movement($user, $holding, ['occurred_at' => '2026-01-10', 'quantity' => 10, 'price' => 40]);
+
+        $this->actingAs($user)->getJson('/api/investments/history')
+            ->assertOk()
+            ->assertJsonPath('twr_pct', null);
+    }
+
     public function test_xirr_is_null_under_one_year(): void
     {
         $this->travelTo('2026-03-15');

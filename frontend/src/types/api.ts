@@ -219,6 +219,7 @@ export interface InvestmentHistory {
   base_currency: string
   points: InvestmentHistoryPoint[]
   xirr_pct: string | null
+  twr_pct: string | null
 }
 
 export type InvestmentSide = 'buy' | 'sell' | 'fee'
