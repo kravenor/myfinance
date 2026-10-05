@@ -15,7 +15,13 @@ updates:
     directory: /frontend
     schedule:
       interval: weekly
+    # Pacchetti con peer dependency incrociate: si aggiornano insieme anche sulle major,
+    # altrimenti una PR singola (es. eslint 10 o vue-router 5) lascia npm ci in ERESOLVE.
     groups:
+      eslint:
+        patterns: ['eslint', 'eslint-*', '@vue/eslint-config-*', 'typescript-eslint', '@typescript-eslint/*']
+      vue-core:
+        patterns: ['vue', 'vue-router', 'pinia', '@vue/*']
       npm-minor:
         update-types: [minor, patch]
 
