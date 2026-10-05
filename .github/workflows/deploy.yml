@@ -1,20 +1,27 @@
 name: Deploy
 
+# Solo su tag v*: una release pubblicata da GitHub crea il suo tag e passa di qui.
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [master]
+  push:
+    tags: ['v*']
+
+concurrency: deploy
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: Deploy su VPS
+    needs: ci
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1
+        env:
+          TAG: ${{ github.ref_name }}
         with:
+          envs: TAG
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -25,19 +32,20 @@ jobs:
             cd "${{ vars.DEPLOY_PATH }}"
             pwd
 
-            # .env.production appartiene all'host (dominio, segreti, chiavi VAPID): il pull non
+            # .env.production appartiene all'host (dominio, segreti, chiavi VAPID): il checkout non
             # deve mai toccarlo. Fino al 2026-10-02 era tracciato con modifiche locali: le si scarta
-            # per far passare il pull (il commit che lo de-traccia lo rimuoverebbe) e la copia
+            # per far passare il checkout (il commit che lo de-traccia lo rimuoverebbe) e la copia
             # torna al suo posto in ogni caso, anche se il deploy fallisce.
             ENV_BACKUP="$(mktemp)"
             cp .env.production "$ENV_BACKUP"
             trap 'cp "$ENV_BACKUP" .env.production; rm -f "$ENV_BACKUP"' EXIT
             git checkout -- .env.production 2>/dev/null || true
-            git pull origin master
+            git fetch --tags --force origin
+            git checkout --detach "refs/tags/$TAG"
             cp "$ENV_BACKUP" .env.production
 
             COMPOSE="docker compose --env-file .env.production -f docker-compose.vps.yml"
-            $COMPOSE up -d --build
+            APP_VERSION="$TAG" $COMPOSE up -d --build
 
             # Backup prima di toccare lo schema: il codice si torna indietro con git,
             # una migration no. Lo stack è già su, quindi il dump non può fallire
@@ -47,3 +55,13 @@ jobs:
             # Senza questo le migration non venivano mai eseguite in produzione: le
             # colonne nuove restavano assenti e le scritture andavano in errore 500.
             $COMPOSE exec -T php php artisan migrate --force
+
+            # Health check attraverso nginx → PHP-FPM → Laravel: un deploy con l'app
+            # giù deve fallire, non chiudersi verde. Attesa massima ~60s per il boot.
+            for i in $(seq 1 20); do
+              $COMPOSE exec -T nginx wget -q -O /dev/null http://127.0.0.1/up && exit 0
+              sleep 3
+            done
+            echo "Health check /up fallito" >&2
+            $COMPOSE ps
+            exit 1

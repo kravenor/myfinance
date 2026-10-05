@@ -75,4 +75,24 @@ class PasswordResetTest extends TestCase
         ])->assertStatus(422)
             ->assertJsonValidationErrors('password');
     }
+
+    public function test_password_reset_endpoints_are_rate_limited(): void
+    {
+        Notification::fake();
+
+        foreach (range(1, 5) as $i) {
+            $this->postJson('/api/auth/forgot-password', ['email' => "user{$i}@example.com"])->assertOk();
+        }
+
+        $this->postJson('/api/auth/forgot-password', ['email' => 'user6@example.com'])->assertTooManyRequests();
+
+        // throttle senza nome conta per IP su tutte le rotte anonime: si aspetta il reset della finestra.
+        $this->travel(61)->seconds();
+
+        foreach (range(1, 5) as $i) {
+            $this->postJson('/api/auth/reset-password', ['token' => 'x', 'email' => 'a@example.com'])->assertUnprocessable();
+        }
+
+        $this->postJson('/api/auth/reset-password', ['token' => 'x', 'email' => 'a@example.com'])->assertTooManyRequests();
+    }
 }

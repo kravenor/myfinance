@@ -1,0 +1,34 @@
+# Aggiornamenti settimanali, minor/patch raggruppati in una sola PR per ecosistema;
+# le major arrivano una per PR. Immagini Docker escluse: le major di Node/PHP/MySQL
+# si scelgono a mano (LTS), vedi AGENTS.md §2.
+version: 2
+updates:
+  - package-ecosystem: composer
+    directory: /backend
+    schedule:
+      interval: weekly
+    groups:
+      composer-minor:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+    # Pacchetti con peer dependency incrociate: si aggiornano insieme anche sulle major,
+    # altrimenti una PR singola (es. eslint 10 o vue-router 5) lascia npm ci in ERESOLVE.
+    groups:
+      eslint:
+        patterns: ['eslint', 'eslint-*', '@vue/eslint-config-*', 'typescript-eslint', '@typescript-eslint/*']
+      vue-core:
+        patterns: ['vue', 'vue-router', 'pinia', '@vue/*']
+      npm-minor:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
