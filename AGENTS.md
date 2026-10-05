@@ -354,14 +354,14 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | GET | `/sanctum/csrf-cookie` | — | Pre-flight CSRF (gestito da Sanctum) |
 | POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201) |
 | POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email, ritorna `UserResource`. `remember` (bool, opzionale) attiva il recaller cookie di Laravel: alla scadenza della sessione l'utente viene ri-autenticato senza reinserire la password |
-| POST | `/api/auth/forgot-password` | — | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
-| POST | `/api/auth/reset-password` | — | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
+| POST | `/api/auth/forgot-password` | `throttle:5,1` | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
+| POST | `/api/auth/reset-password` | `throttle:5,1` | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
 | POST | `/api/auth/logout` | `auth:sanctum` | Logout web + sanctum, invalida sessione, 204 |
 | GET | `/api/auth/me` | `auth:sanctum` | Ritorna utente corrente |
 | PUT | `/api/auth/password` | `auth:sanctum` | Cambio password da autenticato: `current_password` (regola `current_password`), `password` (confirmed + `Password::defaults()`). 200 con messaggio, 422 se la password attuale non combacia |
 | PUT | `/api/auth/preferences` | `auth:sanctum` | Aggiorna le preferenze utente (`date_format` sulla whitelist `finance.date_formats`, `month_start_day` 1–28; entrambi opzionali), ritorna `UserResource` |
 
-**Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView.
+**Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView. `throttle:5,1` senza nome conta per IP sull'insieme delle rotte anonime che lo usano (register, forgot, reset): oltre 5 richieste al minuto → 429.
 
 ## 8.2 Endpoint CRUD (Fase 4)
 
