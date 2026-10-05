@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 COMPOSE := docker compose
 
-.PHONY: prices-backfill help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down backup restore
+.PHONY: test-fe prices-backfill help bootstrap key-generate up down restart build logs ps shell-php shell-node shell-mysql composer-install laravel-new vue-new migrate fresh seed test pint stan lint type-check check prod-build prod-up prod-down backup restore
 
 help: ## Mostra i comandi disponibili
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
@@ -81,7 +81,10 @@ lint: ## ESLint sul frontend
 type-check: ## vue-tsc type-check
 	$(COMPOSE) exec node npm run type-check
 
-check: pint stan test lint type-check ## Esegue tutti i check di qualità
+test-fe: ## Test Vitest del frontend
+	$(COMPOSE) exec node npm test
+
+check: pint stan test lint type-check test-fe ## Esegue tutti i check di qualità
 
 prod-build: ## Build stack produzione (richiede .env.production)
 	$(COMPOSE) -f docker-compose.prod.yml --env-file .env.production build
