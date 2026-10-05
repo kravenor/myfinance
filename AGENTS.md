@@ -35,7 +35,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 | Notifiche push | laravel-notification-channels/webpush (su minishlink/web-push) | 13.x |
 | Web server | Nginx | 1.27 |
 | PHP runtime | PHP-FPM | 8.3 (Alpine) |
-| Node runtime | Node | 20 (Alpine) |
+| Node runtime | Node | 24 LTS (Alpine) |
 | Orchestrazione | Docker Compose | v2 |
 
 ## 3. Struttura del repository
@@ -356,14 +356,14 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | GET | `/sanctum/csrf-cookie` | — | Pre-flight CSRF (gestito da Sanctum) |
 | POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201) |
 | POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email, ritorna `UserResource`. `remember` (bool, opzionale) attiva il recaller cookie di Laravel: alla scadenza della sessione l'utente viene ri-autenticato senza reinserire la password |
-| POST | `/api/auth/forgot-password` | — | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
-| POST | `/api/auth/reset-password` | — | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
+| POST | `/api/auth/forgot-password` | `throttle:5,1` | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
+| POST | `/api/auth/reset-password` | `throttle:5,1` | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
 | POST | `/api/auth/logout` | `auth:sanctum` | Logout web + sanctum, invalida sessione, 204 |
 | GET | `/api/auth/me` | `auth:sanctum` | Ritorna utente corrente |
 | PUT | `/api/auth/password` | `auth:sanctum` | Cambio password da autenticato: `current_password` (regola `current_password`), `password` (confirmed + `Password::defaults()`). 200 con messaggio, 422 se la password attuale non combacia |
 | PUT | `/api/auth/preferences` | `auth:sanctum` | Aggiorna le preferenze utente (`date_format` sulla whitelist `finance.date_formats`, `month_start_day` 1–28; entrambi opzionali), ritorna `UserResource` |
 
-**Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView.
+**Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView. `throttle:5,1` senza nome conta per IP sull'insieme delle rotte anonime che lo usano (register, forgot, reset): oltre 5 richieste al minuto → 429.
 
 ## 8.2 Endpoint CRUD (Fase 4)
 
@@ -538,9 +538,7 @@ I file non UTF-8 (ISO-8859-1) vengono convertiti. Validazione MIME estesa nei 3 
 ### CI — GitHub Actions
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — trigger su `push`/`pull_request` su `master` e `workflow_call` (la richiama il deploy). Due job:
 - **backend**: PHP 8.3 + estensioni, cache vendor, `pint --test`, `phpstan analyse`, `php artisan test` (SQLite in-memory da `phpunit.xml`).
-- **frontend**: Node 20 con cache npm, `npm ci`, `type-check`, `lint`, `test` (Vitest), `build`.
-
-[.github/dependabot.yml](.github/dependabot.yml) — PR settimanali per composer (`backend/`), npm (`frontend/`) e GitHub Actions; minor/patch raggruppate in una PR per ecosistema, major una per PR. Le immagini Docker non sono incluse: le major di Node/PHP/MySQL si aggiornano a mano.
+- **frontend**: Node 24 con cache npm, `npm ci`, `type-check`, `lint`, `test` (Vitest), `build`.
 
 ### Stack produzione
 File:
@@ -571,7 +569,7 @@ Per VPS con Apache già in produzione: [docker-compose.vps.yml](docker-compose.v
 
 **Log**: `php`, `scheduler` e `queue` montano il volume `laravel_logs` su `storage/logs`, quindi i log sopravvivono ai deploy. Con `LOG_STACK=daily` in `.env.production` c'è un file `laravel-YYYY-MM-DD.log` al giorno, tenuto 14 giorni (`LOG_DAILY_DAYS`). Lettura: `docker exec finance_vps_php tail -n 100 storage/logs/laravel-$(date +%F).log` (lo scheduler scrive nello stesso volume, es. i warning di `prices:fetch`).
 
-Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte **solo su push di un tag `v*`** (anche quello creato pubblicando una release GitHub), rilancia la CI come job richiamato e solo se verde via SSH esegue `git fetch --tags` + `git checkout --detach` del tag (l'host resta in detached HEAD sul tag deployato) → `up -d --build` con `APP_VERSION=<tag>` (build arg di `docker/nginx/Dockerfile.prod` → `VITE_APP_VERSION`, mostrata in fondo alla sidebar; `dev` se assente) → **backup** → **`artisan migrate --force`**. Attorno al pull salva e ripristina `.env.production` (con `trap` su `EXIT`, quindi anche se il deploy fallisce): il file dell'host non viene mai toccato da git. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
+Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) parte **solo su push di un tag `v*`** (anche quello creato pubblicando una release GitHub), rilancia la CI come job richiamato e solo se verde via SSH esegue `git fetch --tags` + `git checkout --detach` del tag (l'host resta in detached HEAD sul tag deployato) → `up -d --build` con `APP_VERSION=<tag>` (build arg di `docker/nginx/Dockerfile.prod` → `VITE_APP_VERSION`, mostrata in fondo alla sidebar; `dev` se assente) → **backup** → **`artisan migrate --force`** → **health check** `GET /up` dal container nginx (instradato a PHP-FPM in `docker/nginx/prod.conf`, fino a 20 tentativi ogni 3s: se l'app non risponde il deploy fallisce). Attorno al pull salva e ripristina `.env.production` (con `trap` su `EXIT`, quindi anche se il deploy fallisce): il file dell'host non viene mai toccato da git. Le migration sono l'unico passo non reversibile con un `git revert`, per questo il dump viene fatto subito prima e `set -e` interrompe il deploy se il backup fallisce. Il passo `migrate` mancava fino al 2026-09-03: le colonne nuove non arrivavano in produzione e le scritture rispondevano 500 (sintomo: "Salvataggio non riuscito" salvando le preferenze).
 
 ### HTTPS
 Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.

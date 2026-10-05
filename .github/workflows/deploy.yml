@@ -55,3 +55,13 @@ jobs:
             # Senza questo le migration non venivano mai eseguite in produzione: le
             # colonne nuove restavano assenti e le scritture andavano in errore 500.
             $COMPOSE exec -T php php artisan migrate --force
+
+            # Health check attraverso nginx → PHP-FPM → Laravel: un deploy con l'app
+            # giù deve fallire, non chiudersi verde. Attesa massima ~60s per il boot.
+            for i in $(seq 1 20); do
+              $COMPOSE exec -T nginx wget -q -O /dev/null http://127.0.0.1/up && exit 0
+              sleep 3
+            done
+            echo "Health check /up fallito" >&2
+            $COMPOSE ps
+            exit 1
