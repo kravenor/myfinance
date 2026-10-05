@@ -26,6 +26,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 | Auth | Laravel Sanctum (SPA cookie) | — |
 | Frontend | Vue 3 + TypeScript | — |
 | Build frontend | Vite | — |
+| Test frontend | Vitest (devDependency, `npm test`) | 5.x |
 | State management | Pinia | — |
 | Router | Vue Router | — |
 | CSS | TailwindCSS | — |
@@ -215,7 +216,8 @@ make pint            # formatter PHP
 make stan            # Larastan / PHPStan
 make lint            # ESLint frontend
 make type-check      # vue-tsc
-make check           # pipeline completa (pint + stan + test + lint + type-check)
+make test-fe         # Vitest frontend (src/**/*.test.ts, TZ=America/New_York)
+make check           # pipeline completa (pint + stan + test + lint + type-check + test-fe)
 
 make prod-build      # build immagini produzione
 make prod-up         # avvia stack produzione
@@ -536,7 +538,7 @@ I file non UTF-8 (ISO-8859-1) vengono convertiti. Validazione MIME estesa nei 3 
 ### CI — GitHub Actions
 [.github/workflows/ci.yml](.github/workflows/ci.yml) — trigger su `push`/`pull_request` su `master` e `workflow_call` (la richiama il deploy). Due job:
 - **backend**: PHP 8.3 + estensioni, cache vendor, `pint --test`, `phpstan analyse`, `php artisan test` (SQLite in-memory da `phpunit.xml`).
-- **frontend**: Node 24 con cache npm, `npm ci`, `type-check`, `lint`, `build`.
+- **frontend**: Node 24 con cache npm, `npm ci`, `type-check`, `lint`, `test` (Vitest), `build`.
 
 ### Stack produzione
 File:
