@@ -540,6 +540,8 @@ I file non UTF-8 (ISO-8859-1) vengono convertiti. Validazione MIME estesa nei 3 
 - **backend**: PHP 8.3 + estensioni, cache vendor, `pint --test`, `phpstan analyse`, `php artisan test` (SQLite in-memory da `phpunit.xml`).
 - **frontend**: Node 24 con cache npm, `npm ci`, `type-check`, `lint`, `test` (Vitest), `build`.
 
+[.github/dependabot.yml](.github/dependabot.yml) — PR settimanali per composer (`backend/`), npm (`frontend/`) e GitHub Actions; minor/patch raggruppate in una PR per ecosistema, major una per PR. Eccezioni i gruppi npm `eslint` (eslint + plugin/config) e `vue-core` (vue, vue-router, pinia, `@vue/*`), aggiornati insieme anche sulle major perché hanno peer dependency incrociate: una PR singola (es. eslint 10 senza `@vue/eslint-config-typescript` 14.9, vue-router 5 senza Pinia 3) lascia `npm ci` in ERESOLVE. Le immagini Docker non sono incluse: le major di Node/PHP/MySQL si aggiornano a mano.
+
 ### Stack produzione
 File:
 - [docker/php/Dockerfile.prod](docker/php/Dockerfile.prod) — multi-stage (vendor install + runtime), opcache + JIT in [php.prod.ini](docker/php/php.prod.ini), composer `--no-dev --classmap-authoritative`, codice copiato (no volume mount).
