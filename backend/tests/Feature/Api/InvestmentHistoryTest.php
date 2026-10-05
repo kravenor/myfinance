@@ -223,4 +223,26 @@ class InvestmentHistoryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('points', []);
     }
+
+    public function test_period_filter_trims_points_but_keeps_cumulative_figures(): void
+    {
+        $this->travelTo('2026-04-15');
+
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $holding = $this->holding($user);
+        $this->movement($user, $holding, ['occurred_at' => '2026-01-10', 'quantity' => 10, 'price' => 40]);
+        $this->movement($user, $holding, ['occurred_at' => '2026-02-10', 'quantity' => 10, 'price' => 50]);
+
+        $points = $this->actingAs($user)->getJson('/api/investments/history?from=2026-02-01&to=2026-03-31')
+            ->assertOk()
+            ->json('points');
+
+        $this->assertSame(['2026-02', '2026-03'], array_column($points, 'month'));
+        // Il versato resta cumulato dal primo movimento, anche se gennaio è fuori dal periodo.
+        $this->assertSame('900.00', $points[0]['invested']);
+
+        $this->actingAs($user)->getJson('/api/investments/history?from=2026-03-01&to=2026-02-01')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('to');
+    }
 }
