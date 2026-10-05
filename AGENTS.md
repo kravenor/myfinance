@@ -607,7 +607,9 @@ Cron host (dump alle 03:15):
 15 3 * * * cd /srv/finance && COMPOSE_FILE=docker-compose.vps.yml COMPOSE_ENV_FILES=.env.production ./scripts/backup.sh >> /var/log/finance-backup.log 2>&1
 ```
 
-**Redis non viene salvato**: contiene solo cache, sessioni e code — dati derivati, ricostruibili. Un backup **fuori dalla macchina** (rsync/rclone della cartella `backups/` verso un altro host o storage) resta da aggiungere: il dump locale non protegge dalla perdita del disco. Quando arriveranno gli allegati alle transazioni, aggiungere al backup un tar di `storage/app`.
+**Copia fuori sede**: `BACKUP_OFFSITE_CMD` (vuota = spenta) è un comando `sh` eseguito dopo il dump con il file in `$1`, es. `rclone copy "$1" finance-crypt:` o `rsync -a "$1" backup@nas:/backups/finance/`. Va messa **solo nella riga di cron**, così il backup del deploy resta locale e un remote irraggiungibile non blocca il rilascio. Se la copia fallisce lo script esce 1 ma il dump locale resta valido. La retention remota è a carico della destinazione (lifecycle del bucket, `rclone delete --min-age`…). I dump contengono tutti i dati finanziari: verso storage di terzi usare un remote rclone `crypt` o cifrare prima.
+
+**Redis non viene salvato**: contiene solo cache, sessioni e code — dati derivati, ricostruibili. Quando arriveranno gli allegati alle transazioni, aggiungere al backup un tar di `storage/app`.
 
 ## 13. Statistiche avanzate (estensione)
 
