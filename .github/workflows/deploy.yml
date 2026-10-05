@@ -45,7 +45,7 @@ jobs:
             cp "$ENV_BACKUP" .env.production
 
             COMPOSE="docker compose --env-file .env.production -f docker-compose.vps.yml"
-            $COMPOSE up -d --build
+            APP_VERSION="$TAG" $COMPOSE up -d --build
 
             # Backup prima di toccare lo schema: il codice si torna indietro con git,
             # una migration no. Lo stack è già su, quindi il dump non può fallire

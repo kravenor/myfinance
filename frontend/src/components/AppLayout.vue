@@ -13,6 +13,7 @@ const notifications = useNotificationStore()
 const menu = useMenuStore()
 const router = useRouter()
 const route = useRoute()
+const version = import.meta.env.VITE_APP_VERSION || 'dev'
 
 // Gruppi con almeno una voce visibile, nell'ordine di NAV_GROUPS.
 const groups = computed(() =>
@@ -146,7 +147,8 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
           Esci
         </button>
       </div>
-      <LegalLinks class="border-t border-slate-200 px-3 py-3" />
+      <LegalLinks class="border-t border-slate-200 px-3 pt-3" />
+      <p class="px-3 pt-1 pb-3 text-center text-xs text-slate-400" title="Versione dell'app">{{ version }}</p>
     </aside>
 
     <div class="flex min-w-0 flex-1 flex-col">

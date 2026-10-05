@@ -9,6 +9,8 @@ services:
     build:
       context: .
       dockerfile: docker/nginx/Dockerfile.prod
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     container_name: finance_vps_nginx
     restart: unless-stopped
     ports:
