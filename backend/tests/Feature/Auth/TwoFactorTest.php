@@ -156,7 +156,7 @@ class TwoFactorTest extends TestCase
         $this->assertNotSame('token-vecchio', $user->fresh()->remember_token);
     }
 
-    public function test_disable_and_regenerate_require_the_password(): void
+    public function test_regenerate_and_disable_require_the_password(): void
     {
         [$user, $codes] = $this->userWithTwoFactor();
 
@@ -166,9 +166,23 @@ class TwoFactorTest extends TestCase
             ->assertOk()->json('recovery_codes');
         $this->assertNotEquals($codes, $fresh);
 
-        $this->spa()->actingAs($user)->deleteJson('/api/auth/two-factor', ['current_password' => 'sbagliata'])
-            ->assertUnprocessable();
+        $this->spa()->actingAs($user)->deleteJson('/api/auth/two-factor', ['current_password' => 'sbagliata', 'code' => $this->otp($user)])
+            ->assertUnprocessable()->assertJsonValidationErrors('current_password');
+        $this->assertTrue($user->fresh()->hasTwoFactor());
+    }
+
+    public function test_disable_requires_a_valid_second_factor(): void
+    {
+        [$user, $codes] = $this->userWithTwoFactor();
+        $wrong = $this->otp($user) === '123456' ? '654321' : '123456';
+
         $this->spa()->actingAs($user)->deleteJson('/api/auth/two-factor', ['current_password' => 'Password123!'])
+            ->assertJsonValidationErrors('code');
+        $this->spa()->actingAs($user)->deleteJson('/api/auth/two-factor', ['current_password' => 'Password123!', 'code' => $wrong])
+            ->assertJsonValidationErrors(['code' => 'Codice non valido.']);
+        $this->assertTrue($user->fresh()->hasTwoFactor());
+
+        $this->spa()->actingAs($user)->deleteJson('/api/auth/two-factor', ['current_password' => 'Password123!', 'recovery_code' => $codes[0]])
             ->assertNoContent();
         $this->assertFalse($user->fresh()->hasTwoFactor());
     }
