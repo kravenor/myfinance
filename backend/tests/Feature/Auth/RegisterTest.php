@@ -62,4 +62,22 @@ class RegisterTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors('password');
     }
+
+    public function test_registration_can_be_disabled(): void
+    {
+        $existing = User::factory()->create();
+        config(['finance.registration' => false]);
+
+        $this->getJson('/api/auth/registration')->assertExactJson(['enabled' => false]);
+
+        // 403 anche con un'email già registrata: niente errore di validazione che ne riveli l'esistenza.
+        $this->postJson('/api/auth/register', [
+            'name' => 'Mario Rossi',
+            'email' => $existing->email,
+            'password' => 'Password123!',
+            'password_confirmation' => 'Password123!',
+        ])->assertForbidden()->assertJsonPath('message', 'Registrazione disattivata.');
+
+        $this->assertDatabaseCount('users', 1);
+    }
 }

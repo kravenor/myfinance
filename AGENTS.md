@@ -364,7 +364,8 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | Metodo | Path | Middleware | Note |
 |--------|------|------------|------|
 | GET | `/sanctum/csrf-cookie` | — | Pre-flight CSRF (gestito da Sanctum) |
-| POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201) |
+| GET | `/api/auth/registration` | — | `{enabled}`: stato del flag `finance.registration` (env `FINANCE_REGISTRATION`, default true); il frontend nasconde il link «Registrati» e il form |
+| POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201). Con `FINANCE_REGISTRATION=false` → 403 «Registrazione disattivata.», controllato in `RegisterRequest::authorize()` prima della validazione (niente `unique:users` che riveli le email esistenti) |
 | POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email, ritorna `UserResource`. `remember` (bool, opzionale) attiva il recaller cookie di Laravel: alla scadenza della sessione l'utente viene ri-autenticato senza reinserire la password |
 | POST | `/api/auth/forgot-password` | `throttle:5,1` | Invia link reset (Password broker). Risposta generica (no enumeration), 200 |
 | POST | `/api/auth/reset-password` | `throttle:5,1` | `token`, `email`, `password` (confirmed). 200 su successo, 422 su token/email non validi |
@@ -602,12 +603,13 @@ Lato applicazione serve una cosa sola, già configurata: `trustProxies` in [boot
     ServerName finance.example.com
     ProxyPreserveHost On
     RequestHeader set X-Forwarded-Proto "https"
+    Header always set Strict-Transport-Security "max-age=31536000"
     ProxyPass        / http://127.0.0.1:8080/
     ProxyPassReverse / http://127.0.0.1:8080/
     # SSLCertificateFile/KeyFile: gestiti da certbot
 </VirtualHost>
 ```
-Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
+Header di sicurezza: HSTS qui (chi termina il TLS), `frame-ancestors 'none'`, `nosniff` e `Referrer-Policy` in [prod.conf](docker/nginx/prod.conf) (una location con un proprio `add_header` non li eredita: ripeterli). In `.env.production` `FINANCE_REGISTRATION=false` dopo aver creato il proprio utente. Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
 
 **Raspberry Pi (Traefik, LAN)** — l'impianto è nel repo `infra` fuori da qui: aggiungere l'entrypoint `:443` e, non essendo `*.pi.lan` risolvibile da Let's Encrypt, un certificato self-signed (o una CA locale da installare sui client). Finché resta in LAN, HTTP + `SESSION_SECURE_COOKIE=false` è la config supportata.
 

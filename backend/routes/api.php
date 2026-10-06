@@ -23,6 +23,7 @@ use App\Http\Controllers\TransactionImportExportController;
 use App\Http\Middleware\ScanNotificationsAfterWrite;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/auth/registration', [AuthController::class, 'registrationStatus'])->name('auth.registration');
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->name('auth.register');
 Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
 Route::post('/auth/two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:5,1')->name('auth.two-factor.challenge');

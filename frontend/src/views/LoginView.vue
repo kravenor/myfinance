@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import LegalLinks from '@/components/LegalLinks.vue'
-import { nextTick, ref } from 'vue'
+import { nextTick, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -13,6 +13,10 @@ const password = ref('password')
 const remember = ref(true)
 const error = ref<string | null>(null)
 const resetDone = ref(route.query.reset === '1')
+const canRegister = ref(false)
+onMounted(async () => {
+  canRegister.value = await auth.registrationEnabled()
+})
 
 // Secondo passaggio: la password è giusta, serve il codice dell'app o uno di recupero.
 const twoFactor = ref(false)
@@ -159,7 +163,7 @@ function backToPassword() {
       <button type="submit" class="btn-primary w-full" :disabled="auth.loading">
         {{ auth.loading ? 'Accesso…' : 'Accedi' }}
       </button>
-      <p class="text-sm text-slate-600 text-center">
+      <p v-if="canRegister" class="text-sm text-slate-600 text-center">
         Non hai un account?
         <RouterLink to="/register" class="text-primary-600 hover:underline">Registrati</RouterLink>
       </p>

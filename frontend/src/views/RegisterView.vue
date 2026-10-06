@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -13,6 +13,10 @@ const form = ref({
   password_confirmation: '',
 })
 const error = ref<string | null>(null)
+const enabled = ref(true)
+onMounted(async () => {
+  enabled.value = await auth.registrationEnabled()
+})
 
 async function onSubmit() {
   error.value = null
@@ -33,7 +37,12 @@ async function onSubmit() {
 
 <template>
   <div class="min-h-screen flex items-center justify-center px-4">
-    <form class="card w-full max-w-md p-6 space-y-4" @submit.prevent="onSubmit">
+    <div v-if="!enabled" class="card w-full max-w-md p-6 space-y-4">
+      <h1 class="text-xl font-semibold">Registrazione disattivata</h1>
+      <p class="text-sm text-slate-600">Su questa installazione non si possono creare nuovi account.</p>
+      <RouterLink to="/login" class="btn-primary w-full text-center">Vai all'accesso</RouterLink>
+    </div>
+    <form v-else class="card w-full max-w-md p-6 space-y-4" @submit.prevent="onSubmit">
       <h1 class="text-xl font-semibold">Registrati</h1>
       <div>
         <label class="label" for="name">Nome</label>
@@ -66,9 +75,14 @@ async function onSubmit() {
         <RouterLink to="/login" class="text-primary-600 hover:underline">Accedi</RouterLink>
       </p>
       <p class="border-t border-slate-200 pt-4 text-center text-xs text-slate-500">
-        Creando l'account dichiari di aver letto
-        l'<RouterLink :to="{ name: 'privacy' }" class="underline hover:text-slate-700">informativa sulla privacy</RouterLink>
-        e la <RouterLink :to="{ name: 'cookie' }" class="underline hover:text-slate-700">cookie policy</RouterLink>.
+        Creando l'account dichiari di aver letto l'<RouterLink
+          :to="{ name: 'privacy' }"
+          class="underline hover:text-slate-700"
+          >informativa sulla privacy</RouterLink
+        >
+        e la
+        <RouterLink :to="{ name: 'cookie' }" class="underline hover:text-slate-700">cookie policy</RouterLink
+        >.
       </p>
     </form>
   </div>
