@@ -39,10 +39,11 @@ RUN pecl install redis \
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-RUN addgroup -g ${GID} -S app \
- && adduser -u ${UID} -S app -G app \
+# Come frontend/Dockerfile: su macOS GID=20 (staff) è già «dialout» in Alpine, si riusa il gruppo esistente.
+RUN if ! getent group ${GID} >/dev/null; then addgroup -g ${GID} -S app; fi \
+ && adduser -u ${UID} -S app -G "$(getent group ${GID} | cut -d: -f1)" \
  && mkdir -p /var/www/html \
- && chown -R app:app /var/www/html
+ && chown -R ${UID}:${GID} /var/www/html
 
 COPY php.ini /usr/local/etc/php/conf.d/zz-app.ini
 
