@@ -48,6 +48,15 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  async function registrationEnabled(): Promise<boolean> {
+    try {
+      const { data } = await api.get<{ enabled: boolean }>('/auth/registration')
+      return data.enabled
+    } catch {
+      return true
+    }
+  }
+
   async function register(payload: {
     name: string
     email: string
@@ -95,6 +104,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     twoFactorChallenge,
     register,
+    registrationEnabled,
     logout,
     forgotPassword,
     resetPassword,
