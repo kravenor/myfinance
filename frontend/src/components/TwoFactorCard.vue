@@ -11,6 +11,7 @@ const toast = useToastStore()
 const enabled = computed(() => auth.user?.two_factor_enabled === true)
 const password = ref('')
 const code = ref('')
+const disableCode = ref('')
 const busy = ref(false)
 const error = ref('')
 const setup = ref<{ secret: string; qr_svg: string } | null>(null)
@@ -81,8 +82,16 @@ async function disable() {
   })
   if (!ok) return
   await run(async () => {
-    await api.delete('/auth/two-factor', { data: { current_password: password.value } })
+    // Sei cifre = codice dell'app, altrimenti codice di recupero.
+    const second = disableCode.value.replace(/\s/g, '')
+    await api.delete('/auth/two-factor', {
+      data: {
+        current_password: password.value,
+        ...(/^\d{6}$/.test(second) ? { code: second } : { recovery_code: disableCode.value.trim() }),
+      },
+    })
     password.value = ''
+    disableCode.value = ''
     recoveryCodes.value = []
     await auth.fetchMe()
     toast.success('Verifica in due passaggi disattivata.')
@@ -190,15 +199,34 @@ function download() {
         <p class="field-hint">
           {{
             enabled
-              ? 'Serve per rigenerare i codici di recupero o disattivare la verifica.'
+              ? 'Serve per rigenerare i codici di recupero e, insieme al codice, per disattivare la verifica.'
               : "Dopo l'attivazione, gli altri dispositivi con «Ricordami» ti chiederanno di accedere di nuovo, con il codice."
           }}
         </p>
       </div>
+      <div v-if="enabled">
+        <label class="label" for="two-factor-disable-code">Codice (solo per disattivare)</label>
+        <input
+          id="two-factor-disable-code"
+          v-model="disableCode"
+          type="text"
+          class="input w-48"
+          autocomplete="one-time-code"
+          autocapitalize="off"
+          spellcheck="false"
+          maxlength="20"
+        />
+        <p class="field-hint">Il codice a 6 cifre dell'app oppure uno dei codici di recupero.</p>
+      </div>
       <div class="flex flex-wrap items-center gap-3">
         <template v-if="enabled">
           <button type="submit" class="btn-secondary" :disabled="busy">Rigenera codici di recupero</button>
-          <button type="button" class="btn-danger" :disabled="busy || !password" @click="disable">
+          <button
+            type="button"
+            class="btn-danger"
+            :disabled="busy || !password || !disableCode.trim()"
+            @click="disable"
+          >
             Disattiva
           </button>
         </template>

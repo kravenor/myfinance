@@ -7,6 +7,7 @@ use BaconQrCode\Renderer\Image\SvgImageBackEnd;
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\RendererStyle\RendererStyle;
 use BaconQrCode\Writer;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use PragmaRX\Google2FA\Google2FA;
 
@@ -49,18 +50,24 @@ class TwoFactorAuthenticator
     public function verify(User $user, string $code): bool
     {
         $code = preg_replace('/\s+/', '', $code) ?? '';
-        if ($user->two_factor_secret === null || ! preg_match('/^\d{6}$/', $code)) {
+        if (! preg_match('/^\d{6}$/', $code)) {
             return false;
         }
 
-        $timestep = $this->google2fa->verifyKeyNewer($user->two_factor_secret, $code, $user->two_factor_last_timestep ?? 0, self::WINDOW);
-        if ($timestep === false) {
-            return false;
-        }
+        return $this->withLockedUser($user, function (User $locked) use ($code) {
+            if ($locked->two_factor_secret === null) {
+                return false;
+            }
 
-        $user->forceFill(['two_factor_last_timestep' => $timestep])->save();
+            $timestep = $this->google2fa->verifyKeyNewer($locked->two_factor_secret, $code, $locked->two_factor_last_timestep ?? 0, self::WINDOW);
+            if ($timestep === false) {
+                return false;
+            }
 
-        return true;
+            $locked->forceFill(['two_factor_last_timestep' => $timestep])->save();
+
+            return true;
+        });
     }
 
     /**
@@ -95,18 +102,21 @@ class TwoFactorAuthenticator
     public function useRecoveryCode(User $user, string $code): bool
     {
         $hash = self::hash(Str::lower(trim($code)));
-        $remaining = $user->two_factor_recovery_codes ?? [];
 
-        foreach ($remaining as $i => $stored) {
-            if (hash_equals($stored, $hash)) {
-                unset($remaining[$i]);
-                $user->forceFill(['two_factor_recovery_codes' => array_values($remaining)])->save();
+        return $this->withLockedUser($user, function (User $locked) use ($hash) {
+            $remaining = $locked->two_factor_recovery_codes ?? [];
 
-                return true;
+            foreach ($remaining as $i => $stored) {
+                if (hash_equals($stored, $hash)) {
+                    unset($remaining[$i]);
+                    $locked->forceFill(['two_factor_recovery_codes' => array_values($remaining)])->save();
+
+                    return true;
+                }
             }
-        }
 
-        return false;
+            return false;
+        });
     }
 
     public function disable(User $user): void
@@ -117,6 +127,23 @@ class TwoFactorAuthenticator
             'two_factor_confirmed_at' => null,
             'two_factor_last_timestep' => null,
         ])->save();
+    }
+
+    /**
+     * Legge e scrive sulla riga bloccata: due richieste parallele con lo stesso codice
+     * non passano entrambe. Il model del chiamante viene allineato a fine operazione.
+     *
+     * @param  callable(User): bool  $operation
+     */
+    private function withLockedUser(User $user, callable $operation): bool
+    {
+        return DB::transaction(function () use ($user, $operation) {
+            $locked = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $ok = $operation($locked);
+            $user->setRawAttributes($locked->getAttributes(), true);
+
+            return $ok;
+        });
     }
 
     // Codici casuali ad alta entropia: sha256 basta, bcrypt costerebbe 8 verifiche lente a ogni uso.

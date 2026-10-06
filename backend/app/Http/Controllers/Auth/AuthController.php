@@ -22,12 +22,22 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    private const TWO_FACTOR_MAX_ATTEMPTS = 5;
+
+    private const TWO_FACTOR_LOCKOUT_SECONDS = 900;
+
+    private const SECOND_FACTOR_RULES = [
+        'code' => ['nullable', 'string', 'max:10', 'required_without:recovery_code'],
+        'recovery_code' => ['nullable', 'string', 'max:20'],
+    ];
+
     public function registrationStatus(): JsonResponse
     {
         return response()->json(['enabled' => (bool) config('finance.registration')]);
@@ -128,10 +138,7 @@ class AuthController extends Controller
      */
     public function twoFactorChallenge(Request $request, TwoFactorAuthenticator $twoFactor): UserResource
     {
-        $data = $request->validate([
-            'code' => ['nullable', 'string', 'max:10', 'required_without:recovery_code'],
-            'recovery_code' => ['nullable', 'string', 'max:20'],
-        ]);
+        $data = $request->validate(self::SECOND_FACTOR_RULES);
 
         $pending = $request->hasSession() ? $request->session()->get(LoginRequest::TWO_FACTOR_SESSION_KEY) : null;
         $user = is_array($pending) && $pending['expires'] >= now()->getTimestamp() ? User::find($pending['id']) : null;
@@ -145,14 +152,7 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => 'Accesso scaduto: inserisci di nuovo email e password.']);
         }
 
-        $field = isset($data['recovery_code']) ? 'recovery_code' : 'code';
-        $valid = $field === 'recovery_code'
-            ? $twoFactor->useRecoveryCode($user, $data['recovery_code'])
-            : $twoFactor->verify($user, $data['code']);
-
-        if (! $valid) {
-            throw ValidationException::withMessages([$field => 'Codice non valido.']);
-        }
+        $this->verifySecondFactor($user, $data, $twoFactor);
 
         $request->session()->forget(LoginRequest::TWO_FACTOR_SESSION_KEY);
         Auth::guard('web')->login($user, (bool) $pending['remember']);
@@ -191,12 +191,16 @@ class AuthController extends Controller
         return response()->json(['recovery_codes' => $codes]);
     }
 
+    // Password e codice: chi ha una sessione aperta e la password non basta a spegnere la 2FA.
     public function disableTwoFactor(Request $request, TwoFactorAuthenticator $twoFactor): Response
     {
-        $request->validate(['current_password' => ['required', 'current_password']]);
+        $data = $request->validate(['current_password' => ['required', 'current_password'], ...self::SECOND_FACTOR_RULES]);
 
         /** @var User $user */
         $user = $request->user();
+        if ($user->hasTwoFactor()) {
+            $this->verifySecondFactor($user, $data, $twoFactor);
+        }
         $twoFactor->disable($user);
 
         return response()->noContent();
@@ -251,6 +255,34 @@ class AuthController extends Controller
         $user = $request->user();
 
         return new UserResource($user);
+    }
+
+    /**
+     * Codice dell'app o di recupero. Limite per utente oltre al throttle della rotta:
+     * chi ha la password non può provare codici in parallelo da tanti indirizzi.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function verifySecondFactor(User $user, array $data, TwoFactorAuthenticator $twoFactor): void
+    {
+        $field = isset($data['recovery_code']) ? 'recovery_code' : 'code';
+        $limiterKey = 'two-factor:'.$user->id;
+
+        if (RateLimiter::tooManyAttempts($limiterKey, self::TWO_FACTOR_MAX_ATTEMPTS)) {
+            $minutes = (int) ceil(RateLimiter::availableIn($limiterKey) / 60);
+            throw ValidationException::withMessages([$field => "Troppi codici errati: riprova tra {$minutes} minuti."]);
+        }
+
+        $valid = $field === 'recovery_code'
+            ? $twoFactor->useRecoveryCode($user, (string) $data['recovery_code'])
+            : $twoFactor->verify($user, (string) $data['code']);
+
+        if (! $valid) {
+            RateLimiter::hit($limiterKey, self::TWO_FACTOR_LOCKOUT_SECONDS);
+            throw ValidationException::withMessages([$field => 'Codice non valido.']);
+        }
+
+        RateLimiter::clear($limiterKey);
     }
 
     /**
