@@ -22,12 +22,17 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    private const TWO_FACTOR_MAX_ATTEMPTS = 5;
+
+    private const TWO_FACTOR_LOCKOUT_SECONDS = 900;
+
     public function register(RegisterRequest $request): JsonResponse
     {
         $data = $request->validated();
@@ -141,14 +146,25 @@ class AuthController extends Controller
         }
 
         $field = isset($data['recovery_code']) ? 'recovery_code' : 'code';
+
+        // Per utente, oltre al throttle per IP della rotta: chi ha la password non può
+        // provare codici in parallelo da tanti indirizzi.
+        $limiterKey = 'two-factor:'.$user->id;
+        if (RateLimiter::tooManyAttempts($limiterKey, self::TWO_FACTOR_MAX_ATTEMPTS)) {
+            $minutes = (int) ceil(RateLimiter::availableIn($limiterKey) / 60);
+            throw ValidationException::withMessages([$field => "Troppi codici errati: riprova tra {$minutes} minuti."]);
+        }
+
         $valid = $field === 'recovery_code'
             ? $twoFactor->useRecoveryCode($user, $data['recovery_code'])
             : $twoFactor->verify($user, $data['code']);
 
         if (! $valid) {
+            RateLimiter::hit($limiterKey, self::TWO_FACTOR_LOCKOUT_SECONDS);
             throw ValidationException::withMessages([$field => 'Codice non valido.']);
         }
 
+        RateLimiter::clear($limiterKey);
         $request->session()->forget(LoginRequest::TWO_FACTOR_SESSION_KEY);
         Auth::guard('web')->login($user, (bool) $pending['remember']);
         $request->session()->regenerate();

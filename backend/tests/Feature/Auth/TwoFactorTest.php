@@ -182,4 +182,38 @@ class TwoFactorTest extends TestCase
 
         $this->assertFalse($user->fresh()->hasTwoFactor());
     }
+
+    public function test_challenge_is_limited_per_user_across_ips(): void
+    {
+        [$user] = $this->userWithTwoFactor();
+        $wrong = $this->otp($user) === '123456' ? '654321' : '123456';
+
+        // Un IP per tentativo: il throttle della rotta non scatta, quello per utente sì.
+        for ($i = 1; $i <= 5; $i++) {
+            $this->spa()->withServerVariables(['REMOTE_ADDR' => "203.0.113.{$i}"])->withSession($this->pending($user))
+                ->postJson('/api/auth/two-factor-challenge', ['code' => $wrong])
+                ->assertJsonValidationErrors(['code' => 'Codice non valido.']);
+        }
+
+        $this->spa()->withServerVariables(['REMOTE_ADDR' => '203.0.113.99'])->withSession($this->pending($user))
+            ->postJson('/api/auth/two-factor-challenge', ['code' => $this->otp($user)])
+            ->assertUnprocessable();
+        $this->assertGuest('web');
+    }
+
+    public function test_a_stale_model_cannot_reuse_a_code(): void
+    {
+        [$user, $codes] = $this->userWithTwoFactor();
+        $twoFactor = app(TwoFactorAuthenticator::class);
+        // Due istanze caricate prima di qualsiasi uso: come due richieste parallele.
+        $first = $user->fresh();
+        $second = $user->fresh();
+        $code = $this->otp($user);
+
+        $this->assertTrue($twoFactor->verify($first, $code));
+        $this->assertFalse($twoFactor->verify($second, $code));
+
+        $this->assertTrue($twoFactor->useRecoveryCode($first, $codes[0]));
+        $this->assertFalse($twoFactor->useRecoveryCode($second, $codes[0]));
+    }
 }
