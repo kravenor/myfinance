@@ -21,10 +21,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function login(email: string, password: string, remember = false): Promise<void> {
+  // 'two_factor': password giusta, manca il codice (twoFactorChallenge).
+  async function login(email: string, password: string, remember = false): Promise<'ok' | 'two_factor'> {
     loading.value = true
     try {
-      const { data } = await api.post<{ data: User }>('/auth/login', { email, password, remember })
+      const { data } = await api.post<{ data?: User; two_factor?: boolean }>('/auth/login', {
+        email,
+        password,
+        remember,
+      })
+      if (data.two_factor) return 'two_factor'
+      user.value = data.data ?? null
+      return 'ok'
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function twoFactorChallenge(payload: { code: string } | { recovery_code: string }): Promise<void> {
+    loading.value = true
+    try {
+      const { data } = await api.post<{ data: User }>('/auth/two-factor-challenge', payload)
       user.value = data.data
     } finally {
       loading.value = false
@@ -76,6 +93,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     fetchMe,
     login,
+    twoFactorChallenge,
     register,
     logout,
     forgotPassword,

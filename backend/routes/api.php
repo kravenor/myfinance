@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->name('auth.register');
 Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
+Route::post('/auth/two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:5,1')->name('auth.two-factor.challenge');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1')->name('password.email');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1')->name('password.update');
 
@@ -33,6 +34,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
     Route::put('/auth/preferences', [AuthController::class, 'updatePreferences'])->name('auth.preferences.update');
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+    Route::middleware('throttle:5,1')->group(function () {
+        Route::post('/auth/two-factor', [AuthController::class, 'enableTwoFactor'])->name('auth.two-factor.enable');
+        Route::post('/auth/two-factor/confirm', [AuthController::class, 'confirmTwoFactor'])->name('auth.two-factor.confirm');
+        Route::delete('/auth/two-factor', [AuthController::class, 'disableTwoFactor'])->name('auth.two-factor.disable');
+        Route::post('/auth/two-factor/recovery-codes', [AuthController::class, 'regenerateRecoveryCodes'])->name('auth.two-factor.recovery-codes');
+    });
 
     Route::get('exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
     Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');
