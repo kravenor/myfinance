@@ -10,6 +10,7 @@ use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\UpdatePasswordRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\TwoFactorAuthenticator;
 use App\Support\FinancialMonth;
 use Database\Seeders\CategorySeeder;
 use Illuminate\Auth\Events\PasswordReset;
@@ -23,6 +24,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -55,9 +57,11 @@ class AuthController extends Controller
             ->setStatusCode(Response::HTTP_CREATED);
     }
 
-    public function login(LoginRequest $request): UserResource
+    public function login(LoginRequest $request): UserResource|JsonResponse
     {
-        $request->authenticate();
+        if (! $request->authenticate()) {
+            return response()->json(['two_factor' => true]);
+        }
 
         if ($request->hasSession()) {
             $request->session()->regenerate();
@@ -109,20 +113,99 @@ class AuthController extends Controller
         /** @var User $user */
         $user = $request->user();
 
-        /** @var SessionGuard $guard */
-        $guard = Auth::guard('web');
-        $remembered = $request->cookies->has($guard->getRecallerName());
-
-        // Nuovo remember_token: gli altri dispositivi perdono il «Ricordami» alla scadenza della loro sessione.
-        $user->forceFill([
-            'password' => Hash::make($request->validated('password')),
-            'remember_token' => Str::random(60),
-        ])->save();
-
-        // Questo dispositivo resta collegato e, se usava «Ricordami», riceve il cookie con il token nuovo.
-        $guard->login($user, $remembered);
+        $this->rotateRememberToken($request, $user, ['password' => Hash::make($request->validated('password'))]);
 
         return response()->json(['message' => 'Password aggiornata.']);
+    }
+
+    /**
+     * Secondo passo del login: l'utente arriva solo dalla sessione scritta da LoginRequest, mai dal body.
+     */
+    public function twoFactorChallenge(Request $request, TwoFactorAuthenticator $twoFactor): UserResource
+    {
+        $data = $request->validate([
+            'code' => ['nullable', 'string', 'max:10', 'required_without:recovery_code'],
+            'recovery_code' => ['nullable', 'string', 'max:20'],
+        ]);
+
+        $pending = $request->hasSession() ? $request->session()->get(LoginRequest::TWO_FACTOR_SESSION_KEY) : null;
+        $user = is_array($pending) && $pending['expires'] >= now()->getTimestamp() ? User::find($pending['id']) : null;
+
+        if (! $user?->hasTwoFactor()) {
+            if ($request->hasSession()) {
+                $request->session()->forget(LoginRequest::TWO_FACTOR_SESSION_KEY);
+            }
+
+            // Su «email»: il client torna al primo passaggio.
+            throw ValidationException::withMessages(['email' => 'Accesso scaduto: inserisci di nuovo email e password.']);
+        }
+
+        $field = isset($data['recovery_code']) ? 'recovery_code' : 'code';
+        $valid = $field === 'recovery_code'
+            ? $twoFactor->useRecoveryCode($user, $data['recovery_code'])
+            : $twoFactor->verify($user, $data['code']);
+
+        if (! $valid) {
+            throw ValidationException::withMessages([$field => 'Codice non valido.']);
+        }
+
+        $request->session()->forget(LoginRequest::TWO_FACTOR_SESSION_KEY);
+        Auth::guard('web')->login($user, (bool) $pending['remember']);
+        $request->session()->regenerate();
+
+        return new UserResource($user);
+    }
+
+    public function enableTwoFactor(Request $request, TwoFactorAuthenticator $twoFactor): JsonResponse
+    {
+        $request->validate(['current_password' => ['required', 'current_password']]);
+
+        /** @var User $user */
+        $user = $request->user();
+        abort_if($user->hasTwoFactor(), Response::HTTP_CONFLICT, 'La verifica in due passaggi è già attiva.');
+
+        return response()->json($twoFactor->enable($user));
+    }
+
+    public function confirmTwoFactor(Request $request, TwoFactorAuthenticator $twoFactor): JsonResponse
+    {
+        $data = $request->validate(['code' => ['required', 'string', 'max:10']]);
+
+        /** @var User $user */
+        $user = $request->user();
+        abort_if($user->hasTwoFactor(), Response::HTTP_CONFLICT, 'La verifica in due passaggi è già attiva.');
+
+        $codes = $twoFactor->confirm($user, $data['code']);
+        if ($codes === null) {
+            throw ValidationException::withMessages(['code' => 'Codice non valido.']);
+        }
+
+        // Come al cambio password: i dispositivi con «Ricordami» devono rientrare passando dal codice.
+        $this->rotateRememberToken($request, $user);
+
+        return response()->json(['recovery_codes' => $codes]);
+    }
+
+    public function disableTwoFactor(Request $request, TwoFactorAuthenticator $twoFactor): Response
+    {
+        $request->validate(['current_password' => ['required', 'current_password']]);
+
+        /** @var User $user */
+        $user = $request->user();
+        $twoFactor->disable($user);
+
+        return response()->noContent();
+    }
+
+    public function regenerateRecoveryCodes(Request $request, TwoFactorAuthenticator $twoFactor): JsonResponse
+    {
+        $request->validate(['current_password' => ['required', 'current_password']]);
+
+        /** @var User $user */
+        $user = $request->user();
+        abort_unless($user->hasTwoFactor(), Response::HTTP_CONFLICT, 'La verifica in due passaggi non è attiva.');
+
+        return response()->json(['recovery_codes' => $twoFactor->regenerateRecoveryCodes($user)]);
     }
 
     public function updatePreferences(Request $request): UserResource
@@ -163,5 +246,22 @@ class AuthController extends Controller
         $user = $request->user();
 
         return new UserResource($user);
+    }
+
+    /**
+     * Nuovo remember_token: gli altri dispositivi perdono il «Ricordami» alla scadenza della loro sessione.
+     * Questo dispositivo resta collegato e, se usava «Ricordami», riceve il cookie con il token nuovo.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function rotateRememberToken(Request $request, User $user, array $attributes = []): void
+    {
+        /** @var SessionGuard $guard */
+        $guard = Auth::guard('web');
+        $remembered = $request->cookies->has($guard->getRecallerName());
+
+        $user->forceFill([...$attributes, 'remember_token' => Str::random(60)])->save();
+
+        $guard->login($user, $remembered);
     }
 }

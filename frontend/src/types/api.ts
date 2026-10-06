@@ -20,6 +20,7 @@ export interface User {
   date_format: string
   month_start_day: number
   notification_preferences?: NotificationPreferences
+  two_factor_enabled?: boolean
   created_at: string
 }
 

@@ -9,11 +9,16 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\HasApiTokens;
 use NotificationChannels\WebPush\HasPushSubscriptions;
 
 /**
  * @property array<string, mixed>|null $notification_preferences
+ * @property string|null $two_factor_secret
+ * @property list<string>|null $two_factor_recovery_codes
+ * @property Carbon|null $two_factor_confirmed_at
+ * @property int|null $two_factor_last_timestep
  */
 class User extends Authenticatable
 {
@@ -59,6 +64,9 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'two_factor_secret',
+        'two_factor_recovery_codes',
+        'two_factor_last_timestep',
     ];
 
     protected function casts(): array
@@ -68,6 +76,10 @@ class User extends Authenticatable
             'password' => 'hashed',
             'notification_preferences' => 'array',
             'month_start_day' => 'integer',
+            'two_factor_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
+            'two_factor_confirmed_at' => 'datetime',
+            'two_factor_last_timestep' => 'integer',
         ];
     }
 
@@ -79,6 +91,11 @@ class User extends Authenticatable
     public function notificationPreferences(): array
     {
         return array_merge(self::NOTIFICATION_DEFAULTS, $this->notification_preferences ?? []);
+    }
+
+    public function hasTwoFactor(): bool
+    {
+        return $this->two_factor_confirmed_at !== null && $this->two_factor_secret !== null;
     }
 
     public function notificationPreference(string $key): mixed

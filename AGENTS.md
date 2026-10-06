@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-05**
-Fase corrente: **Estensione — Notifiche (in analisi)**; completati restyling UI/UX, coerenza dati, privacy/cookie, «Ricordami», patrimonio storico, storico quotazioni (U1), colori categorie
+Ultimo aggiornamento: **2026-10-06**
+Fase corrente: **Estensione — Autenticazione a due fattori** (branch `feat/two-factor-auth`); prossimi candidati nella coda «Da fare» di §7
 
 ---
 
@@ -33,6 +33,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 | DB | MySQL | 8.4 |
 | Cache/Queue | Redis | 7 |
 | Notifiche push | laravel-notification-channels/webpush (su minishlink/web-push) | 13.x |
+| 2FA (TOTP + QR) | pragmarx/google2fa + bacon/bacon-qr-code (no Fortify) | 9.x / 3.x |
 | Web server | Nginx | 1.27 |
 | PHP runtime | PHP-FPM | 8.3 (Alpine) |
 | Node runtime | Node | 24 LTS (Alpine) |
@@ -308,6 +309,15 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Coerenza dati ([analisi](docs/analysis/DATA-CONSISTENCY-ANALYSIS.md)): risparmiato degli obiettivi convertito nella valuta dell'obiettivo, dedup CSV via `external_id`, regole mai sui giroconti, categoria coerente col tipo (`CategoryTypeCheck`); diagnosi pre-rilascio in `scripts/diagnose-data-consistency.sql`
 - [x] **Estensione** — Privacy e cookie policy ([analisi](docs/analysis/COOKIE-PRIVACY-POLICY-ANALYSIS.md)): pagine pubbliche `/privacy` e `/cookie`, link in login, registrazione e sidebar, nessun banner (solo cookie tecnici)
 - [x] **Estensione** — Storico quotazioni (ADR 0002 U1): `prices:backfill` mensile via Yahoo dal primo movimento, solo i buchi, schedulato dopo `prices:fetch`
+- [x] **Estensione** — Autenticazione a due fattori ([analisi](docs/analysis/TWO-FACTOR-AUTH-ANALYSIS.md)): TOTP facoltativo per utente con 8 codici di recupero, login in due passi, gestione da Impostazioni ([TwoFactorCard](frontend/src/components/TwoFactorCard.vue)), command d'emergenza `user:two-factor-disable` — dettagli in §8.1
+
+### Da fare (coda, non ancora analizzati salvo dove indicato)
+- [ ] **Multitenant / workspace condivisi** — [analisi](docs/analysis/MULTITENANT_ANALYSIS.md) pronta, nessuna implementazione
+- [ ] **ADR 0002 U5** — aggancio movimento investimento ↔ transazione di cassa (prima decidere chi comanda)
+- [ ] **ADR 0002 U7** — `from`/`to` lato server su `/investments/history` (oggi filtro solo client)
+- [ ] **ADR 0002 U4** — FIFO come metodo di costo alternativo (solo se serve per la dichiarazione fiscale)
+- [ ] **ADR 0002 U3** — `investment_plans` dedicati: in gran parte coperto dalla rata PAC sulle ricorrenti, probabilmente da scartare
+- [ ] **Notifiche** — decidere se serve un'opzione budget «solo sforato» (aperta nell'[analisi](docs/analysis/NOTIFICATIONS-ANALYSIS.md))
 
 ## 8. Schema dati (implementato in Fase 2)
 
@@ -362,6 +372,14 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | GET | `/api/auth/me` | `auth:sanctum` | Ritorna utente corrente |
 | PUT | `/api/auth/password` | `auth:sanctum` | Cambio password da autenticato: `current_password` (regola `current_password`), `password` (confirmed + `Password::defaults()`). 200 con messaggio, 422 se la password attuale non combacia |
 | PUT | `/api/auth/preferences` | `auth:sanctum` | Aggiorna le preferenze utente (`date_format` sulla whitelist `finance.date_formats`, `month_start_day` 1–28; entrambi opzionali), ritorna `UserResource` |
+
+| POST | `/api/auth/two-factor-challenge` | `throttle:5,1` | Secondo passo del login: `code` (6 cifre) o `recovery_code`. L'utente arriva solo dalla sessione (`LoginRequest::TWO_FACTOR_SESSION_KEY`, 5 minuti), mai dal body. Ritorna `UserResource` e rispetta il `remember` del primo passo; 422 su `email` se il login in attesa manca o è scaduto |
+| POST | `/api/auth/two-factor` | `auth:sanctum`, `throttle:5,1` | `current_password` → `{secret, otpauth_url, qr_svg}`; segreto non confermato. 409 se già attiva |
+| POST | `/api/auth/two-factor/confirm` | `auth:sanctum`, `throttle:5,1` | `code` → `{recovery_codes}` (unica volta in chiaro); rigenera il `remember_token` come il cambio password |
+| DELETE | `/api/auth/two-factor` | `auth:sanctum`, `throttle:5,1` | `current_password`, 204 |
+| POST | `/api/auth/two-factor/recovery-codes` | `auth:sanctum`, `throttle:5,1` | `current_password` → nuovi `{recovery_codes}`, i vecchi non valgono più |
+
+**Autenticazione a due fattori**: [TwoFactorAuthenticator](backend/app/Services/TwoFactorAuthenticator.php). Con 2FA confermata `POST /auth/login` non fa entrare e risponde `{two_factor: true}` (200, nessun utente): [LoginRequest](backend/app/Http/Requests/Auth/LoginRequest.php) usa `validate()` + `login()` al posto di `attempt()`. Colonne su `users`: `two_factor_secret` (cast `encrypted`), `two_factor_recovery_codes` (`encrypted:array` di hash sha256), `two_factor_confirmed_at` (la 2FA conta solo se valorizzato), `two_factor_last_timestep` (un codice già accettato non vale due volte); tutte in `$hidden`, scritte solo con `forceFill`. `UserResource.two_factor_enabled`. Frontend: secondo passaggio dentro [LoginView](frontend/src/views/LoginView.vue), card in Impostazioni. **Deploy**: segreti cifrati con `APP_KEY` — ruotandola mettere la vecchia in `APP_PREVIOUS_KEYS`, e un restore su un ambiente con chiave diversa rompe la 2FA. Il TOTP dipende dall'ora del server (NTP sul VPS). Telefono e codici persi: `docker compose exec php php artisan user:two-factor-disable {email}`.
 
 **Recupero password**: usa il Password broker di Laravel (tabella `password_reset_tokens` già presente, `User` eredita `CanResetPassword`). Il link di reset punta alla SPA (`{FRONTEND_URL}/reset-password?token=…&email=…`) via `ResetPassword::createUrlUsing` in [AppServiceProvider](backend/app/Providers/AppServiceProvider.php); config `app.frontend_url`. Email in `MAIL_MAILER=log` in dev (finiscono in `storage/logs/laravel.log`); in produzione configurare SMTP. Frontend: viste [ForgotPasswordView](frontend/src/views/ForgotPasswordView.vue) (`/forgot-password`) e [ResetPasswordView](frontend/src/views/ResetPasswordView.vue) (`/reset-password`), link in LoginView. `throttle:5,1` senza nome conta per IP sull'insieme delle rotte anonime che lo usano (register, forgot, reset): oltre 5 richieste al minuto → 429.
 

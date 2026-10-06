@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import { useThemeStore, type ThemePreference } from '@/stores/theme'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import TwoFactorCard from '@/components/TwoFactorCard.vue'
 import { disablePush, enablePush, pushState, sendTestPush, type PushState } from '@/lib/push'
 import { useToastStore } from '@/stores/toast'
 import type { NotificationPreferences, User } from '@/types/api'
@@ -375,6 +376,7 @@ onMounted(async () => {
         </div>
       </form>
     </div>
+    <TwoFactorCard />
     <div class="card p-4 sm:p-6">
       <form class="space-y-5" @submit.prevent="onDateSubmit">
         <div>
