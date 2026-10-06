@@ -38,6 +38,11 @@ class AuthController extends Controller
         'recovery_code' => ['nullable', 'string', 'max:20'],
     ];
 
+    public function registrationStatus(): JsonResponse
+    {
+        return response()->json(['enabled' => (bool) config('finance.registration')]);
+    }
+
     public function register(RegisterRequest $request): JsonResponse
     {
         $data = $request->validated();
