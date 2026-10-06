@@ -13,6 +13,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Registrazione
+    |--------------------------------------------------------------------------
+    | Con false nessuno può creare nuovi account (403). Su un'istanza personale
+    | esposta su internet va spenta dopo aver creato il proprio utente.
+    */
+    'registration' => (bool) env('FINANCE_REGISTRATION', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Provider tassi di cambio
     |--------------------------------------------------------------------------
     | Frankfurter (https://frankfurter.dev) espone i tassi di riferimento BCE

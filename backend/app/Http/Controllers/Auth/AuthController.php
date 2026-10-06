@@ -28,6 +28,11 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    public function registrationStatus(): JsonResponse
+    {
+        return response()->json(['enabled' => (bool) config('finance.registration')]);
+    }
+
     public function register(RegisterRequest $request): JsonResponse
     {
         $data = $request->validated();
