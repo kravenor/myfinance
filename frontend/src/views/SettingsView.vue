@@ -42,6 +42,12 @@ const loading = ref(true)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
+// Cambiare l'indirizzo delle notifiche richiede la password attuale (al vecchio arriva un avviso).
+const savedAddress = ref('')
+const addressPassword = ref('')
+const addressChanged = computed(
+  () => (form.value.email_address ?? '').trim().toLowerCase() !== savedAddress.value.toLowerCase(),
+)
 
 const passwordForm = ref({
   current_password: '',
@@ -103,6 +109,8 @@ async function onDateSubmit() {
 }
 
 function hydrate(prefs: NotificationPreferences) {
+  savedAddress.value = prefs.email_address ?? ''
+  addressPassword.value = ''
   form.value = {
     email: prefs.email,
     email_address: prefs.email_address ?? '',
@@ -125,13 +133,17 @@ async function onSubmit() {
     const payload = {
       ...form.value,
       email_address: form.value.email_address?.trim() || null,
+      ...(addressChanged.value ? { current_password: addressPassword.value } : {}),
     }
     const { data } = await api.put<{ data: NotificationPreferences }>('/notification-preferences', payload)
     hydrate(data.data)
     saved.value = true
     await auth.fetchMe()
   } catch (e: unknown) {
-    error.value = 'Salvataggio non riuscito. Controlla i campi.'
+    const errors = (e as { response?: { data?: { errors?: Record<string, string[]> } } }).response?.data?.errors
+    error.value = errors?.current_password
+      ? "Per cambiare l'indirizzo serve la password attuale corretta."
+      : 'Salvataggio non riuscito. Controlla i campi.'
     throw e
   } finally {
     saving.value = false
@@ -231,6 +243,21 @@ onMounted(async () => {
               aria-describedby="hint-email-address"
             />
             <p id="hint-email-address" class="field-hint">Lascia vuoto per usare l'email dell'account.</p>
+            <div v-if="addressChanged" class="mt-3">
+              <label class="label" for="address-password">Password attuale</label>
+              <input
+                id="address-password"
+                v-model="addressPassword"
+                type="password"
+                class="input"
+                autocomplete="current-password"
+                required
+                aria-describedby="hint-address-password"
+              />
+              <p id="hint-address-password" class="field-hint">
+                Serve per cambiare l'indirizzo. Al vecchio indirizzo arriva un'email che segnala il cambio.
+              </p>
+            </div>
             <div class="mt-2 flex flex-wrap items-center gap-3">
               <button type="button" class="btn-secondary" :disabled="testingEmail" @click="sendTestEmail">
                 {{ testingEmail ? 'Invio…' : 'Invia email di prova' }}

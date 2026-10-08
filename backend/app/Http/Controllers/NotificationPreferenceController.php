@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\User\UpdateNotificationPreferencesRequest;
 use App\Models\User;
+use App\Notifications\NotificationAddressChangedNotification;
 use App\Notifications\TestEmailNotification;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification as NotificationFacade;
 use Throwable;
 
 class NotificationPreferenceController extends Controller
@@ -23,12 +25,18 @@ class NotificationPreferenceController extends Controller
     {
         /** @var User $user */
         $user = $request->user();
+        $previous = $user->routeNotificationForMail();
 
         $user->notification_preferences = array_merge(
             $user->notificationPreferences(),
-            $request->validated(),
+            $request->safe()->except('current_password'),
         );
         $user->save();
+
+        $current = $user->routeNotificationForMail();
+        if (strcasecmp($previous, $current) !== 0) {
+            NotificationFacade::route('mail', $previous)->notify(new NotificationAddressChangedNotification($current));
+        }
 
         return response()->json(['data' => $user->notificationPreferences()]);
     }
