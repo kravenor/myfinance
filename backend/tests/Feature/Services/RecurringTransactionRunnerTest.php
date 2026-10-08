@@ -203,4 +203,25 @@ class RecurringTransactionRunnerTest extends TestCase
             Transaction::withoutGlobalScopes()->orderBy('occurred_at')->pluck('occurred_at')->map(fn ($d) => Carbon::parse($d)->toDateString())->all(),
         );
     }
+
+    public function test_month_end_recurring_keeps_its_day_after_february(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        // Mensile del 31: 28/02 è sabato → 2/3, poi torna al 31 (31/03 martedì, 30/04 giovedì).
+        $recurring = RecurringTransaction::factory()->for($user)->for($account, 'account')->create([
+            'cadence' => 'monthly',
+            'interval' => 1,
+            'starts_on' => '2026-01-31',
+            'next_run_at' => '2026-02-28',
+        ]);
+
+        app(RecurringTransactionRunner::class)->run(Carbon::parse('2026-04-30'));
+
+        $this->assertSame(
+            ['2026-03-02', '2026-03-31', '2026-04-30'],
+            Transaction::withoutGlobalScopes()->orderBy('occurred_at')->pluck('occurred_at')->map(fn ($d) => Carbon::parse($d)->toDateString())->all(),
+        );
+        $this->assertSame('2026-05-31', $recurring->fresh()->next_run_at->toDateString());
+    }
 }

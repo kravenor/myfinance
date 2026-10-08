@@ -10,6 +10,7 @@ use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\PacInstallmentNotification;
 use App\Support\BusinessDay;
+use App\Support\Cadence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -84,7 +85,7 @@ class RecurringTransactionRunner
                 }
 
                 $recurring->last_run_at = $occurredAt;
-                $recurring->next_run_at = $this->advance($recurring->next_run_at, $recurring->cadence, max(1, (int) $recurring->interval));
+                $recurring->next_run_at = Cadence::advance($recurring->next_run_at, $recurring->cadence, max(1, (int) $recurring->interval), $recurring->starts_on->day);
 
                 if ($recurring->ends_on && $recurring->next_run_at->gt($recurring->ends_on)) {
                     $recurring->is_active = false;
@@ -199,18 +200,5 @@ class RecurringTransactionRunner
         );
 
         return number_format($converted, 2, '.', '');
-    }
-
-    private function advance(Carbon $from, string $cadence, int $interval): Carbon
-    {
-        return match ($cadence) {
-            'daily' => $from->copy()->addDays($interval),
-            'weekly' => $from->copy()->addWeeks($interval),
-            'biweekly' => $from->copy()->addWeeks(2 * $interval),
-            'monthly' => $from->copy()->addMonthsNoOverflow($interval),
-            'quarterly' => $from->copy()->addMonthsNoOverflow(3 * $interval),
-            'yearly' => $from->copy()->addYearsNoOverflow($interval),
-            default => throw new \UnexpectedValueException("Cadenza non supportata: {$cadence}"),
-        };
     }
 }
