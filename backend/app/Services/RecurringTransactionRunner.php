@@ -9,6 +9,8 @@ use App\Models\RecurringTransaction;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\PacInstallmentNotification;
+use App\Support\BusinessDay;
+use App\Support\Cadence;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
@@ -57,8 +59,12 @@ class RecurringTransactionRunner
         $lastBuy = null;
 
         DB::transaction(function () use ($recurring, $holding, $until, &$count, &$lastBuy) {
-            while ($recurring->is_active && $recurring->next_run_at->lte($until)) {
-                $occurredAt = $recurring->next_run_at->copy();
+            while ($recurring->is_active) {
+                // next_run_at resta la data teorica (ancora della cadenza): slitta solo la data del movimento.
+                $occurredAt = BusinessDay::next($recurring->next_run_at);
+                if ($occurredAt->gt($until)) {
+                    break;
+                }
 
                 Transaction::withoutGlobalScopes()->create([
                     'user_id' => $recurring->user_id,
@@ -79,7 +85,7 @@ class RecurringTransactionRunner
                 }
 
                 $recurring->last_run_at = $occurredAt;
-                $recurring->next_run_at = $this->advance($occurredAt, $recurring->cadence, max(1, (int) $recurring->interval));
+                $recurring->next_run_at = Cadence::advance($recurring->next_run_at, $recurring->cadence, max(1, (int) $recurring->interval), $recurring->starts_on->day);
 
                 if ($recurring->ends_on && $recurring->next_run_at->gt($recurring->ends_on)) {
                     $recurring->is_active = false;
@@ -194,18 +200,5 @@ class RecurringTransactionRunner
         );
 
         return number_format($converted, 2, '.', '');
-    }
-
-    private function advance(Carbon $from, string $cadence, int $interval): Carbon
-    {
-        return match ($cadence) {
-            'daily' => $from->copy()->addDays($interval),
-            'weekly' => $from->copy()->addWeeks($interval),
-            'biweekly' => $from->copy()->addWeeks(2 * $interval),
-            'monthly' => $from->copy()->addMonthsNoOverflow($interval),
-            'quarterly' => $from->copy()->addMonthsNoOverflow(3 * $interval),
-            'yearly' => $from->copy()->addYearsNoOverflow($interval),
-            default => throw new \UnexpectedValueException("Cadenza non supportata: {$cadence}"),
-        };
     }
 }
