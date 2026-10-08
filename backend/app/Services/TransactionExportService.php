@@ -55,12 +55,12 @@ class TransactionExportService
                         $t->type,
                         $t->amount,
                         $t->currency,
-                        $accounts[$t->account_id] ?? '',
-                        $t->transfer_account_id ? ($accounts[$t->transfer_account_id] ?? '') : '',
-                        $t->category_id ? ($categories[$t->category_id] ?? '') : '',
-                        $t->description ?? '',
-                        $t->notes ?? '',
-                        $t->external_id ?? '',
+                        self::cell($accounts[$t->account_id] ?? ''),
+                        self::cell($t->transfer_account_id ? ($accounts[$t->transfer_account_id] ?? '') : ''),
+                        self::cell($t->category_id ? ($categories[$t->category_id] ?? '') : ''),
+                        self::cell($t->description ?? ''),
+                        self::cell($t->notes ?? ''),
+                        self::cell($t->external_id ?? ''),
                     ]);
                 }
             });
@@ -71,5 +71,14 @@ class TransactionExportService
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
             'Cache-Control' => 'no-store',
         ]);
+    }
+
+    /**
+     * Testo libero (descrizioni importate dalla banca, nomi): Excel esegue le celle che iniziano
+     * con = + - @ tab o CR come formule. L'apostrofo le fa leggere come testo.
+     */
+    private static function cell(string $value): string
+    {
+        return $value !== '' && str_contains("=+-@\t\r", $value[0]) ? "'".$value : $value;
     }
 }

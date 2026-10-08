@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\CategorizationRule;
 
+use App\Models\CategorizationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,11 +40,14 @@ class UpdateCategorizationRuleRequest extends FormRequest
     public function withValidator(Validator $validator): void
     {
         $validator->after(function (Validator $v) {
-            $matchType = $this->input('match_type');
+            // Tipo e pattern mancanti nel payload si leggono dalla regola: anche cambiare solo il pattern di una regex va controllato.
+            /** @var CategorizationRule $rule */
+            $rule = $this->route('categorization_rule');
+            $matchType = $this->input('match_type', $rule->match_type);
             if ($matchType !== 'regex') {
                 return;
             }
-            $pattern = (string) $this->input('pattern', '');
+            $pattern = (string) $this->input('pattern', $rule->pattern);
             if ($pattern === '') {
                 return;
             }
