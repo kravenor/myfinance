@@ -73,6 +73,15 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Accessi, 2FA e password: separati dal log applicativo e conservati più a lungo (dati personali: IP, email).
+        'security' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/security.log'),
+            'level' => 'info',
+            'days' => env('LOG_SECURITY_DAYS', 90),
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

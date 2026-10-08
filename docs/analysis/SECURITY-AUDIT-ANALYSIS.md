@@ -53,7 +53,7 @@ Quattro branch, in quest'ordine:
 3. **`fix/output-escaping`** (5, 18, 24): neutralizzazione delle formule nel CSV, markdown sicuro nelle email, validazione regex in PATCH.
 4. **`chore/infra-hardening`** (9, 10, 14, 22, 23): action a SHA e `permissions`, pull delle immagini nel deploy, nginx 1.28 con `server_tokens off` e CSP, `trustProxies` ristretto con `trustHosts`, `umask 077` nei backup, healthcheck senza password in chiaro.
 
-Da decidere con il proprietario prima di intervenire: **8** (destinazione e retention dei log di sicurezza), **11** (CA locale e certificati sui dispositivi), **13** (`uncompromised()` chiama Have I Been Pwned: va dichiarato nelle pagine Privacy e Cookie), **19**, **20**, **21**.
+Da decidere con il proprietario prima di intervenire: **11** (CA locale e certificati sui dispositivi), **13** (`uncompromised()` chiama Have I Been Pwned: va dichiarato nelle pagine Privacy e Cookie), **20**, **21**. **11** è rinviato: lo stack Raspberry non è in uso. **19** deciso: password più avviso al vecchio indirizzo (branch `fix/notification-email-change`). **8** deciso: canale di log dedicato, 90 giorni (branch `fix/security-logging`).
 
 ## 3. Dettaglio dei fix
 
@@ -76,6 +76,21 @@ Da decidere con il proprietario prima di intervenire: **8** (destinazione e rete
 - **5**: `TransactionExportService::cell()` antepone un apostrofo alle celle di testo (conti, categoria, descrizione, note, `external_id`) che iniziano con `= + - @`, tab o CR. Data, tipo, importo e valuta non passano dall'helper: sono generati dall'app.
 - **18**: `Markdown::withSecuredEncoding()` in `AppServiceProvider::boot`: nei valori interpolati nelle email `[` diventa `\[`, `<` e `>` diventano entità, quindi una descrizione `[testo](url)` resta testo. Nessuna notifica attuale usa link markdown nelle righe (verificato).
 - **24**: `UpdateCategorizationRuleRequest` legge `match_type` e `pattern` dalla regola quando mancano nel payload, quindi `PATCH {pattern}` su una regola regex viene validato. La difesa dal backtracking non è stata aggiunta: con JIT PCRE ferma i pattern patologici in circa 1ms e il danno resta all'utente stesso.
+
+### Branch `fix/notification-email-change` (finding 19)
+- `UpdateNotificationPreferencesRequest` richiede `current_password` solo se `email_address` cambia (confronto senza maiuscole e spazi); `current_password` non finisce nelle preferenze (`safe()->except`).
+- Se l'indirizzo effettivo cambia (personalizzato o, se vuoto, quello dell'account), al vecchio parte `NotificationAddressChangedNotification`, in coda, anche con le email disattivate nelle preferenze.
+- Scartata la conferma via link al nuovo indirizzo: eviterebbe errori di battitura e relay di spam, ma non ferma chi controlla il nuovo indirizzo, e costa uno stato «in attesa» con link firmato e UI.
+- Frontend: in Impostazioni il campo «Password attuale» compare solo quando l'indirizzo è diverso da quello salvato.
+
+### Branch `fix/security-logging` (finding 8)
+- Canale `security` in `config/logging.php`: file giornaliero `storage/logs/security-*.log`, livello `info`, `LOG_SECURITY_DAYS` (default 90). Sul VPS `storage/logs` è già sul volume `laravel_logs`, quindi il registro sopravvive ai deploy senza toccare il compose.
+- Helper `App\Support\SecurityLog::record()` con IP, browser (max 200 caratteri) e nome della rotta; scarta i valori vuoti.
+- Eventi registrati con chiamate esplicite in `AuthController`, `LoginRequest`, `NotificationPreferenceController` e nel command `user:two-factor-disable` (che prima scriveva nel log applicativo). Un listener su `Illuminate\Auth\Events\Login` è stato scartato: `rotateRememberToken` rifà `login()` al cambio password e all'attivazione 2FA.
+- `login.failed` registra l'email tentata anche se non esiste: serve a riconoscere il password spraying. È un dato personale di chi l'ha digitata, coperto dalla stessa retention.
+- Non registrati: richieste di reset password (email arbitrarie di chiunque), logout, 403/404 di autorizzazione (gli id altrui danno 404 dal global scope, rumore senza segnale).
+- Privacy policy aggiornata (dati, base giuridica, conservazione) e `LEGAL.updatedAt`.
+- Da valutare in `chore/infra-hardening`: montare `storage/logs` su una cartella dell'host per far leggere `security-*.log` a fail2ban sul VPS.
 
 ### Branch 4
 Da dettagliare all'avvio, partendo dalle righe indicate nelle tabelle della sezione 1.

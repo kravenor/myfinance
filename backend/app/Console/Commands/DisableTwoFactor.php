@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Models\User;
 use App\Services\TwoFactorAuthenticator;
+use App\Support\SecurityLog;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 class DisableTwoFactor extends Command
 {
@@ -23,7 +23,7 @@ class DisableTwoFactor extends Command
         }
 
         $twoFactor->disable($user);
-        Log::warning('Verifica in due passaggi disattivata da console', ['user_id' => $user->id]);
+        SecurityLog::record('two_factor.disabled_from_console', $user->id);
         $this->info("Verifica in due passaggi disattivata per {$user->email}.");
 
         return self::SUCCESS;

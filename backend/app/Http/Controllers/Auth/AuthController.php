@@ -12,6 +12,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\TwoFactorAuthenticator;
 use App\Support\FinancialMonth;
+use App\Support\SecurityLog;
 use Database\Seeders\CategorySeeder;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\SessionGuard;
@@ -62,6 +63,7 @@ class AuthController extends Controller
         });
 
         Auth::login($user);
+        SecurityLog::record('register', $user->id);
 
         if ($request->hasSession()) {
             $request->session()->regenerate();
@@ -84,6 +86,7 @@ class AuthController extends Controller
 
         /** @var User $user */
         $user = $request->user();
+        SecurityLog::record('login.success', $user->id);
 
         return new UserResource($user);
     }
@@ -112,6 +115,7 @@ class AuthController extends Controller
                 ])->setRememberToken(Str::random(60));
 
                 $user->save();
+                SecurityLog::record('password.reset', $user->id);
 
                 event(new PasswordReset($user));
             }
@@ -131,6 +135,7 @@ class AuthController extends Controller
         $user = $request->user();
 
         $this->rotateRememberToken($request, $user, ['password' => Hash::make($request->validated('password'))]);
+        SecurityLog::record('password.changed', $user->id);
 
         return response()->json(['message' => 'Password aggiornata.']);
     }
@@ -158,6 +163,7 @@ class AuthController extends Controller
 
         $request->session()->forget(LoginRequest::TWO_FACTOR_SESSION_KEY);
         Auth::guard('web')->login($user, (bool) $pending['remember']);
+        SecurityLog::record('login.success', $user->id, ['two_factor' => true]);
         $request->session()->regenerate();
 
         return new UserResource($user);
@@ -189,6 +195,7 @@ class AuthController extends Controller
 
         // Come al cambio password: i dispositivi con «Ricordami» devono rientrare passando dal codice.
         $this->rotateRememberToken($request, $user);
+        SecurityLog::record('two_factor.enabled', $user->id);
 
         return response()->json(['recovery_codes' => $codes]);
     }
@@ -204,6 +211,7 @@ class AuthController extends Controller
             $this->verifySecondFactor($user, $data, $twoFactor);
         }
         $twoFactor->disable($user);
+        SecurityLog::record('two_factor.disabled', $user->id);
 
         return response()->noContent();
     }
@@ -218,7 +226,10 @@ class AuthController extends Controller
         abort_unless($user->hasTwoFactor(), Response::HTTP_CONFLICT, 'La verifica in due passaggi non è attiva.');
         $this->verifySecondFactor($user, $data, $twoFactor);
 
-        return response()->json(['recovery_codes' => $twoFactor->regenerateRecoveryCodes($user)]);
+        $codes = $twoFactor->regenerateRecoveryCodes($user);
+        SecurityLog::record('two_factor.recovery_codes_regenerated', $user->id);
+
+        return response()->json(['recovery_codes' => $codes]);
     }
 
     public function updatePreferences(Request $request): UserResource
@@ -273,6 +284,7 @@ class AuthController extends Controller
         $limiterKey = 'two-factor:'.$user->id;
 
         if (RateLimiter::tooManyAttempts($limiterKey, self::TWO_FACTOR_MAX_ATTEMPTS)) {
+            SecurityLog::record('two_factor.lockout', $user->id);
             $minutes = (int) ceil(RateLimiter::availableIn($limiterKey) / 60);
             throw ValidationException::withMessages([$field => "Troppi codici errati: riprova tra {$minutes} minuti."]);
         }
@@ -282,11 +294,15 @@ class AuthController extends Controller
             : $twoFactor->verify($user, (string) $data['code']);
 
         if (! $valid) {
+            SecurityLog::record('two_factor.failed', $user->id, ['method' => $field]);
             RateLimiter::hit($limiterKey, self::TWO_FACTOR_LOCKOUT_SECONDS);
             throw ValidationException::withMessages([$field => 'Codice non valido.']);
         }
 
         RateLimiter::clear($limiterKey);
+        if ($field === 'recovery_code') {
+            SecurityLog::record('two_factor.recovery_code_used', $user->id);
+        }
     }
 
     /**

@@ -122,7 +122,7 @@ class User extends Authenticatable
      * Indirizzo email per le notifiche: quello personalizzato se impostato,
      * altrimenti l'email dell'account.
      */
-    public function routeNotificationForMail(Notification $notification): string
+    public function routeNotificationForMail(?Notification $notification = null): string
     {
         $custom = $this->notificationPreference('email_address');
 
