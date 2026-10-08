@@ -36,7 +36,7 @@ class BudgetController extends Controller
             $query->where('category_id', $request->integer('category_id'));
         }
 
-        $paginator = $query->paginate($request->integer('per_page', 50));
+        $paginator = $query->paginate($this->perPage($request, 50));
 
         $this->attachSpent($paginator->getCollection()->all());
 

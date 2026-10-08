@@ -45,7 +45,7 @@ class UpdateRecurringTransactionRequest extends FormRequest
             'interval' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:255'],
             'starts_on' => ['sometimes', 'required', 'date'],
             'ends_on' => ['sometimes', 'nullable', 'date'],
-            'next_run_at' => ['sometimes', 'nullable', 'date'],
+            'next_run_at' => ['sometimes', 'nullable', 'date', 'after_or_equal:'.now()->subYears(5)->toDateString()],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

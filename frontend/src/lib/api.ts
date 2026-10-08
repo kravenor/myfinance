@@ -53,6 +53,8 @@ api.interceptors.response.use(undefined, async (error: AxiosError) => {
       useToastStore().info('Sessione scaduta: accedi di nuovo.')
       router.push({ name: 'login', query: { redirect: current.fullPath } })
     }
+  } else if (status === 429 && !config?.url?.startsWith('/auth/')) {
+    useToastStore().info('Troppe richieste in poco tempo: attendi un minuto e riprova.')
   } else if (!error.response && !axios.isCancel(error)) {
     useToastStore().error('Connessione assente o server non raggiungibile. Riprova tra poco.')
   } else if (status && status >= 500) {

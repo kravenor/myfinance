@@ -63,9 +63,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     Route::get('investments/overview', [InvestmentController::class, 'overview'])->name('investments.overview');
-    Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->name('investments.lookup');
+    Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->middleware('throttle:10,1,prices-lookup')->name('investments.lookup');
     Route::get('investments/history', [InvestmentController::class, 'history'])->name('investments.history');
-    Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->name('investments.refresh-prices');
+    Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->middleware('throttle:2,1,prices-refresh')->name('investments.refresh-prices');
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
     Route::apiResource('investment-holdings.transactions', InvestmentTransactionController::class)

@@ -7,9 +7,17 @@ use App\Models\Transaction;
 use App\Services\Import\ImportReaderFactory;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class TransactionImportService
 {
+    /** Righe per import: oltre, il file va diviso (la richiesta resta entro i limiti di tempo e memoria). */
+    public const MAX_ROWS = 5000;
+
+    /** Stessi limiti di StoreTransactionRequest. */
+    private const MAX_AMOUNT = 999999999999.99;
+
     public function __construct(
         private readonly CategorizationRuleMatcher $matcher,
         private readonly ImportReaderFactory $readers,
@@ -110,8 +118,11 @@ class TransactionImportService
         string $currency = 'EUR',
     ): array {
         $reader = $this->readers->for($file);
-        $data = $reader->read($file, PHP_INT_MAX);
+        $data = $reader->read($file, self::MAX_ROWS + 1);
         $rows = $data['rows'];
+        if (count($rows) > self::MAX_ROWS) {
+            throw ValidationException::withMessages(['file' => 'Il file contiene più di '.number_format(self::MAX_ROWS, 0, ',', '.').' movimenti: dividilo in più parti.']);
+        }
 
         // I formati strutturati (OFX/QIF) hanno campi fissi e date già normalizzate ISO.
         if ($data['mapping_locked']) {
@@ -119,6 +130,17 @@ class TransactionImportService
             $dateFormat = 'Y-m-d';
         }
 
+        // Tutto o niente: un timeout a metà non lascia un import parziale.
+        return DB::transaction(fn () => $this->importRows($rows, $mapping, $dateFormat, $accountId, $currency));
+    }
+
+    /**
+     * @param  array<int, array<string, string>>  $rows
+     * @param  array<string, ?string>  $mapping
+     * @return array{imported: int, skipped: int, duplicates: int, auto_categorized: int, errors: array<int, array{row: int, message: string}>}
+     */
+    private function importRows(array $rows, array $mapping, string $dateFormat, int $accountId, string $currency): array
+    {
         $byName = Category::query()->get()->keyBy(fn ($c) => mb_strtolower($c->name));
         $this->matcher->reset();
         $this->matcher->preload();
@@ -141,27 +163,34 @@ class TransactionImportService
 
             try {
                 $raw = trim((string) ($row[$mapping['date']] ?? ''));
-                $date = $raw === '' ? null : Carbon::createFromFormat($dateFormat, $raw);
+                $date = $raw === '' ? null : rescue(fn () => Carbon::createFromFormat($dateFormat, $raw), null, false);
                 if (! $date) {
-                    throw new \RuntimeException("Data non valida: {$raw}");
+                    throw new ImportRowException('Data non valida: '.mb_substr($raw, 0, 40));
                 }
 
                 $amountRaw = (string) ($row[$mapping['amount']] ?? '');
                 $amount = $this->parseAmount($amountRaw);
                 if ($amount === null) {
-                    throw new \RuntimeException("Importo non valido: {$amountRaw}");
+                    throw new ImportRowException('Importo non valido: '.mb_substr($amountRaw, 0, 40));
+                }
+                if (abs($amount) == 0.0 || abs($amount) > self::MAX_AMOUNT) {
+                    throw new ImportRowException('Importo nullo o fuori intervallo.');
                 }
 
                 $type = $this->resolveType($mapping, $row, $amount);
+                // Le causali bancarie possono superare i limiti delle colonne: si accorciano invece di scartare la riga.
                 $description = ! empty($mapping['description'])
-                    ? trim((string) ($row[$mapping['description']] ?? '')) ?: null
+                    ? mb_substr(trim((string) ($row[$mapping['description']] ?? '')), 0, 255) ?: null
                     : null;
                 $notes = ! empty($mapping['notes'])
-                    ? trim((string) ($row[$mapping['notes']] ?? '')) ?: null
+                    ? mb_substr(trim((string) ($row[$mapping['notes']] ?? '')), 0, 2000) ?: null
                     : null;
                 $externalId = ! empty($mapping['external_id'])
                     ? trim((string) ($row[$mapping['external_id']] ?? '')) ?: null
                     : null;
+                if ($externalId !== null && mb_strlen($externalId) > 255) {
+                    throw new ImportRowException('ID esterno troppo lungo.');
+                }
 
                 if ($externalId !== null
                     && (isset($existingExternalIds[$externalId]) || isset($seenInBatch[$externalId]))) {
@@ -208,9 +237,14 @@ class TransactionImportService
                 }
 
                 $imported++;
-            } catch (\Throwable $e) {
+            } catch (ImportRowException $e) {
                 $skipped++;
                 $errors[] = ['row' => $rowNumber, 'message' => $e->getMessage()];
+            } catch (\Throwable $e) {
+                // Il dettaglio (SQL, binding) va nei log, non al client.
+                report($e);
+                $skipped++;
+                $errors[] = ['row' => $rowNumber, 'message' => 'Riga non importabile.'];
             }
         }
 

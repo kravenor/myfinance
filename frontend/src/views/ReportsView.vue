@@ -21,6 +21,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import SegmentedControl from '@/components/ui/SegmentedControl.vue'
 import { useQueryFilters } from '@/composables/useQueryFilters'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import { EXPENSE_COLOR, INCOME_COLOR, PRIMARY_COLOR, paletteColor } from '@/lib/chartTheme'
 import type { CategoryTotal, NetWorthPoint, TagTotal, TimelinePoint } from '@/types/reports'
 
@@ -168,6 +169,11 @@ async function refresh() {
     } else {
       categories.value = (await api.get<{ data: CategoryTotal[] }>('/reports/by-category', { params: { from, to, type: kind.value } })).data.data
     }
+  } catch (e: unknown) {
+    // Periodo personalizzato non valido (es. oltre il massimo consentito dal server).
+    const err = e as { response?: { status?: number; data?: { message?: string } } }
+    if (err.response?.status !== 422) throw e
+    useToastStore().error(err.response.data?.message ?? 'Periodo non valido.')
   } finally {
     loading.value = false
     loaded.value = true

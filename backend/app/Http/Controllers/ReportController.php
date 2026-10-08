@@ -8,9 +8,12 @@ use App\Support\FinancialMonth;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 
 class ReportController extends Controller
 {
+    private const MAX_RANGE_YEARS = 10;
+
     public function __construct(
         private readonly ReportService $reports,
         private readonly ExpenseForecastService $expenseForecast,
@@ -166,6 +169,11 @@ class ReportController extends Controller
      */
     private function range(Request $request, int $defaultMonths = 1): array
     {
+        $request->validate([
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date'],
+        ]);
+
         [$currentStart, $currentEnd] = FinancialMonth::range(Carbon::now());
 
         $to = $request->filled('to')
@@ -177,6 +185,11 @@ class ReportController extends Controller
             : ($request->filled('to')
                 ? FinancialMonth::range($to)[0]->subMonthsNoOverflow($defaultMonths - 1)
                 : $currentStart->copy()->subMonthsNoOverflow($defaultMonths - 1));
+
+        // Alcuni report fanno query per ogni mese: un intervallo enorme blocca i worker.
+        if ($from->gt($to) || $from->copy()->addYears(self::MAX_RANGE_YEARS)->lt($to)) {
+            throw ValidationException::withMessages(['from' => 'Scegli un periodo valido di al massimo '.self::MAX_RANGE_YEARS.' anni.']);
+        }
 
         return [$from, $to];
     }

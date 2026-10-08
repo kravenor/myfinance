@@ -42,7 +42,8 @@ class StoreRecurringTransactionRequest extends FormRequest
             'description' => ['nullable', 'string', 'max:255'],
             'cadence' => ['required', 'in:daily,weekly,biweekly,monthly,quarterly,yearly'],
             'interval' => ['nullable', 'integer', 'min:1', 'max:255'],
-            'starts_on' => ['required', 'date'],
+            // Un inizio remoto genera tutto l'arretrato nel job notturno.
+            'starts_on' => ['required', 'date', 'after_or_equal:'.now()->subYears(5)->toDateString()],
             'ends_on' => ['nullable', 'date', 'after_or_equal:starts_on'],
             'next_run_at' => ['nullable', 'date', 'after_or_equal:starts_on'],
             'is_active' => ['sometimes', 'boolean'],
