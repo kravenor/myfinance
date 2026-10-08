@@ -1,0 +1,83 @@
+name: "Auto Cross-Reference PRs"
+
+on:
+  pull_request:
+    types: [opened, synchronize] # Gira quando la PR viene aperta o se aggiungi nuovi commit
+
+jobs:
+  update-description:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write # Permesso fondamentale per permettere al token di modificare il testo della PR
+      contents: read       # Permesso per leggere la cronologia dei commit
+
+    steps:
+      # 1. Scarica il codice del repository con tutta la cronologia dei commit
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Prende tutta la cronologia, altrimenti non vedrebbe i vecchi commit di merge
+
+      # 2. Estrae i numeri delle PR dai messaggi di commit e aggiorna la PR principale
+      - name: Extract and Append Included PRs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const execSync = require('child_process').execSync;
+            
+            // Trova la base e la testa della PR attuale per analizzare solo i commit di questo branch
+            const baseSha = context.payload.pull_request.base.sha;
+            const headSha = context.payload.pull_request.head.sha;
+            
+            // Esegue un comando git per estrarre tutti i messaggi di commit tra base e head
+            // Cerca pattern classici come "Merge pull request #123" o "(#123)"
+            let gitLog = "";
+            try {
+              gitLog = execSync(`git log ${baseSha}..${headSha} --oneline`).toString();
+            } catch (error) {
+              console.log("Impossibile recuperare i log di git:", error);
+              return;
+            }
+            
+            // Regex per intercettare i numeri delle PR (es. #123 o (#123))
+            const prRegex = /#(\d+)/g;
+            const foundPrs = new Set();
+            let match;
+            
+            while ((match = prRegex.exec(gitLog)) !== null) {
+              // Evitiamo di auto-referenziare la PR corrente
+              if (parseInt(match[1]) !== context.payload.pull_request.number) {
+                foundPrs.add(match[1]);
+              }
+            }
+            
+            // Se non ha trovato vecchie PR incluse, interrompe l'esecuzione senza fare modifiche
+            if (foundPrs.size === 0) {
+              console.log("Nessuna PR precedente rilevata nei commit.");
+              return;
+            }
+            
+            // Costruisce la lista di cross-reference in formato Markdown
+            let referenceList = "\n\n### 🔗 PR Incluse in questa Release:\n";
+            foundPrs.forEach(pr => {
+              referenceList += `- #${pr}\n`;
+            });
+            
+            // Recupera la descrizione attuale della PR
+            const currentBody = context.payload.pull_request.body || "";
+            
+            // Evita di appendere doppioni se l'azione gira più volte (es. al push di nuovi commit)
+            if (currentBody.includes("### 🔗 PR Incluse in questa Release:")) {
+              console.log("I riferimenti sono già stati aggiunti in precedenza.");
+              return;
+            }
+            
+            // Aggiorna la PR aggiungendo la lista in fondo al testo esistente
+            await github.rest.pullRequests.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              body: currentBody + referenceList
+            });
+            
+            console.log(`Descrizione aggiornata con successo! Aggiunte le PR: ${Array.from(foundPrs).join(', ')}`);
