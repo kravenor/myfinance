@@ -3,6 +3,9 @@
 namespace App\Providers;
 
 use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -20,6 +23,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Tetto generale delle API: largo per l'uso normale (le pagine fanno più chiamate in parallelo),
+        // ferma i loop. Le rotte costose hanno un throttle proprio.
+        RateLimiter::for('api', fn (Request $request) => Limit::perMinute(300)->by($request->user()?->id ?: $request->ip()));
+
         // Il link di reset password punta alla rotta SPA del frontend.
         ResetPassword::createUrlUsing(function (object $notifiable, string $token): string {
             $base = rtrim((string) config('app.frontend_url'), '/');

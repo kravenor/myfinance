@@ -18,7 +18,7 @@ class TagController extends Controller
         $this->authorize('viewAny', Tag::class);
 
         return TagResource::collection(
-            Tag::query()->orderBy('name')->paginate($request->integer('per_page', 50))
+            Tag::query()->orderBy('name')->paginate($this->perPage($request, 50))
         );
     }
 

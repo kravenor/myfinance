@@ -3,9 +3,13 @@
 namespace App\Services\Import;
 
 use Illuminate\Http\UploadedFile;
+use Illuminate\Validation\ValidationException;
 
 class CsvReader extends ImportReader
 {
+    /** Un estratto conto ha una decina di colonne: centinaia di migliaia esauriscono la memoria già in anteprima. */
+    private const MAX_COLUMNS = 100;
+
     public function format(): string
     {
         return 'csv';
@@ -21,6 +25,10 @@ class CsvReader extends ImportReader
         $delimiter = $this->detectDelimiter($file);
 
         $headers = fgetcsv($handle, 0, $delimiter) ?: [];
+        if (count($headers) > self::MAX_COLUMNS) {
+            fclose($handle);
+            throw ValidationException::withMessages(['file' => 'Il file ha più di '.self::MAX_COLUMNS.' colonne: non sembra un estratto conto.']);
+        }
         $headers = array_map(fn ($h) => trim((string) $h), $headers);
 
         $rows = [];

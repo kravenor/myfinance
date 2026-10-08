@@ -62,7 +62,9 @@ async function onPasswordSubmit() {
     passwordForm.value = { current_password: '', password: '', password_confirmation: '' }
   } catch (e: unknown) {
     passwordError.value =
-      'Aggiornamento non riuscito. Controlla la password attuale e i requisiti della nuova.'
+      (e as { response?: { status?: number } }).response?.status === 429
+        ? 'Troppi tentativi: attendi un minuto.'
+        : 'Aggiornamento non riuscito. Controlla la password attuale e i requisiti della nuova.'
     throw e
   } finally {
     passwordSaving.value = false

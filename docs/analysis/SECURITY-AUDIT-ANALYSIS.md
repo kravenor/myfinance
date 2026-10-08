@@ -63,12 +63,21 @@ Da decidere con il proprietario prima di intervenire: **8** (destinazione e rete
 - **7**: forgot password risponde sempre con `passwords.sent`; reset password mappa `INVALID_USER` sullo stesso messaggio di `INVALID_TOKEN`.
 - **12**: `PUT /auth/password` dentro il gruppo `throttle:5,1`.
 
-### Branch 2, 3, 4
+### Branch 2, `fix/request-limits`
+- **Throttle globale**: `throttleApi()` con limiter `api` a 300 richieste al minuto per utente (o IP). Il valore è largo perché Dashboard e Statistiche fanno più chiamate in parallelo; serve a fermare i loop, le rotte costose hanno limiti propri. Nel frontend un 429 fuori da `/auth/*` mostra un toast.
+- **2**: `ReportController::range()` valida `from`/`to` come date e rifiuta intervalli invertiti o oltre 10 anni (422 su `from`); ReportsView mostra il messaggio.
+- **3**: massimo 5.000 righe per import (letta una riga in più per accorgersene senza leggere tutto il file) e 100 colonne per i CSV, controllate già in preview. Il ciclo di import gira in `DB::transaction`.
+- **4**: `refresh-prices` aggiorna solo i simboli dell'utente (`fetchLatest($symbols)`, con guard sulla lista vuota che altrimenti significherebbe «tutti»); `throttle:2,1,prices-refresh`. `investments/lookup` ha `throttle:10,1,prices-lookup`. I prefissi separano i contatori: i `throttle` anonimi di uno stesso utente condividono la chiave.
+- **15**: `Controller::perPage()` limita `per_page` tra 1 e 200 (200 è il massimo che chiede il frontend per riempire le select).
+- **16**: `starts_on` in creazione e `next_run_at` in modifica al massimo 5 anni nel passato. `starts_on` in modifica non è limitato perché non sposta la prossima scadenza e il form lo rimanda sempre (le ricorrenti vecchie non diventerebbero più modificabili).
+- **17**: ogni riga importata rispetta i limiti di `StoreTransactionRequest`: importo diverso da 0 e entro il massimo, `external_id` ≤ 255; descrizione e note vengono accorciate invece di scartare la riga, perché le causali bancarie lunghe sono comuni. La valuta è sempre quella del conto (il parametro `currency` è stato tolto, il frontend non lo inviava). Errori attesi con `ImportRowException`; ogni altra eccezione va nei log e al client arriva «Riga non importabile.».
+
+### Branch 3, 4
 Da dettagliare all'avvio di ciascun branch, partendo dalle righe indicate nelle tabelle della sezione 1.
 
 ## 4. Impatti e possibili regressioni
 Riferimento: `master`.
 - **Branch 1**: la UI della 2FA cambia (codice richiesto per rigenerare i codici di recupero); il messaggio di forgot password è sempre lo stesso anche per email inesistenti; un account bersagliato può restare bloccato fino a 15 minuti dopo 10 password errate.
-- **Branch 2**: `throttleApi()` (60 richieste al minuto per utente di default) può colpire pagine che fanno molte chiamate in parallelo, come Dashboard e Statistiche: va misurato prima di scegliere il valore. Gli import oltre i nuovi tetti vengono rifiutati con un messaggio.
+- **Branch 2**: con 300 richieste al minuto l'uso normale non dovrebbe mai arrivare al limite; se succede, compare un toast. Gli import oltre 5.000 righe vanno divisi. Report con periodo personalizzato oltre 10 anni rifiutati. Le ricorrenti nuove non possono partire più di 5 anni fa. Il pulsante «Aggiorna quotazioni» vale 2 volte al minuto e non aggiorna più i simboli degli altri utenti (lo fa lo scheduler).
 - **Branch 3**: le celle CSV che iniziano con `= + - @` ricevono un apostrofo iniziale, visibile riaprendo il file in un editor di testo.
 - **Branch 4**: la CSP può bloccare lo script inline del tema in `index.html` se l'hash non è allineato; il cambio di `trustProxies` va provato su VPS e Raspberry (redirect HTTPS, link nelle email).

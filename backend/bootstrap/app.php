@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->statefulApi();
+        $middleware->throttleApi();
 
         // Dietro il reverse proxy che termina TLS (Apache sul VPS, Traefik sulla
         // Pi) l'app deve fidarsi di X-Forwarded-*: senza, Laravel vede `http` e

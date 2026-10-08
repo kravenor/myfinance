@@ -25,7 +25,10 @@ class InvestmentController extends Controller
     {
         $this->authorize('viewAny', InvestmentHolding::class);
 
-        return response()->json(['data' => ['updated' => $fetcher->fetchLatest()]]);
+        // Solo i simboli dell'utente: il refresh di tutti resta allo scheduler. Lista vuota = tutti, quindi va evitata.
+        $symbols = InvestmentHolding::query()->whereNotNull('symbol')->where('symbol', '!=', '')->distinct()->pluck('symbol')->all();
+
+        return response()->json(['data' => ['updated' => $symbols === [] ? 0 : $fetcher->fetchLatest($symbols)]]);
     }
 
     /**
