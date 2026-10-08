@@ -25,6 +25,10 @@ import { LEGAL } from '@/lib/legal'
         ricorrenti, investimenti, scenari e file che importi.
       </li>
       <li><strong>Dati tecnici di sessione</strong>: indirizzo IP e tipo di browser, legati alla sessione di accesso.</li>
+      <li>
+        <strong>Registro di sicurezza</strong>: data e ora, indirizzo IP, browser ed email usata per gli accessi riusciti e
+        falliti, la verifica in due passaggi, i cambi di password e dell'indirizzo delle notifiche.
+      </li>
     </ul>
 
     <h2>Perché e su quale base</h2>
@@ -35,7 +39,7 @@ import { LEGAL } from '@/lib/legal'
       </li>
       <li>
         Per la sicurezza del servizio e la prevenzione degli abusi (art. 6.1.f, legittimo interesse): dati tecnici di
-        sessione e limiti ai tentativi di accesso.
+        sessione, limiti ai tentativi di accesso e registro di sicurezza.
       </li>
       <li>Non usiamo i tuoi dati per pubblicità o profilazione e non li vendiamo a nessuno.</li>
     </ul>
@@ -67,6 +71,7 @@ import { LEGAL } from '@/lib/legal'
       <li>Sessione di accesso: scade dopo 120 minuti di inattività o quando esci.</li>
       <li>Accesso con «Ricordami»: fino a 400 giorni, o finché non esci.</li>
       <li>Link per reimpostare la password: valido 60 minuti.</li>
+      <li>Registro di sicurezza: 90 giorni, poi viene cancellato automaticamente.</li>
     </ul>
 
     <h2>I tuoi diritti</h2>

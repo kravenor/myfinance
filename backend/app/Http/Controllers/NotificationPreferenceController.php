@@ -6,6 +6,7 @@ use App\Http\Requests\User\UpdateNotificationPreferencesRequest;
 use App\Models\User;
 use App\Notifications\NotificationAddressChangedNotification;
 use App\Notifications\TestEmailNotification;
+use App\Support\SecurityLog;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification as NotificationFacade;
@@ -36,6 +37,7 @@ class NotificationPreferenceController extends Controller
         $current = $user->routeNotificationForMail();
         if (strcasecmp($previous, $current) !== 0) {
             NotificationFacade::route('mail', $previous)->notify(new NotificationAddressChangedNotification($current));
+            SecurityLog::record('notifications.address_changed', $user->id, ['from' => $previous, 'to' => $current]);
         }
 
         return response()->json(['data' => $user->notificationPreferences()]);

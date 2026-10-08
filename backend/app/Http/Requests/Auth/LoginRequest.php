@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Auth;
 
 use App\Models\User;
+use App\Support\SecurityLog;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Foundation\Http\FormRequest;
@@ -51,6 +52,8 @@ class LoginRequest extends FormRequest
         $guard = Auth::guard('web');
 
         if (! $guard->validate($this->only('email', 'password'))) {
+            $attempted = $guard->getLastAttempted(); // null se l'email non esiste
+            SecurityLog::record('login.failed', $attempted instanceof User ? $attempted->id : null, ['email' => Str::lower((string) $this->input('email'))]);
             RateLimiter::hit($this->throttleKey());
             RateLimiter::hit($this->emailThrottleKey(), self::EMAIL_DECAY_SECONDS);
 
@@ -70,6 +73,8 @@ class LoginRequest extends FormRequest
                 throw ValidationException::withMessages(['email' => 'Accesso con verifica in due passaggi disponibile solo dall\'app web.']);
             }
 
+            // Password giusta: se il codice non arriva mai, qualcuno la conosce.
+            SecurityLog::record('login.two_factor_required', $user->id);
             $this->session()->put(self::TWO_FACTOR_SESSION_KEY, [
                 'id' => $user->id,
                 'remember' => $this->boolean('remember'),
@@ -96,6 +101,7 @@ class LoginRequest extends FormRequest
         }
 
         event(new Lockout($this));
+        SecurityLog::record('login.lockout', null, ['email' => Str::lower((string) $this->input('email'))]);
 
         $seconds = RateLimiter::availableIn($key);
 
