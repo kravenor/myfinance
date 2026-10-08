@@ -7,6 +7,7 @@ use App\Models\Category;
 use App\Models\RecurringTransaction;
 use App\Models\Scenario;
 use App\Models\ScenarioItem;
+use App\Support\BusinessDay;
 use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -275,10 +276,11 @@ class ExpenseForecastService
                 if ($r->ends_on && $cursor->gt($r->ends_on)) {
                     break;
                 }
-                if ($cursor->gte($start)) {
-                    $key = FinancialMonth::key($cursor);
+                $on = BusinessDay::next($cursor);
+                if ($on->gte($start) && $on->lte($end)) {
+                    $key = FinancialMonth::key($on);
                     if (isset($valid[$key])) {
-                        $totals[$key] += $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
+                        $totals[$key] += $this->converter->convert((float) $r->amount, $r->currency, $base, $on);
                     }
                 }
                 $cursor = $this->advance($cursor, $r->cadence, $interval);
@@ -354,10 +356,11 @@ class ExpenseForecastService
                 if ($r->ends_on && $cursor->gt($r->ends_on)) {
                     break;
                 }
-                if ($cursor->gte($start)) {
-                    $key = FinancialMonth::key($cursor);
+                $on = BusinessDay::next($cursor);
+                if ($on->gte($start) && $on->lte($end)) {
+                    $key = FinancialMonth::key($on);
                     if (isset($valid[$key])) {
-                        $amount = $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
+                        $amount = $this->converter->convert((float) $r->amount, $r->currency, $base, $on);
                         $cid = (int) $r->category_id;
                         $totals[$cid][$key] = ($totals[$cid][$key] ?? 0.0) + $amount;
                     }

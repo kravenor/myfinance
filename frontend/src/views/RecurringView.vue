@@ -261,7 +261,7 @@ onMounted(async () => {
           <div>
             <label class="label">Inizio</label>
             <input v-model="form.starts_on" type="date" class="input" :class="{ 'input-invalid': fieldErrors.starts_on }" aria-describedby="hint-starts-on" required />
-            <p id="hint-starts-on" class="field-hint">Data della prima scadenza: se è già passata, nella notte vengono registrate anche le scadenze arretrate. In modifica non sposta la prossima scadenza.</p>
+            <p id="hint-starts-on" class="field-hint">Data della prima scadenza: se è già passata, nella notte vengono registrate anche le scadenze arretrate. In modifica non sposta la prossima scadenza. Se una scadenza cade di sabato, domenica o in un festivo, il movimento slitta al primo giorno lavorativo successivo.</p>
             <FieldError :errors="fieldErrors" name="starts_on" />
           </div>
           <div>
@@ -315,7 +315,7 @@ onMounted(async () => {
                 <template v-if="r.type === 'transfer'"> → {{ accountName(r.transfer_account_id) }}</template>
               </p>
               <p class="text-xs text-slate-500 mt-0.5">
-                {{ cadenceText(r.interval, r.cadence) }} · prossima {{ formatDate(r.next_run_at) }}
+                {{ cadenceText(r.interval, r.cadence) }} · prossima {{ formatDate(r.next_occurs_on) }}
               </p>
             </div>
             <div class="text-right shrink-0">
@@ -360,7 +360,7 @@ onMounted(async () => {
               <span v-if="r.type === 'transfer'" class="text-slate-500"> → {{ accountName(r.transfer_account_id) }}</span>
             </td>
             <td>{{ cadenceText(r.interval, r.cadence) }}</td>
-            <td>{{ formatDate(r.next_run_at) }}</td>
+            <td>{{ formatDate(r.next_occurs_on) }}</td>
             <td class="text-right font-medium"><Amount :value="r.amount" :currency="r.currency" :type="r.type" /></td>
             <td>
               <span

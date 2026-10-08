@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-06**
+Ultimo aggiornamento: **2026-10-08**
 Fase corrente: **Estensione — Autenticazione a due fattori** (branch `feat/two-factor-auth`); prossimi candidati nella coda «Da fare» di §7
 
 ---
@@ -75,7 +75,7 @@ Finance/
 │   ├── app/Notifications/  # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), BackfillInstrumentPrices (`prices:backfill`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
-│   ├── app/Support/       # FinancialMonth (confini del "mese finanziario", vedi §6)
+│   ├── app/Support/       # FinancialMonth (confini del "mese finanziario", vedi §6), BusinessDay (giorni lavorativi e festivi per nazione)
 │   ├── database/migrations/
 │   ├── database/factories/  # User/Account/Category/Tag/Transaction/Budget/RecurringTransaction/SavingsGoalFactory
 │   ├── database/seeders/  # DatabaseSeeder, CategorySeeder (seedFor pubblico)
@@ -232,6 +232,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 
 ### Backend (Laravel)
 - **Periodi mensili**: mai `startOfMonth()/endOfMonth()` nei calcoli di reporting — usare `App\Support\FinancialMonth` (`range`, `forYearMonth`, `fromKey`, `key`), che applica `users.month_start_day`. Un ciclo è etichettato `Y-m`/`(year, month)` del mese in cui **inizia**: con `month_start_day = 27` il periodo `2026-06` va dal 27/06 al 26/07; con `1` l'helper è identico al mese di calendario. Lo start day arriva dall'utente autenticato (i command fanno `Auth::loginUsingId`). Fa eccezione `RecurringTransactionRunner`, dove il mese è la *cadenza* di una ricorrente, non un confine di reporting.
+- **Giorni lavorativi**: una scadenza ricorrente che cade di sabato, domenica o in un festivo nazionale slitta al primo giorno lavorativo successivo con `App\Support\BusinessDay::next()`. Slitta solo la data del movimento (`occurred_at`, `last_run_at`, `next_occurs_on` della Resource): `next_run_at` resta la data teorica e la cadenza avanza da lì, altrimenti la ricorrente scivolerebbe. Runner, `ExpenseForecastService` e `ReportService` applicano la stessa regola. Festivi per nazione nelle costanti `FIXED`/`EASTER` (oggi solo `IT`); Pasqua calcolata in PHP perché l'immagine non ha `ext-calendar`. Analisi in [RECURRING-BUSINESS-DAYS-ANALYSIS](docs/analysis/RECURRING-BUSINESS-DAYS-ANALYSIS.md).
 - **Architettura**: Controller sottile → Service (business logic) → Repository/Eloquent
 - **API**: tutte le rotte sotto `/api`, versionate `routes/api.php`
 - **Validazione**: Form Request, mai inline nel controller
@@ -311,12 +312,15 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Storico quotazioni (ADR 0002 U1): `prices:backfill` mensile via Yahoo dal primo movimento, solo i buchi, schedulato dopo `prices:fetch`
 - [x] **Estensione** — Autenticazione a due fattori ([analisi](docs/analysis/TWO-FACTOR-AUTH-ANALYSIS.md)): TOTP facoltativo per utente con 8 codici di recupero, login in due passi, gestione da Impostazioni ([TwoFactorCard](frontend/src/components/TwoFactorCard.vue)), command d'emergenza `user:two-factor-disable` — dettagli in §8.1
 
+- [x] **Fix** — Ricorrenti nei giorni non lavorativi ([analisi](docs/analysis/RECURRING-BUSINESS-DAYS-ANALYSIS.md)): weekend e festivi nazionali italiani fanno slittare il movimento al primo giorno lavorativo successivo, senza spostare la cadenza; stessa regola in previsioni e report
+
 ### Da fare (coda, non ancora analizzati salvo dove indicato)
 - [ ] **Multitenant / workspace condivisi** — [analisi](docs/analysis/MULTITENANT_ANALYSIS.md) pronta, nessuna implementazione
 - [ ] **ADR 0002 U5** — aggancio movimento investimento ↔ transazione di cassa (prima decidere chi comanda)
 - [ ] **ADR 0002 U7** — `from`/`to` lato server su `/investments/history` (oggi filtro solo client)
 - [ ] **ADR 0002 U4** — FIFO come metodo di costo alternativo (solo se serve per la dichiarazione fiscale)
 - [ ] **ADR 0002 U3** — `investment_plans` dedicati: in gran parte coperto dalla rata PAC sulle ricorrenti, probabilmente da scartare
+- [ ] **Ricorrenti a fine mese** — `addMonthsNoOverflow` applicato a `next_run_at` fa diventare "il 28" una mensile del 31 dopo febbraio (31/1 → 28/2 → 28/3): servirebbe un giorno di ancoraggio (es. da `starts_on`)
 - [ ] **Notifiche** — decidere se serve un'opzione budget «solo sforato» (aperta nell'[analisi](docs/analysis/NOTIFICATIONS-ANALYSIS.md))
 
 ## 8. Schema dati (implementato in Fase 2)
@@ -447,6 +451,7 @@ Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.
 
 - Service `App\Services\RecurringTransactionRunner::run(?Carbon $until)`: cicla su tutte le ricorrenti attive con `next_run_at <= $until`, materializza Transaction collegate (`recurring_transaction_id` impostato), aggiorna `last_run_at`, calcola `next_run_at` secondo `cadence`/`interval` (`daily/weekly/biweekly/monthly/quarterly/yearly`, `*NoOverflow` per evitare salti di mese). Se `ends_on` superato → `is_active=false`. Itera finché c'è backlog.
 - Se la ricorrente ha `investment_holding_id`, ogni occorrenza registra anche un movimento `buy` sull'holding con `quantity = importo / quotazione della data` (prezzo da [InvestmentPriceResolver](backend/app/Services/InvestmentPriceResolver.php), fallback `effectivePrice()`; importo convertito se la valuta differisce). Prezzo non disponibile o ≤ 0 → solo il movimento di cassa. La posizione è ricalcolata una volta a fine backlog.
+- Scadenza in un giorno non lavorativo (weekend o festivo nazionale, [BusinessDay](backend/app/Support/BusinessDay.php)): il movimento viene registrato con la data del primo giorno lavorativo successivo e solo quando quella data arriva; `next_run_at` avanza dalla data teorica.
 - Command Artisan `php artisan recurring:run [--date=YYYY-MM-DD]`.
 - Schedule giornaliero in [routes/console.php](backend/routes/console.php) alle 02:00 (richiede `php artisan schedule:work` o cron `php artisan schedule:run` ogni minuto in produzione — da pianificare in Fase 9).
 

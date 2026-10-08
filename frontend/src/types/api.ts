@@ -142,6 +142,8 @@ export interface RecurringTransaction {
   starts_on: string
   ends_on: string | null
   next_run_at: string
+  /** next_run_at spostato al primo giorno lavorativo: data del prossimo movimento. */
+  next_occurs_on: string
   last_run_at: string | null
   is_active: boolean
   created_at: string
