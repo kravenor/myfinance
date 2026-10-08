@@ -42,4 +42,17 @@ class UpdatePasswordTest extends TestCase
         $response->assertUnprocessable();
         $this->assertTrue(Hash::check('OldPassword123!', $user->fresh()->password));
     }
+
+    public function test_current_password_guesses_are_rate_limited(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('OldPassword123!')]);
+        $guess = ['current_password' => 'wrong', 'password' => 'NewPassword123!', 'password_confirmation' => 'NewPassword123!'];
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->actingAs($user)->putJson('/api/auth/password', $guess)->assertUnprocessable();
+        }
+
+        $this->actingAs($user)->putJson('/api/auth/password', ['current_password' => 'OldPassword123!'] + $guess)
+            ->assertTooManyRequests();
+    }
 }

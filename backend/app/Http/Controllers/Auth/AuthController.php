@@ -93,9 +93,10 @@ class AuthController extends Controller
      */
     public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
-        $status = Password::sendResetLink($request->only('email'));
+        // Stesso messaggio anche per email inesistente o in throttle: lo stato non deve trapelare.
+        Password::sendResetLink($request->only('email'));
 
-        return response()->json(['message' => __($status)]);
+        return response()->json(['message' => __('passwords.sent')]);
     }
 
     /**
@@ -120,7 +121,8 @@ class AuthController extends Controller
             return response()->json(['message' => __($status)]);
         }
 
-        return response()->json(['message' => __($status)], Response::HTTP_UNPROCESSABLE_ENTITY);
+        // Email inesistente e token errato rispondono uguale.
+        return response()->json(['message' => __('passwords.token')], Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     public function updatePassword(UpdatePasswordRequest $request): JsonResponse
@@ -206,13 +208,15 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
+    // Come la disattivazione: codici nuovi equivalgono a un accesso senza telefono.
     public function regenerateRecoveryCodes(Request $request, TwoFactorAuthenticator $twoFactor): JsonResponse
     {
-        $request->validate(['current_password' => ['required', 'current_password']]);
+        $data = $request->validate(['current_password' => ['required', 'current_password'], ...self::SECOND_FACTOR_RULES]);
 
         /** @var User $user */
         $user = $request->user();
         abort_unless($user->hasTwoFactor(), Response::HTTP_CONFLICT, 'La verifica in due passaggi non è attiva.');
+        $this->verifySecondFactor($user, $data, $twoFactor);
 
         return response()->json(['recovery_codes' => $twoFactor->regenerateRecoveryCodes($user)]);
     }

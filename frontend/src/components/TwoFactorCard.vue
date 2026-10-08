@@ -11,7 +11,7 @@ const toast = useToastStore()
 const enabled = computed(() => auth.user?.two_factor_enabled === true)
 const password = ref('')
 const code = ref('')
-const disableCode = ref('')
+const secondCode = ref('')
 const busy = ref(false)
 const error = ref('')
 const setup = ref<{ secret: string; qr_svg: string } | null>(null)
@@ -63,13 +63,21 @@ function confirm() {
   }, 'Codice non valido.')
 }
 
+// Sei cifre = codice dell'app, altrimenti codice di recupero.
+function secondFactor() {
+  const compact = secondCode.value.replace(/\s/g, '')
+  return /^\d{6}$/.test(compact) ? { code: compact } : { recovery_code: secondCode.value.trim() }
+}
+
 function regenerate() {
   return run(async () => {
     const { data } = await api.post<{ recovery_codes: string[] }>('/auth/two-factor/recovery-codes', {
       current_password: password.value,
+      ...secondFactor(),
     })
     recoveryCodes.value = data.recovery_codes
     password.value = ''
+    secondCode.value = ''
   }, 'Rigenerazione non riuscita.')
 }
 
@@ -82,16 +90,11 @@ async function disable() {
   })
   if (!ok) return
   await run(async () => {
-    // Sei cifre = codice dell'app, altrimenti codice di recupero.
-    const second = disableCode.value.replace(/\s/g, '')
     await api.delete('/auth/two-factor', {
-      data: {
-        current_password: password.value,
-        ...(/^\d{6}$/.test(second) ? { code: second } : { recovery_code: disableCode.value.trim() }),
-      },
+      data: { current_password: password.value, ...secondFactor() },
     })
     password.value = ''
-    disableCode.value = ''
+    secondCode.value = ''
     recoveryCodes.value = []
     await auth.fetchMe()
     toast.success('Verifica in due passaggi disattivata.')
@@ -199,16 +202,16 @@ function download() {
         <p class="field-hint">
           {{
             enabled
-              ? 'Serve per rigenerare i codici di recupero e, insieme al codice, per disattivare la verifica.'
+              ? 'Insieme al codice, serve per rigenerare i codici di recupero o disattivare la verifica.'
               : "Dopo l'attivazione, gli altri dispositivi con «Ricordami» ti chiederanno di accedere di nuovo, con il codice."
           }}
         </p>
       </div>
       <div v-if="enabled">
-        <label class="label" for="two-factor-disable-code">Codice (solo per disattivare)</label>
+        <label class="label" for="two-factor-second-code">Codice</label>
         <input
-          id="two-factor-disable-code"
-          v-model="disableCode"
+          id="two-factor-second-code"
+          v-model="secondCode"
           type="text"
           class="input w-48"
           autocomplete="one-time-code"
@@ -220,11 +223,11 @@ function download() {
       </div>
       <div class="flex flex-wrap items-center gap-3">
         <template v-if="enabled">
-          <button type="submit" class="btn-secondary" :disabled="busy">Rigenera codici di recupero</button>
+          <button type="submit" class="btn-secondary" :disabled="busy || !secondCode.trim()">Rigenera codici di recupero</button>
           <button
             type="button"
             class="btn-danger"
-            :disabled="busy || !password || !disableCode.trim()"
+            :disabled="busy || !password || !secondCode.trim()"
             @click="disable"
           >
             Disattiva
