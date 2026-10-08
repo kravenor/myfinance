@@ -69,7 +69,10 @@ import { LEGAL } from '@/lib/legal'
     <ul>
       <li>Dati dell'account e dati finanziari: finché l'account esiste, poi vengono cancellati.</li>
       <li>Sessione di accesso: scade dopo 120 minuti di inattività o quando esci.</li>
-      <li>Accesso con «Ricordami»: fino a 400 giorni, o finché non esci.</li>
+      <li>
+        Accesso con «Ricordami»: fino a 90 giorni. «Esci» lo chiude su quel dispositivo; da Impostazioni puoi scollegare
+        tutti gli altri.
+      </li>
       <li>Link per reimpostare la password: valido 60 minuti.</li>
       <li>Registro di sicurezza: 90 giorni, poi viene cancellato automaticamente.</li>
     </ul>

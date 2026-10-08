@@ -37,6 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Rotte che verificano la password attuale: senza limite diventano un oracolo per indovinarla.
     Route::middleware('throttle:5,1')->group(function () {
         Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
+        Route::post('/auth/logout-other-devices', [AuthController::class, 'logoutOtherDevices'])->name('auth.logout-other-devices');
         Route::post('/auth/two-factor', [AuthController::class, 'enableTwoFactor'])->name('auth.two-factor.enable');
         Route::post('/auth/two-factor/confirm', [AuthController::class, 'confirmTwoFactor'])->name('auth.two-factor.confirm');
         Route::delete('/auth/two-factor', [AuthController::class, 'disableTwoFactor'])->name('auth.two-factor.disable');
