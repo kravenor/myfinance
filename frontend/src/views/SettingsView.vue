@@ -77,6 +77,25 @@ async function onPasswordSubmit() {
   }
 }
 
+// Esci dagli altri dispositivi: l'unico modo per revocare sessioni e «Ricordami» aperti altrove.
+const othersPassword = ref('')
+const othersBusy = ref(false)
+const othersError = ref('')
+async function onLogoutOthers() {
+  othersBusy.value = true
+  othersError.value = ''
+  try {
+    await api.post('/auth/logout-other-devices', { current_password: othersPassword.value })
+    othersPassword.value = ''
+    toast.success('Gli altri dispositivi sono stati scollegati.')
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } }).response?.status
+    othersError.value = status === 429 ? 'Troppi tentativi: attendi un minuto.' : 'Password non corretta.'
+  } finally {
+    othersBusy.value = false
+  }
+}
+
 const dateFormat = ref(DEFAULT_DATE_FORMAT)
 const monthStartDay = ref(1)
 const monthStartDays = Array.from({ length: 28 }, (_, i) => i + 1)
@@ -362,7 +381,7 @@ onMounted(async () => {
       <form class="space-y-5" @submit.prevent="onPasswordSubmit">
         <div>
           <h2 class="font-medium">Password</h2>
-          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account. Questo dispositivo resta collegato; gli altri, dopo 2 ore di inattività, ti chiederanno di accedere di nuovo.</p>
+          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account. Questo dispositivo resta collegato; gli altri ti chiederanno di accedere di nuovo.</p>
         </div>
 
         <div>
@@ -402,6 +421,34 @@ onMounted(async () => {
           </button>
           <span v-if="passwordSaved" role="status" class="text-sm text-income-700">Password aggiornata.</span>
           <span v-if="passwordError" role="alert" class="text-sm text-danger-600">{{ passwordError }}</span>
+        </div>
+      </form>
+    </div>
+    <div class="p-4 card sm:p-6">
+      <form class="space-y-5" @submit.prevent="onLogoutOthers">
+        <div>
+          <h2 class="font-medium">Dispositivi collegati</h2>
+          <p class="text-sm text-slate-500 mt-1">
+            «Esci» chiude solo questo dispositivo. Se hai usato Finance su un computer non tuo o temi che qualcuno abbia
+            accesso, scollega tutti gli altri: anche quelli con «Ricordami» ti chiederanno di accedere di nuovo.
+          </p>
+        </div>
+        <div>
+          <label class="label" for="others-password">Password attuale</label>
+          <input
+            id="others-password"
+            v-model="othersPassword"
+            type="password"
+            class="input"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="submit" class="btn-secondary" :disabled="othersBusy">
+            {{ othersBusy ? 'Attendi…' : 'Esci dagli altri dispositivi' }}
+          </button>
+          <span v-if="othersError" role="alert" class="text-sm text-danger-600">{{ othersError }}</span>
         </div>
       </form>
     </div>

@@ -53,7 +53,7 @@ Quattro branch, in quest'ordine:
 3. **`fix/output-escaping`** (5, 18, 24): neutralizzazione delle formule nel CSV, markdown sicuro nelle email, validazione regex in PATCH.
 4. **`chore/infra-hardening`** (9, 10, 14, 22, 23): action a SHA e `permissions`, pull delle immagini nel deploy, nginx 1.28 con `server_tokens off` e CSP, `trustProxies` ristretto con `trustHosts`, `umask 077` nei backup, healthcheck senza password in chiaro.
 
-Da decidere con il proprietario prima di intervenire: **11** (CA locale e certificati sui dispositivi), **13** (`uncompromised()` chiama Have I Been Pwned: va dichiarato nelle pagine Privacy e Cookie), **20**, **21**. **11** è rinviato: lo stack Raspberry non è in uso. **19** deciso: password più avviso al vecchio indirizzo (branch `fix/notification-email-change`). **8** deciso: canale di log dedicato, 90 giorni (branch `fix/security-logging`).
+Da decidere con il proprietario prima di intervenire: **11** (CA locale e certificati sui dispositivi), **13** (`uncompromised()` chiama Have I Been Pwned: va dichiarato nelle pagine Privacy e Cookie), **20**. **21** risolto nel branch `fix/remember-me-revocation`. **11** è rinviato: lo stack Raspberry non è in uso. **19** deciso: password più avviso al vecchio indirizzo (branch `fix/notification-email-change`). **8** deciso: canale di log dedicato, 90 giorni (branch `fix/security-logging`).
 
 ## 3. Dettaglio dei fix
 
@@ -91,6 +91,12 @@ Da decidere con il proprietario prima di intervenire: **11** (CA locale e certif
 - Non registrati: richieste di reset password (email arbitrarie di chiunque), logout, 403/404 di autorizzazione (gli id altrui danno 404 dal global scope, rumore senza segnale).
 - Privacy policy aggiornata (dati, base giuridica, conservazione) e `LEGAL.updatedAt`.
 - Da valutare in `chore/infra-hardening`: montare `storage/logs` su una cartella dell'host per far leggere `security-*.log` a fail2ban sul VPS.
+
+### Branch `fix/remember-me-revocation` (finding 21)
+- Il logout resta `logoutCurrentDevice()` (non scollega la PWA). La revoca diventa un comando esplicito: `POST /auth/logout-other-devices` con `current_password`, nel gruppo `throttle:5,1`. Riusa `rotateRememberToken` con un nuovo hash della stessa password: `AuthenticateSession` di Sanctum confronta l'hash salvato in sessione e chiude le altre sessioni alla richiesta successiva; il token nuovo invalida i loro cookie «Ricordami». Registrato come `logout.other_devices`.
+- Durata del cookie «Ricordami» ridotta da 400 a 90 giorni (`auth.guards.web.remember`). Protegge i dispositivi dimenticati ancora collegati, non un cookie copiato: un valore rubato resta valido fino alla rotazione del token, qualunque sia la scadenza del cookie.
+- Scartati i token «Ricordami» per dispositivo (tabella dedicata): revoca selettiva, ma un'infrastruttura nuova per un'app con un utente e pochi dispositivi.
+- Corretti i testi: Impostazioni (dopo il cambio password gli altri dispositivi escono subito, non dopo 2 ore di inattività), Privacy e Cookie policy (90 giorni, come scollegare gli altri dispositivi).
 
 ### Branch 4
 Da dettagliare all'avvio, partendo dalle righe indicate nelle tabelle della sezione 1.

@@ -41,6 +41,8 @@ return [
         'web' => [
             'driver' => 'session',
             'provider' => 'users',
+            // «Ricordami» per 90 giorni (minuti) invece dei 400 del framework: un dispositivo dimenticato perde l'accesso prima.
+            'remember' => 60 * 24 * 90,
         ],
     ],
 

@@ -264,6 +264,23 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
+    /**
+     * Unico modo per revocare un «Ricordami» copiato: il logout chiude solo questo dispositivo.
+     * Nuovo hash della stessa password: le altre sessioni cadono alla richiesta successiva
+     * (AuthenticateSession di Sanctum) e il token nuovo invalida i loro cookie «Ricordami».
+     */
+    public function logoutOtherDevices(Request $request): Response
+    {
+        $data = $request->validate(['current_password' => ['required', 'string', 'current_password']]);
+
+        /** @var User $user */
+        $user = $request->user();
+        $this->rotateRememberToken($request, $user, ['password' => Hash::make($data['current_password'])]);
+        SecurityLog::record('logout.other_devices', $user->id);
+
+        return response()->noContent();
+    }
+
     public function me(Request $request): UserResource
     {
         /** @var User $user */
