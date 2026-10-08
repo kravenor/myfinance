@@ -156,13 +156,16 @@ class TwoFactorTest extends TestCase
         $this->assertNotSame('token-vecchio', $user->fresh()->remember_token);
     }
 
-    public function test_regenerate_and_disable_require_the_password(): void
+    public function test_regenerate_and_disable_require_password_and_second_factor(): void
     {
         [$user, $codes] = $this->userWithTwoFactor();
 
-        $this->spa()->actingAs($user)->postJson('/api/auth/two-factor/recovery-codes', ['current_password' => 'sbagliata'])
-            ->assertUnprocessable();
-        $fresh = $this->spa()->actingAs($user)->postJson('/api/auth/two-factor/recovery-codes', ['current_password' => 'Password123!'])
+        $this->spa()->actingAs($user)->postJson('/api/auth/two-factor/recovery-codes', ['current_password' => 'sbagliata', 'code' => $this->otp($user)])
+            ->assertUnprocessable()->assertJsonValidationErrors('current_password');
+        // La sola password non basta: codici nuovi valgono come accesso senza telefono.
+        $this->spa()->actingAs($user)->postJson('/api/auth/two-factor/recovery-codes', ['current_password' => 'Password123!'])
+            ->assertJsonValidationErrors('code');
+        $fresh = $this->spa()->actingAs($user)->postJson('/api/auth/two-factor/recovery-codes', ['current_password' => 'Password123!', 'code' => $this->otp($user)])
             ->assertOk()->json('recovery_codes');
         $this->assertNotEquals($codes, $fresh);
 

@@ -17,6 +17,11 @@ class LoginRequest extends FormRequest
 
     public const TWO_FACTOR_TTL_MINUTES = 5;
 
+    /** Limite per sola email: ferma il brute force distribuito su più IP contro lo stesso account. */
+    private const EMAIL_MAX_ATTEMPTS = 10;
+
+    private const EMAIL_DECAY_SECONDS = 900;
+
     public function authorize(): bool
     {
         return true;
@@ -47,6 +52,7 @@ class LoginRequest extends FormRequest
 
         if (! $guard->validate($this->only('email', 'password'))) {
             RateLimiter::hit($this->throttleKey());
+            RateLimiter::hit($this->emailThrottleKey(), self::EMAIL_DECAY_SECONDS);
 
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
@@ -54,6 +60,7 @@ class LoginRequest extends FormRequest
         }
 
         RateLimiter::clear($this->throttleKey());
+        RateLimiter::clear($this->emailThrottleKey());
 
         /** @var User $user */
         $user = $guard->getLastAttempted();
@@ -79,13 +86,18 @@ class LoginRequest extends FormRequest
 
     protected function ensureIsNotRateLimited(): void
     {
-        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) {
+        $key = match (true) {
+            RateLimiter::tooManyAttempts($this->throttleKey(), 5) => $this->throttleKey(),
+            RateLimiter::tooManyAttempts($this->emailThrottleKey(), self::EMAIL_MAX_ATTEMPTS) => $this->emailThrottleKey(),
+            default => null,
+        };
+        if ($key === null) {
             return;
         }
 
         event(new Lockout($this));
 
-        $seconds = RateLimiter::availableIn($this->throttleKey());
+        $seconds = RateLimiter::availableIn($key);
 
         throw ValidationException::withMessages([
             'email' => __('auth.throttle', [
@@ -98,5 +110,10 @@ class LoginRequest extends FormRequest
     public function throttleKey(): string
     {
         return Str::transliterate(Str::lower((string) $this->input('email')).'|'.$this->ip());
+    }
+
+    private function emailThrottleKey(): string
+    {
+        return 'login-email:'.Str::transliterate(Str::lower((string) $this->input('email')));
     }
 }

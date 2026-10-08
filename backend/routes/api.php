@@ -32,10 +32,11 @@ Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->m
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
-    Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
     Route::put('/auth/preferences', [AuthController::class, 'updatePreferences'])->name('auth.preferences.update');
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+    // Rotte che verificano la password attuale: senza limite diventano un oracolo per indovinarla.
     Route::middleware('throttle:5,1')->group(function () {
+        Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
         Route::post('/auth/two-factor', [AuthController::class, 'enableTwoFactor'])->name('auth.two-factor.enable');
         Route::post('/auth/two-factor/confirm', [AuthController::class, 'confirmTwoFactor'])->name('auth.two-factor.confirm');
         Route::delete('/auth/two-factor', [AuthController::class, 'disableTwoFactor'])->name('auth.two-factor.disable');
