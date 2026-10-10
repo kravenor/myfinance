@@ -7,6 +7,7 @@ use App\Notifications\Contracts\Dedupable;
 use App\Support\Money;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Carbon;
 
@@ -29,20 +30,51 @@ class MonthlySummaryNotification extends Notification implements Dedupable, Shou
     public function toArray(object $notifiable): array
     {
         $m = $this->month;
-        $name = ucfirst(Carbon::parse($m['label'].'-01')->locale('it')->translatedFormat('F Y'));
         $net = (float) $m['net'];
         $saving = ($net < 0 ? 'risparmio negativo ' : 'risparmio ').Money::format(abs($net), $m['currency']);
-        $trend = $m['expense_pct'] !== null
-            ? ' Uscite '.((float) $m['expense_pct'] > 0 ? 'in aumento' : 'in calo').' del '.abs(round((float) $m['expense_pct'])).'% sul mese prima.'
-            : '';
+        $trend = $this->trend();
 
         return [
             'key' => $this->dedupKey(),
             'type' => 'monthly_summary',
             'level' => 'info',
-            'title' => "Riepilogo di {$name}",
-            'message' => 'Entrate '.Money::format($m['income'], $m['currency']).', uscite '.Money::format($m['expense'], $m['currency']).", {$saving}.{$trend}",
+            'title' => "Riepilogo di {$this->monthName()}",
+            'message' => 'Entrate '.Money::format($m['income'], $m['currency']).', uscite '.Money::format($m['expense'], $m['currency']).", {$saving}.".($trend ? " {$trend}" : ''),
             'url' => "/reports?tab=trend&period=custom&from={$m['from']}&to={$m['to']}",
         ];
+    }
+
+    /** Email con template proprio: importi in tabella, entrate in verde e uscite in rosso. */
+    public function toMail(object $notifiable): MailMessage
+    {
+        $m = $this->month;
+        $data = $this->toArray($notifiable);
+
+        return (new MailMessage)
+            ->subject($data['title'])
+            ->markdown('mail.monthly-summary', [
+                'name' => $notifiable->name ?? null,
+                'month' => $this->monthName(),
+                'income' => Money::format($m['income'], $m['currency']),
+                'expense' => Money::format($m['expense'], $m['currency']),
+                'net' => Money::format($m['net'], $m['currency']),
+                'netPositive' => (float) $m['net'] >= 0,
+                'trend' => $this->trend(),
+                'url' => url($data['url']),
+            ]);
+    }
+
+    private function monthName(): string
+    {
+        return ucfirst(Carbon::parse($this->month['label'].'-01')->locale('it')->translatedFormat('F Y'));
+    }
+
+    private function trend(): ?string
+    {
+        $pct = $this->month['expense_pct'];
+
+        return $pct === null
+            ? null
+            : 'Uscite '.((float) $pct > 0 ? 'in aumento' : 'in calo').' del '.abs(round((float) $pct)).'% sul mese prima.';
     }
 }

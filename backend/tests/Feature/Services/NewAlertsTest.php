@@ -9,9 +9,12 @@ use App\Models\InvestmentHolding;
 use App\Models\RecurringTransaction;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Notifications\MonthlySummaryNotification;
+use App\Notifications\TestEmailNotification;
 use App\Services\RecurringTransactionRunner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 // Avvisi del passo 3: rata PAC, quotazioni ferme, spesa importante, riepilogo mensile.
@@ -148,5 +151,32 @@ class NewAlertsTest extends TestCase
         $this->assertSame('Riepilogo di Maggio 2026', $summary[0]['title']);
         $this->assertSame("Entrate 2.000,00\u{a0}€, uscite 1.500,00\u{a0}€, risparmio 500,00\u{a0}€.", $summary[0]['message']);
         $this->assertSame('/reports?tab=trend&period=custom&from=2026-05-01&to=2026-05-31', $summary[0]['url']);
+    }
+
+    public function test_monthly_summary_email_colors_income_and_expense(): void
+    {
+        $user = User::factory()->create(['name' => 'Mario']);
+        $html = (string) (new MonthlySummaryNotification([
+            'label' => '2026-05', 'from' => '2026-05-01', 'to' => '2026-05-31',
+            'income' => '2000', 'expense' => '2500', 'net' => '-500', 'currency' => 'EUR', 'expense_pct' => '12.4',
+        ]))->toMail($user)->render();
+
+        $this->assertStringContainsString('Ciao Mario,', $html);
+        $this->assertStringContainsString("color: #15803d; font-weight: bold;\">2.000,00\u{a0}€", $html);
+        $this->assertStringContainsString("color: #b91c1c; font-weight: bold;\">2.500,00\u{a0}€", $html);
+        $this->assertStringContainsString("color: #b91c1c; font-weight: bold;\">-500,00\u{a0}€", $html);
+        $this->assertStringContainsString('Uscite in aumento del 12% sul mese prima.', $html);
+        $this->assertStringNotContainsString('Regards', $html);
+    }
+
+    public function test_email_header_embeds_the_logo_inline(): void
+    {
+        Notification::route('mail', 'mario@example.test')->notifyNow(new TestEmailNotification, ['mail']);
+
+        $email = app('mailer')->getSymfonyTransport()->messages()->last()->getOriginalMessage();
+        $logo = collect($email->getAttachments())->first(fn ($part) => $part->getDisposition() === 'inline');
+
+        $this->assertNotNull($logo);
+        $this->assertStringContainsString('src="cid:'.$logo->getContentId().'"', $email->getHtmlBody());
     }
 }
