@@ -24,7 +24,7 @@ class InvestmentPriceResolverTest extends TestCase
         $user = User::factory()->create();
         $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
 
-        return InvestmentHolding::factory()->for($user)->for($account, 'account')->create($attrs);
+        return InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['asset_type' => 'etf', ...$attrs]);
     }
 
     public function test_auto_quote_overrides_manual_price(): void
@@ -34,13 +34,25 @@ class InvestmentPriceResolverTest extends TestCase
             'quantity' => 2, 'avg_cost' => 8, 'last_price' => 10,
         ]);
         InstrumentPrice::query()->create([
-            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 12, 'as_of' => '2026-06-27',
+            'provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 12, 'as_of' => '2026-06-27',
         ]);
 
         app(InvestmentPriceResolver::class)->hydrate(collect([$h]));
 
         $this->assertSame(12.0, $h->effectivePrice());
         $this->assertSame(24.0, $h->marketValue());
+    }
+
+    public function test_quote_of_the_same_symbol_on_another_provider_is_ignored(): void
+    {
+        $etf = $this->holding(['symbol' => 'SAME', 'currency' => 'EUR', 'quantity' => 1, 'avg_cost' => 8, 'last_price' => null]);
+        $crypto = $this->holding(['symbol' => 'SAME', 'asset_type' => 'crypto', 'currency' => 'EUR', 'quantity' => 1, 'avg_cost' => 8, 'last_price' => null]);
+        InstrumentPrice::query()->create(['provider' => 'coingecko', 'symbol' => 'SAME', 'currency' => 'EUR', 'price' => 20000, 'as_of' => '2026-06-27']);
+
+        app(InvestmentPriceResolver::class)->hydrate(collect([$etf, $crypto]));
+
+        $this->assertSame('cost', $etf->priceSource());
+        $this->assertSame(20000.0, $crypto->effectivePrice());
     }
 
     public function test_converts_quote_currency_to_holding_currency(): void
@@ -53,7 +65,7 @@ class InvestmentPriceResolverTest extends TestCase
             'quantity' => 1, 'avg_cost' => 100, 'last_price' => null,
         ]);
         InstrumentPrice::query()->create([
-            'symbol' => 'AAPL.US', 'currency' => 'USD', 'price' => 110, 'as_of' => '2026-06-27',
+            'provider' => 'yahoo', 'symbol' => 'AAPL.US', 'currency' => 'USD', 'price' => 110, 'as_of' => '2026-06-27',
         ]);
 
         app(InvestmentPriceResolver::class)->hydrate(collect([$h]));
@@ -76,8 +88,8 @@ class InvestmentPriceResolverTest extends TestCase
     public function test_picks_latest_quote_not_after_as_of(): void
     {
         $h = $this->holding(['symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'quantity' => 1, 'last_price' => 1]);
-        InstrumentPrice::query()->create(['symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 100, 'as_of' => '2026-06-01']);
-        InstrumentPrice::query()->create(['symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 200, 'as_of' => '2026-06-20']);
+        InstrumentPrice::query()->create(['provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 100, 'as_of' => '2026-06-01']);
+        InstrumentPrice::query()->create(['provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 200, 'as_of' => '2026-06-20']);
 
         app(InvestmentPriceResolver::class)->hydrate(collect([$h]), Carbon::parse('2026-06-10'));
 

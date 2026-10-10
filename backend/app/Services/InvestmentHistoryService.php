@@ -242,7 +242,7 @@ class InvestmentHistoryService
     }
 
     /**
-     * Quotazioni per symbol ordinate per data, caricate in un colpo solo.
+     * Quotazioni per provider e symbol ordinate per data, caricate in un colpo solo.
      *
      * @param  Collection<int, InvestmentHolding>  $holdings
      * @return Collection<array-key, mixed>
@@ -260,7 +260,7 @@ class InvestmentHistoryService
                 ->whereIn('symbol', $symbols)
                 ->orderBy('as_of')
                 ->get()
-                ->groupBy('symbol')
+                ->groupBy(fn (InstrumentPrice $p) => InstrumentPrice::key($p->provider, $p->symbol))
         );
     }
 
@@ -271,7 +271,7 @@ class InvestmentHistoryService
             return null;
         }
 
-        $quote = ($quotes[$holding->symbol] ?? collect())
+        $quote = ($quotes[$holding->priceKey()] ?? collect())
             ->last(fn (InstrumentPrice $p) => $p->as_of->lte($at));
 
         if ($quote === null) {

@@ -193,7 +193,7 @@ class InvestmentHoldingTest extends TestCase
         ]);
         // Quota automatica più recente del prezzo manuale.
         InstrumentPrice::query()->create([
-            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 60, 'as_of' => now()->toDateString(),
+            'provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 60, 'as_of' => now()->toDateString(),
         ]);
 
         $this->actingAs($user)
@@ -212,7 +212,7 @@ class InvestmentHoldingTest extends TestCase
             'quantity' => 10, 'avg_cost' => 40, 'last_price' => 50,
         ]);
         InstrumentPrice::query()->create([
-            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 60, 'as_of' => '2026-06-20',
+            'provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 60, 'as_of' => '2026-06-20',
         ]);
 
         $this->actingAs($user)

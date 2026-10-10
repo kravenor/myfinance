@@ -22,6 +22,7 @@ class InvestmentHistoryTest extends TestCase
             'account_id' => $account->id,
             'currency' => 'EUR',
             'symbol' => 'VWCE',
+            'asset_type' => 'etf',
             'quantity' => 0,
             'avg_cost' => 0,
             'last_price' => null,
@@ -64,7 +65,7 @@ class InvestmentHistoryTest extends TestCase
         $this->movement($user, $holding, ['occurred_at' => '2026-02-10', 'quantity' => 10, 'price' => 50]);
 
         // Una sola quotazione, a marzo: prima di quella data il valore non è ricostruibile.
-        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 60, 'as_of' => '2026-03-31']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 60, 'as_of' => '2026-03-31']);
 
         $points = $this->actingAs($user)->getJson('/api/investments/history')
             ->assertOk()
@@ -97,7 +98,7 @@ class InvestmentHistoryTest extends TestCase
         $this->movement($user, $holding, ['occurred_at' => '2026-01-10', 'quantity' => 10, 'price' => 40]);
         $this->movement($user, $holding, ['occurred_at' => '2026-02-10', 'side' => 'sell', 'quantity' => 4, 'price' => 50]);
 
-        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-02-01']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-02-01']);
 
         $points = $this->actingAs($user)->getJson('/api/investments/history')->assertOk()->json('points');
 
@@ -130,7 +131,7 @@ class InvestmentHistoryTest extends TestCase
 
         // 1000 versati un anno fa, oggi valgono 1100: +10% annuo.
         $this->movement($user, $holding, ['occurred_at' => '2025-01-01', 'quantity' => 10, 'price' => 100]);
-        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
 
         $xirr = $this->actingAs($user)->getJson('/api/investments/history')->assertOk()->json('xirr_pct');
 
@@ -148,7 +149,7 @@ class InvestmentHistoryTest extends TestCase
         // il rendimento money-weighted deve superare il 10%.
         $this->movement($user, $holding, ['occurred_at' => '2025-01-01', 'quantity' => 5, 'price' => 100]);
         $this->movement($user, $holding, ['occurred_at' => '2025-07-02', 'quantity' => 5, 'price' => 100]);
-        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
 
         $xirr = (float) $this->actingAs($user)->getJson('/api/investments/history')->json('xirr_pct');
 
@@ -167,7 +168,7 @@ class InvestmentHistoryTest extends TestCase
         // qualunque sia il momento in cui è entrata la seconda metà.
         $this->movement($user, $holding, ['occurred_at' => '2025-01-01', 'quantity' => 5, 'price' => 100]);
         $this->movement($user, $holding, ['occurred_at' => '2025-07-02', 'quantity' => 5, 'price' => 100]);
-        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2025-12-31']);
 
         $twr = (float) $this->actingAs($user)->getJson('/api/investments/history')->json('twr_pct');
 

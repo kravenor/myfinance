@@ -43,7 +43,7 @@ class NewAlertsTest extends TestCase
     {
         $user = $this->user();
         $holding = $this->holding($user);
-        InstrumentPrice::create(['symbol' => 'VWCE.MI', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-01']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE.MI', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-01']);
         RecurringTransaction::factory()->for($user)->for(Account::factory()->for($user), 'account')->create([
             'cadence' => 'monthly', 'interval' => 1, 'starts_on' => '2026-01-01', 'next_run_at' => '2026-01-01',
             'amount' => 100, 'currency' => 'EUR', 'investment_holding_id' => $holding->id,
@@ -91,8 +91,8 @@ class NewAlertsTest extends TestCase
         $this->holding($user, ['symbol' => 'SOLD.MI', 'quantity' => 0]);
         $this->holding($user, ['symbol' => 'MANUAL', 'asset_type' => 'other', 'quantity' => 5]);
         $this->holding($user, ['symbol' => 'JUST.MI', 'quantity' => 5]); // creato oggi, mai quotato
-        InstrumentPrice::create(['symbol' => 'OLD.MI', 'currency' => 'EUR', 'price' => 10, 'as_of' => '2026-05-05']);
-        InstrumentPrice::create(['symbol' => 'NEW.MI', 'currency' => 'EUR', 'price' => 10, 'as_of' => '2026-05-19']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'OLD.MI', 'currency' => 'EUR', 'price' => 10, 'as_of' => '2026-05-05']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'NEW.MI', 'currency' => 'EUR', 'price' => 10, 'as_of' => '2026-05-19']);
 
         $this->artisan('notifications:scan')->assertSuccessful();
         $this->artisan('notifications:scan')->assertSuccessful();

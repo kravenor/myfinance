@@ -113,7 +113,17 @@ services:
       retries: 10
     networks:
       - finance
-
+  mail:
+    image: rnwood/smtp4dev:v3
+    container_name: finance_mail
+    restart: unless-stopped
+    ports:
+      - 25:25
+      - "143:143"
+    volumes:
+        - ../datadir/smtp4dev:/smtp4dev
+    networks:
+      - finance
 volumes:
   mysql_data:
   redis_data:

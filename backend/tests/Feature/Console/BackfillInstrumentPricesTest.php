@@ -71,7 +71,7 @@ class BackfillInstrumentPricesTest extends TestCase
         $this->travelTo('2026-03-10');
         $this->holdingWithMovement('COVERED.MI', 'etf', '2026-01-12');
         $this->holdingWithMovement('IT0005534984', 'bond', '2026-01-12');
-        InstrumentPrice::create(['symbol' => 'COVERED.MI', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-30']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'COVERED.MI', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-30']);
         Http::fake(['*/v8/finance/chart/COVERED.MI*' => Http::response($this->yahooHistory([['2026-02-27', 55.0]]))]);
 
         // Già coperto dal mese del primo movimento; il BTP passa da Borsa Italiana, senza storico.

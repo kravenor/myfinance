@@ -16,9 +16,9 @@ use RuntimeException;
 use Throwable;
 
 /**
- * Raccoglie i simboli distinti da tutti gli holding (globalmente, oltre lo
- * scope utente), li raggruppa per asset_type, instrada al provider giusto e
- * fa l'upsert in `instrument_prices`. Un errore su un provider/gruppo non
+ * Raccoglie le coppie (simbolo, provider) distinte da tutti gli holding (globalmente,
+ * oltre lo scope utente), instrada ogni simbolo a ciascuno dei suoi provider e fa
+ * l'upsert in `instrument_prices` per (provider, symbol, as_of). Un errore su un provider/gruppo non
  * blocca gli altri.
  */
 class InvestmentPriceFetcher
@@ -35,7 +35,7 @@ class InvestmentPriceFetcher
         foreach ($byProvider as $providerKey => $symbols) {
             try {
                 $quotes = $this->provider($providerKey)->fetch($symbols);
-                $total += $this->store($quotes);
+                $total += $this->store($providerKey, $quotes);
             } catch (Throwable $e) {
                 report($e); // ponytail: un provider giù non deve far fallire gli altri
             }
@@ -61,10 +61,11 @@ class InvestmentPriceFetcher
             ->selectRaw('investment_holdings.symbol as symbol, MIN(investment_transactions.occurred_at) as first_at')
             ->pluck('first_at', 'symbol');
 
-        $firstQuote = InstrumentPrice::query()
-            ->groupBy('symbol')
-            ->selectRaw('symbol, MIN(as_of) as first_at')
-            ->pluck('first_at', 'symbol');
+        $firstQuote = InstrumentPrice::query()->toBase()
+            ->groupBy('provider', 'symbol')
+            ->selectRaw('provider, symbol, MIN(as_of) as first_at')
+            ->get()
+            ->mapWithKeys(fn (object $row) => [InstrumentPrice::key($row->provider, $row->symbol) => $row->first_at]);
 
         $today = Carbon::today();
         $total = 0;
@@ -80,13 +81,14 @@ class InvestmentPriceFetcher
                     continue;
                 }
                 $from = Carbon::parse($firstMovement[$symbol])->startOfMonth();
-                $covered = isset($firstQuote[$symbol]) && Carbon::parse($firstQuote[$symbol])->lte($from->copy()->endOfMonth());
+                $firstAt = $firstQuote[InstrumentPrice::key($providerKey, $symbol)] ?? null;
+                $covered = $firstAt !== null && Carbon::parse($firstAt)->lte($from->copy()->endOfMonth());
                 if ($covered && ! $force) {
                     continue;
                 }
 
                 try {
-                    $total += $this->store($provider->history($symbol, $from, $today));
+                    $total += $this->store($providerKey, $provider->history($symbol, $from, $today));
                 } catch (Throwable $e) {
                     report($e); // un simbolo non risolvibile non deve fermare gli altri
                 }
@@ -98,7 +100,8 @@ class InvestmentPriceFetcher
 
     /**
      * Simboli distinti per provider, ricavati dagli holding (senza scope utente)
-     * mappando asset_type → provider via config.
+     * mappando asset_type → provider via config. Uno stesso simbolo con tipi diversi
+     * finisce sotto ciascuno dei suoi provider.
      *
      * @param  list<string>  $only
      * @return array<string, list<string>>
@@ -115,7 +118,7 @@ class InvestmentPriceFetcher
             $query->whereIn('symbol', $only);
         }
 
-        $rows = $query->get(['symbol', 'asset_type'])->unique('symbol');
+        $rows = $query->distinct()->get(['symbol', 'asset_type']);
 
         $out = [];
         foreach ($rows as $row) {
@@ -123,10 +126,10 @@ class InvestmentPriceFetcher
             if ($providerKey === null) {
                 continue; // asset_type senza provider configurato
             }
-            $out[$providerKey][] = $row->symbol;
+            $out[$providerKey][$row->symbol] = $row->symbol; // etf e stock condividono yahoo
         }
 
-        return $out;
+        return array_map(array_values(...), $out);
     }
 
     private function provider(string $key): PriceProvider
@@ -143,7 +146,7 @@ class InvestmentPriceFetcher
     /**
      * @param  list<array{symbol: string, price: float, currency: string, as_of: string}>  $quotes
      */
-    private function store(array $quotes): int
+    private function store(string $provider, array $quotes): int
     {
         if ($quotes === []) {
             return 0;
@@ -151,6 +154,7 @@ class InvestmentPriceFetcher
 
         $now = Carbon::now();
         $rows = array_map(fn (array $q) => [
+            'provider' => $provider,
             'symbol' => $q['symbol'],
             'currency' => strtoupper($q['currency']),
             'price' => $q['price'],
@@ -159,7 +163,7 @@ class InvestmentPriceFetcher
             'updated_at' => $now,
         ], $quotes);
 
-        InstrumentPrice::query()->upsert($rows, ['symbol', 'as_of'], ['price', 'currency', 'updated_at']);
+        InstrumentPrice::query()->upsert($rows, ['provider', 'symbol', 'as_of'], ['price', 'currency', 'updated_at']);
 
         return count($rows);
     }
