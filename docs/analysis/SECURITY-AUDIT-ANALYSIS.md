@@ -98,8 +98,13 @@ Da decidere con il proprietario prima di intervenire: **11** (CA locale e certif
 - Scartati i token «Ricordami» per dispositivo (tabella dedicata): revoca selettiva, ma un'infrastruttura nuova per un'app con un utente e pochi dispositivi.
 - Corretti i testi: Impostazioni (dopo il cambio password gli altri dispositivi escono subito, non dopo 2 ore di inattività), Privacy e Cookie policy (90 giorni, come scollegare gli altri dispositivi).
 
-### Branch 4
-Da dettagliare all'avvio, partendo dalle righe indicate nelle tabelle della sezione 1.
+### Branch 4, `chore/infra-hardening` (finding 9, 10, 14, 22, 23)
+- **9**: tutte le action fissate a SHA con il tag in commento (dependabot aggiorna entrambi); `permissions: contents: read` in `ci.yml` e `deploy.yml`.
+- **10**: il deploy fa `pull mysql redis`, `build --pull` e poi `up -d`: le immagini base ricevono le patch uscite sullo stesso tag. nginx passa a 1.30 (il ramo stabile attuale; 1.28 indicato in origine è già chiuso). Le immagini Docker restano fuori da dependabot per scelta (major scelte a mano).
+- **14**: `trustProxies` non accetta più `X-Forwarded-Host` (Apache con `ProxyPreserveHost` e Traefik passano già l'host originale); `trustHosts` ammette solo l'host di `APP_URL`, con i sottodomini, più `127.0.0.1` per l'health check del deploy. Non attivo in `local` e nei test.
+- **22**: `umask 077` in `backup.sh`. I dump già presenti restano 0644: sul VPS una volta `chmod 600 backups/*.sql.gz && chmod 700 backups`. Cifratura e copia fuori dal server restano aperte.
+- **23**: `server_tokens off`; CSP completa (`script-src 'self'`, `style-src` con `'unsafe-inline'` perché Vue scrive i nodi statici via `innerHTML`, `img-src data:` per il QR della 2FA). Lo script del tema in `index.html` diventa `public/theme.js`, altrimenti bloccato. Healthcheck MySQL con `MYSQL_PWD` dall'env del container in tutti e tre i compose.
+- Non fatti: `MAIL_MAILER=log` nel template di produzione resta (senza SMTP configurato il recupero password fallirebbe); log su cartella dell'host per fail2ban, da fare quando fail2ban viene installato sul VPS.
 
 ## 4. Impatti e possibili regressioni
 Riferimento: `master`.

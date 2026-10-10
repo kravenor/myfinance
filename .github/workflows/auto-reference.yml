@@ -14,13 +14,13 @@ jobs:
     steps:
       # 1. Scarica il codice del repository con tutta la cronologia dei commit
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0 # Prende tutta la cronologia, altrimenti non vedrebbe i vecchi commit di merge
 
       # 2. Estrae i numeri delle PR dai messaggi di commit e aggiorna la PR principale
       - name: Extract and Append Included PRs
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const execSync = require('child_process').execSync;
