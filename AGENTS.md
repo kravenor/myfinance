@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-08**
-Fase corrente: **Estensione — Autenticazione a due fattori** (branch `feat/two-factor-auth`); prossimi candidati nella coda «Da fare» di §7
+Ultimo aggiornamento: **2026-10-10**
+Fase corrente: **Audit di sicurezza — `chore/infra-hardening`**, ultimo branch dell'audit; prossimi candidati nella coda «Da fare» di §7
 
 ---
 
@@ -34,7 +34,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 | Cache/Queue | Redis | 7 |
 | Notifiche push | laravel-notification-channels/webpush (su minishlink/web-push) | 13.x |
 | 2FA (TOTP + QR) | pragmarx/google2fa + bacon/bacon-qr-code (no Fortify) | 9.x / 3.x |
-| Web server | Nginx | 1.27 |
+| Web server | Nginx | 1.30 |
 | PHP runtime | PHP-FPM | 8.3 (Alpine) |
 | Node runtime | Node | 24 LTS (Alpine) |
 | Orchestrazione | Docker Compose | v2 |
@@ -315,7 +315,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Storico quotazioni (ADR 0002 U1): `prices:backfill` mensile via Yahoo dal primo movimento, solo i buchi, schedulato dopo `prices:fetch`
 - [x] **Estensione** — Autenticazione a due fattori ([analisi](docs/analysis/TWO-FACTOR-AUTH-ANALYSIS.md)): TOTP facoltativo per utente con 8 codici di recupero, login in due passi, gestione da Impostazioni ([TwoFactorCard](frontend/src/components/TwoFactorCard.vue)), command d'emergenza `user:two-factor-disable` — dettagli in §8.1
 
-- [x] **Audit di sicurezza** ([analisi](docs/analysis/SECURITY-AUDIT-ANALYSIS.md)): nessun finding critico o alto; fix in quattro branch. Fatti `fix/auth-hardening` (secondo fattore per rigenerare i codici di recupero, limite per email sul login, risposte uniformi nel recupero password, throttle sul cambio password) e `fix/request-limits` (throttle globale API, periodo massimo dei report, tetti e transazione nell'import, refresh quotazioni limitato all'utente, `per_page` tra 1 e 200, `starts_on` al massimo 5 anni fa) e `fix/output-escaping` (formule neutralizzate nell'export CSV, markdown sicuro nelle email, regex validata anche quando la PATCH cambia solo il pattern), poi `fix/notification-email-change` (password per cambiare l'indirizzo delle notifiche, avviso al vecchio) e `fix/security-logging` (registro di sicurezza su canale dedicato, 90 giorni), `fix/remember-me-revocation` («Esci dagli altri dispositivi», «Ricordami» a 90 giorni); da fare `chore/infra-hardening`
+- [x] **Audit di sicurezza** ([analisi](docs/analysis/SECURITY-AUDIT-ANALYSIS.md)): nessun finding critico o alto; fix in quattro branch. Fatti `fix/auth-hardening` (secondo fattore per rigenerare i codici di recupero, limite per email sul login, risposte uniformi nel recupero password, throttle sul cambio password) e `fix/request-limits` (throttle globale API, periodo massimo dei report, tetti e transazione nell'import, refresh quotazioni limitato all'utente, `per_page` tra 1 e 200, `starts_on` al massimo 5 anni fa) e `fix/output-escaping` (formule neutralizzate nell'export CSV, markdown sicuro nelle email, regex validata anche quando la PATCH cambia solo il pattern), poi `fix/notification-email-change` (password per cambiare l'indirizzo delle notifiche, avviso al vecchio) e `fix/security-logging` (registro di sicurezza su canale dedicato, 90 giorni), `fix/remember-me-revocation` («Esci dagli altri dispositivi», «Ricordami» a 90 giorni) e infine `chore/infra-hardening` (action a SHA con `permissions`, pull delle immagini nel deploy, nginx 1.30 con CSP e `server_tokens off`, niente `X-Forwarded-Host` e `trustHosts`, backup 0600, healthcheck MySQL senza password in argv). Restano da decidere i finding 13 e 20
 - [x] **Fix** — Ricorrenti nei giorni non lavorativi ([analisi](docs/analysis/RECURRING-BUSINESS-DAYS-ANALYSIS.md)): weekend e festivi nazionali italiani fanno slittare il movimento al primo giorno lavorativo successivo, senza spostare la cadenza; stessa regola in previsioni e report
 - [x] **Fix** — Ricorrenti a fine mese ([analisi](docs/analysis/RECURRING-MONTH-END-ANALYSIS.md)): le cadenze mensile/trimestrale/annuale tornano sul giorno di `starts_on` dopo un mese più corto (31/1 → 28/2 → 31/3); calcolo unico in `App\Support\Cadence`, usato anche dalle voci degli scenari
 
@@ -605,7 +605,7 @@ Deploy automatico: [.github/workflows/deploy.yml](.github/workflows/deploy.yml) 
 ### HTTPS
 Il TLS **non** termina nel container nginx (che resta in HTTP su :80): lo termina il proxy davanti, diverso per ambiente.
 
-Lato applicazione serve una cosa sola, già configurata: `trustProxies` in [bootstrap/app.php](backend/bootstrap/app.php) limitato a loopback + reti private (`10/8`, `172.16/12`, `192.168/16`). Senza, Laravel vede `http`, genera redirect e link di reset password in chiaro e attribuisce il rate limit all'IP del proxy invece che al client. La restrizione alle reti private evita che gli header `X-Forwarded-*` siano credibili se il container venisse mai esposto direttamente. Test: [TrustedProxyTest](backend/tests/Feature/TrustedProxyTest.php).
+Lato applicazione serve una cosa sola, già configurata: `trustProxies` in [bootstrap/app.php](backend/bootstrap/app.php) limitato a loopback + reti private (`10/8`, `172.16/12`, `192.168/16`). Senza, Laravel vede `http`, genera redirect e link di reset password in chiaro e attribuisce il rate limit all'IP del proxy invece che al client. La restrizione alle reti private evita che gli header `X-Forwarded-*` siano credibili se il container venisse mai esposto direttamente. `X-Forwarded-Host` non è accettato (i proxy preservano l'host) e `trustHosts` ammette solo l'host di `APP_URL` più `127.0.0.1` per l'health check: cambiando dominio va aggiornato `APP_URL`, altrimenti le richieste rispondono 404. Test: [TrustedProxyTest](backend/tests/Feature/TrustedProxyTest.php).
 
 **VPS (Apache host)** — Apache termina TLS e deve dichiarare lo schema originale:
 ```apache
@@ -619,7 +619,7 @@ Lato applicazione serve una cosa sola, già configurata: `trustProxies` in [boot
     # SSLCertificateFile/KeyFile: gestiti da certbot
 </VirtualHost>
 ```
-Header di sicurezza: HSTS qui (chi termina il TLS), `frame-ancestors 'none'`, `nosniff` e `Referrer-Policy` in [prod.conf](docker/nginx/prod.conf) (una location con un proprio `add_header` non li eredita: ripeterli). In `.env.production` `FINANCE_REGISTRATION=false` dopo aver creato il proprio utente. Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
+Header di sicurezza: HSTS qui (chi termina il TLS), CSP (`script-src 'self'`: niente script inline in `index.html`, vanno in `frontend/public/`), `nosniff` e `Referrer-Policy` in [prod.conf](docker/nginx/prod.conf) (una location con un proprio `add_header` non li eredita: ripeterli). In `.env.production` `FINANCE_REGISTRATION=false` dopo aver creato il proprio utente. Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
 
 **Raspberry Pi (Traefik, LAN)** — l'impianto è nel repo `infra` fuori da qui: aggiungere l'entrypoint `:443` e, non essendo `*.pi.lan` risolvibile da Let's Encrypt, un certificato self-signed (o una CA locale da installare sui client). Finché resta in LAN, HTTP + `SESSION_SECURE_COOKIE=false` è la config supportata.
 

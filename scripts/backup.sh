@@ -13,6 +13,8 @@
 # dati derivati e ricostruibili. Quando arriveranno gli allegati, aggiungere qui
 # un tar di storage/app.
 set -euo pipefail
+# Dump e cartella leggibili solo dal proprietario: contengono tutti i dati finanziari.
+umask 077
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
