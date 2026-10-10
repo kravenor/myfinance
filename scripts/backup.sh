@@ -7,7 +7,11 @@
 # compose, così qui non serve nessun flag:
 #   COMPOSE_FILE=docker-compose.vps.yml COMPOSE_ENV_FILES=.env.production ./scripts/backup.sh
 #
-# Variabili: BACKUP_DIR (default `backups`), BACKUP_KEEP_DAYS (default 14).
+# Variabili: BACKUP_DIR (default `backups`), BACKUP_KEEP_DAYS (default 14),
+# BACKUP_OFFSITE_CMD (vuota = spento): comando sh eseguito con il dump in $1,
+# per copiarlo fuori dalla macchina. Esempi:
+#   BACKUP_OFFSITE_CMD='rclone copy "$1" finance-crypt:'
+#   BACKUP_OFFSITE_CMD='rsync -a "$1" backup@nas:/backups/finance/'
 #
 # ponytail: Redis non viene salvato — contiene solo cache, sessioni e code, tutti
 # dati derivati e ricostruibili. Quando arriveranno gli allegati, aggiungere qui
@@ -46,3 +50,11 @@ mv "$FILE.part" "$FILE"
 echo "✓ $FILE ($(du -h "$FILE" | cut -f1))"
 
 find "$DEST" -maxdepth 1 -name 'finance-*.sql.gz' -mtime "+$KEEP_DAYS" -print -delete
+
+if [ -n "${BACKUP_OFFSITE_CMD:-}" ]; then
+    if ! sh -c "$BACKUP_OFFSITE_CMD" _ "$FILE"; then
+        echo "✗ copia fuori sede FALLITA (il dump locale è valido): $FILE" >&2
+        exit 1
+    fi
+    echo "✓ copia fuori sede: $FILE"
+fi
