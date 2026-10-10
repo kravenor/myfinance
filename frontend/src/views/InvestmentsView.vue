@@ -51,7 +51,7 @@ const history = ref<InvestmentHistory | null>(null)
 const chartHolding = ref<number | null>(null)
 const holdingHistory = ref<InvestmentHistory | null>(null)
 // Periodo in mesi (null = tutto). ponytail: filtro client sui punti già caricati (mensili, 10 anni = 120);
-// from/to lato server (U7 dell'ADR 0002) solo se la granularità diventa giornaliera.
+// L'endpoint accetta from/to (U7 dell'ADR 0002): passarli solo se la granularità diventa giornaliera.
 const chartMonths = ref<number | null>(null)
 const chartPoints = computed(() => {
   const points = (chartHolding.value ? holdingHistory.value : history.value)?.points ?? []

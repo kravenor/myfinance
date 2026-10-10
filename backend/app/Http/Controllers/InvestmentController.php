@@ -9,6 +9,7 @@ use App\Services\InvestmentService;
 use App\Services\Prices\YahooSymbolLookup;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 
 class InvestmentController extends Controller
 {
@@ -57,8 +58,16 @@ class InvestmentController extends Controller
     {
         $this->authorize('viewAny', InvestmentHolding::class);
 
-        $validated = $request->validate(['holding' => ['nullable', 'integer']]);
+        $validated = $request->validate([
+            'holding' => ['nullable', 'integer'],
+            'from' => ['nullable', 'date'],
+            'to' => ['nullable', 'date', 'after_or_equal:from'],
+        ]);
 
-        return response()->json($history->monthly($validated['holding'] ?? null));
+        return response()->json($history->monthly(
+            $validated['holding'] ?? null,
+            isset($validated['from']) ? Carbon::parse($validated['from'])->startOfDay() : null,
+            isset($validated['to']) ? Carbon::parse($validated['to'])->endOfDay() : null,
+        ));
     }
 }
