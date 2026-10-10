@@ -131,4 +131,37 @@ class FetchInstrumentPricesTest extends TestCase
         $this->assertDatabaseHas('instrument_prices', ['symbol' => 'bitcoin']);
         $this->assertDatabaseMissing('instrument_prices', ['symbol' => 'ethereum']);
     }
+
+    /** Finding 20: il tipo scelto da un altro utente non cambia la fonte del prezzo. */
+    public function test_same_symbol_with_different_types_is_fetched_and_stored_per_provider(): void
+    {
+        Http::fake([
+            '*/v8/finance/chart/SAME*' => Http::response($this->yahooChart(10.0, 'EUR')),
+            'api.coingecko.com/*' => Http::response(['SAME' => ['eur' => 20000]]),
+        ]);
+
+        $this->holding(User::factory()->create(), 'SAME', 'etf');
+        $this->holding(User::factory()->create(), 'SAME', 'crypto');
+
+        $this->artisan('prices:fetch')->assertSuccessful();
+
+        $this->assertDatabaseHas('instrument_prices', ['provider' => 'yahoo', 'symbol' => 'SAME', 'price' => 10.0]);
+        $this->assertDatabaseHas('instrument_prices', ['provider' => 'coingecko', 'symbol' => 'SAME', 'price' => 20000]);
+    }
+
+    public function test_coingecko_ids_are_split_into_chunks(): void
+    {
+        Http::fake(['api.coingecko.com/*' => Http::response(['coin0' => ['eur' => 1], 'coin50' => ['eur' => 2]])]);
+
+        $user = User::factory()->create();
+        foreach (range(0, 50) as $i) {
+            $this->holding($user, "coin{$i}", 'crypto');
+        }
+
+        $this->artisan('prices:fetch')->assertSuccessful();
+
+        Http::assertSentCount(2);
+        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'coin0']);
+        $this->assertDatabaseHas('instrument_prices', ['symbol' => 'coin50']);
+    }
 }

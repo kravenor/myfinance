@@ -42,11 +42,11 @@ class InvestmentPriceResolver
             ->where('as_of', '<=', $asOf->toDateString())
             ->orderBy('as_of')
             ->get()
-            ->groupBy('symbol');
+            ->groupBy(fn (InstrumentPrice $p) => InstrumentPrice::key($p->provider, $p->symbol));
 
         foreach ($holdings as $holding) {
             $quote = $holding->symbol
-                ? ($quotesBySymbol[$holding->symbol] ?? null)?->last()
+                ? ($quotesBySymbol[$holding->priceKey()] ?? null)?->last()
                 : null;
 
             if ($quote === null) {

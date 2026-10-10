@@ -111,6 +111,24 @@ class InvestmentHolding extends Model
     }
 
     /**
+     * Provider delle quotazioni automatiche, da `asset_type`; null se il tipo non ne ha.
+     * Le quote si leggono sempre per (provider, symbol): lo stesso simbolo con un tipo
+     * diverso, anche di un altro utente, non deve cambiare la fonte del prezzo.
+     */
+    public function priceProvider(): ?string
+    {
+        $provider = config('finance.prices.providers')[$this->asset_type] ?? null;
+
+        return is_string($provider) ? $provider : null;
+    }
+
+    /** Chiave delle quote di questo holding in `instrument_prices`, vedi InstrumentPrice::key(). */
+    public function priceKey(): string
+    {
+        return InstrumentPrice::key($this->priceProvider(), $this->symbol);
+    }
+
+    /**
      * Origine del prezzo effettivo: 'auto' (quotazione risolta) → 'manual'
      * (`last_price`) → 'cost' (costo medio). Stessa precedenza di effectivePrice().
      */

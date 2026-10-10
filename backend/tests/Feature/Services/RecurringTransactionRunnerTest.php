@@ -106,12 +106,13 @@ class RecurringTransactionRunnerTest extends TestCase
             'account_id' => Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR'])->id,
             'currency' => 'EUR',
             'symbol' => 'VWCE.XETRA',
+            'asset_type' => 'etf',
             'quantity' => 0,
             'avg_cost' => 0,
             'last_price' => null,
         ]);
         InstrumentPrice::query()->create([
-            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-01',
+            'provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-01',
         ]);
 
         RecurringTransaction::factory()->for($user)->for($account, 'account')->create([
@@ -145,12 +146,13 @@ class RecurringTransactionRunnerTest extends TestCase
             'account_id' => Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR'])->id,
             'currency' => 'EUR',
             'symbol' => 'VWCE.XETRA',
+            'asset_type' => 'etf',
             'quantity' => 0,
             'avg_cost' => 0,
             'last_price' => null,
         ]);
         InstrumentPrice::query()->create([
-            'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-01',
+            'provider' => 'yahoo', 'symbol' => 'VWCE.XETRA', 'currency' => 'EUR', 'price' => 50, 'as_of' => '2026-01-01',
         ]);
 
         RecurringTransaction::factory()->for($user)->for($account, 'account')->create([

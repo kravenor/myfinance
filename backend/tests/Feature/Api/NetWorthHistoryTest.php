@@ -22,7 +22,7 @@ class NetWorthHistoryTest extends TestCase
         $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR', 'initial_balance' => 0]);
         // Cache di oggi: 20 quote e un prezzo manuale che nel passato non deve contare.
         $holding = InvestmentHolding::factory()->for($user)->for($account, 'account')->create([
-            'currency' => 'EUR', 'symbol' => 'VWCE', 'quantity' => 20, 'avg_cost' => 110, 'last_price' => 999,
+            'currency' => 'EUR', 'asset_type' => 'etf', 'symbol' => 'VWCE', 'quantity' => 20, 'avg_cost' => 110, 'last_price' => 999,
         ]);
         foreach ([['2026-01-10', 100], ['2026-03-10', 120]] as [$date, $price]) {
             InvestmentTransaction::factory()->for($user)->create([
@@ -30,7 +30,7 @@ class NetWorthHistoryTest extends TestCase
                 'quantity' => 10, 'price' => $price, 'fees' => 0,
             ]);
         }
-        InstrumentPrice::create(['symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2026-02-15']);
+        InstrumentPrice::create(['provider' => 'yahoo', 'symbol' => 'VWCE', 'currency' => 'EUR', 'price' => 110, 'as_of' => '2026-02-15']);
 
         $this->actingAs($user)
             ->getJson('/api/reports/net-worth?from=2026-01-01&to=2026-03-31')

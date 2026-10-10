@@ -90,29 +90,30 @@ class NotificationScanner
     /** Strumenti in portafoglio con quotazione automatica ferma da più di STALE_PRICE_DAYS giorni. */
     private function stalePrices(User $user, Carbon $now): int
     {
-        $providers = (array) config('finance.prices.providers', []);
         $holdings = InvestmentHolding::query()
             ->whereNotNull('symbol')
             ->where('symbol', '!=', '')
             ->where('quantity', '>', 0)
             ->get()
-            ->filter(fn (InvestmentHolding $h) => isset($providers[$h->asset_type]));
+            ->filter(fn (InvestmentHolding $h) => $h->priceProvider() !== null);
 
         if ($holdings->isEmpty()) {
             return 0;
         }
 
-        $lastQuote = InstrumentPrice::query()
+        $lastQuote = InstrumentPrice::query()->toBase()
             ->whereIn('symbol', $holdings->pluck('symbol')->unique())
-            ->groupBy('symbol')
-            ->selectRaw('symbol, MAX(as_of) as last_as_of')
-            ->pluck('last_as_of', 'symbol');
+            ->groupBy('provider', 'symbol')
+            ->selectRaw('provider, symbol, MAX(as_of) as last_as_of')
+            ->get()
+            ->mapWithKeys(fn (object $row) => [InstrumentPrice::key($row->provider, $row->symbol) => $row->last_as_of]);
 
         $limit = $now->copy()->subDays(self::STALE_PRICE_DAYS)->startOfDay();
         $sent = 0;
 
         foreach ($holdings as $holding) {
-            $lastAsOf = isset($lastQuote[$holding->symbol]) ? Carbon::parse($lastQuote[$holding->symbol])->toDateString() : null;
+            $last = $lastQuote[$holding->priceKey()] ?? null;
+            $lastAsOf = $last !== null ? Carbon::parse($last)->toDateString() : null;
             // Uno strumento appena creato non è «fermo»: si conta dalla sua creazione.
             $reference = $lastAsOf ? Carbon::parse($lastAsOf) : $holding->created_at;
             if ($reference === null || $reference->gte($limit)) {

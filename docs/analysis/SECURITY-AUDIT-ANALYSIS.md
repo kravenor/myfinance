@@ -53,7 +53,7 @@ Quattro branch, in quest'ordine:
 3. **`fix/output-escaping`** (5, 18, 24): neutralizzazione delle formule nel CSV, markdown sicuro nelle email, validazione regex in PATCH.
 4. **`chore/infra-hardening`** (9, 10, 14, 22, 23): action a SHA e `permissions`, pull delle immagini nel deploy, nginx 1.28 con `server_tokens off` e CSP, `trustProxies` ristretto con `trustHosts`, `umask 077` nei backup, healthcheck senza password in chiaro.
 
-Da decidere con il proprietario prima di intervenire: **11** (CA locale e certificati sui dispositivi), **13** (`uncompromised()` chiama Have I Been Pwned: va dichiarato nelle pagine Privacy e Cookie), **20**. **21** risolto nel branch `fix/remember-me-revocation`. **11** è rinviato: lo stack Raspberry non è in uso. **19** deciso: password più avviso al vecchio indirizzo (branch `fix/notification-email-change`). **8** deciso: canale di log dedicato, 90 giorni (branch `fix/security-logging`).
+Da decidere con il proprietario prima di intervenire: **11** (CA locale e certificati sui dispositivi), **13** (`uncompromised()` chiama Have I Been Pwned: va dichiarato nelle pagine Privacy e Cookie). **20** deciso: quote per provider (branch `fix/prices-per-provider`). **21** risolto nel branch `fix/remember-me-revocation`. **11** è rinviato: lo stack Raspberry non è in uso. **19** deciso: password più avviso al vecchio indirizzo (branch `fix/notification-email-change`). **8** deciso: canale di log dedicato, 90 giorni (branch `fix/security-logging`).
 
 ## 3. Dettaglio dei fix
 
@@ -105,6 +105,13 @@ Da decidere con il proprietario prima di intervenire: **11** (CA locale e certif
 - **22**: `umask 077` in `backup.sh`. I dump già presenti restano 0644: sul VPS una volta `chmod 600 backups/*.sql.gz && chmod 700 backups`. Cifratura e copia fuori dal server restano aperte.
 - **23**: `server_tokens off`; CSP completa (`script-src 'self'`, `style-src` con `'unsafe-inline'` perché Vue scrive i nodi statici via `innerHTML`, `img-src data:` per il QR della 2FA). Lo script del tema in `index.html` diventa `public/theme.js`, altrimenti bloccato. Healthcheck MySQL con `MYSQL_PWD` dall'env del container in tutti e tre i compose.
 - Non fatti: `MAIL_MAILER=log` nel template di produzione resta (senza SMTP configurato il recupero password fallirebbe); log su cartella dell'host per fail2ban, da fare quando fail2ban viene installato sul VPS.
+
+### Branch `fix/prices-per-provider` (finding 20)
+- `instrument_prices.provider` nella chiave unica `(provider, symbol, as_of)`. Il fetcher scarica ogni coppia distinta (simbolo, provider): lo stesso simbolo come `etf` per un utente e `crypto` per un altro va su Yahoo e su CoinGecko, in righe separate.
+- Resolver, serie storica, backfill e avviso «quotazione ferma» leggono con `InstrumentPrice::key()` / `InvestmentHolding::priceKey()`: un holding vede solo le quote del provider del proprio `asset_type`. Gli `asset_type` senza provider (`cash`, `commodity`, `other`) non leggono più quote scaricate per altri holding con lo stesso simbolo.
+- Migration: le righe esistenti prendono il provider dagli holding con quel simbolo; simboli con più provider (ambigui) o senza holding (orfani) vengono cancellati e riscaricati da `prices:fetch` e `prices:backfill`.
+- CoinGecko a blocchi di 50 id; un blocco rifiutato non ferma gli altri.
+- Scartate le quote per utente: isolamento uguale per lo stesso strumento, ma ogni simbolo comune scaricato una volta per utente.
 
 ## 4. Impatti e possibili regressioni
 Riferimento: `master`.
