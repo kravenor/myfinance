@@ -8,10 +8,12 @@ use App\Models\Category;
 use App\Models\Transaction;
 use App\Models\User;
 use App\Notifications\BudgetThresholdNotification;
+use App\Notifications\NotificationAddressChangedNotification;
 use App\Notifications\TestEmailNotification;
 use App\Services\NotificationScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
@@ -137,5 +139,38 @@ class NotificationPreferenceTest extends TestCase
             ->assertOk()
             ->assertJsonPath('message', 'Email di prova inviata a mario@example.test.');
         Notification::assertSentTo($user, TestEmailNotification::class);
+    }
+
+    public function test_changing_the_address_requires_the_password_and_alerts_the_old_one(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['email' => 'account@example.test', 'password' => Hash::make('Password123!')]);
+
+        $this->actingAs($user)->putJson('/api/notification-preferences', ['email_address' => 'altro@example.test'])
+            ->assertJsonValidationErrors('current_password');
+        $this->actingAs($user)->putJson('/api/notification-preferences', ['email_address' => 'altro@example.test', 'current_password' => 'sbagliata'])
+            ->assertJsonValidationErrors('current_password');
+        $this->assertNull($user->fresh()->notificationPreference('email_address'));
+        Notification::assertNothingSent();
+
+        $this->actingAs($user)->putJson('/api/notification-preferences', ['email_address' => 'altro@example.test', 'current_password' => 'Password123!'])
+            ->assertOk()->assertJsonMissingPath('data.current_password');
+
+        $this->assertSame('altro@example.test', $user->fresh()->notificationPreference('email_address'));
+        Notification::assertSentOnDemand(
+            NotificationAddressChangedNotification::class,
+            fn ($notification, array $channels, object $notifiable) => $notifiable->routes['mail'] === 'account@example.test',
+        );
+    }
+
+    public function test_other_preferences_and_the_same_address_need_no_password(): void
+    {
+        Notification::fake();
+        $user = User::factory()->create(['notification_preferences' => ['email_address' => 'altro@example.test']]);
+
+        $this->actingAs($user)->putJson('/api/notification-preferences', ['budget' => false, 'email_address' => ' Altro@example.test '])
+            ->assertOk();
+
+        Notification::assertNothingSent();
     }
 }

@@ -25,14 +25,20 @@ class PasswordResetTest extends TestCase
         Notification::assertSentTo($user, ResetPassword::class);
     }
 
-    public function test_forgot_password_does_not_reveal_unknown_email(): void
+    public function test_forgot_password_answers_the_same_for_unknown_and_throttled_email(): void
     {
         Notification::fake();
 
-        $this->postJson('/api/auth/forgot-password', ['email' => 'nobody@example.com'])
-            ->assertOk();
+        $known = User::factory()->create();
+        $expected = $this->postJson('/api/auth/forgot-password', ['email' => $known->email])->json('message');
 
-        Notification::assertNothingSent();
+        $this->postJson('/api/auth/forgot-password', ['email' => 'nobody@example.com'])
+            ->assertOk()->assertJsonPath('message', $expected);
+        // Un secondo invio per la stessa email è in throttle nel broker: il messaggio non cambia.
+        $this->postJson('/api/auth/forgot-password', ['email' => $known->email])
+            ->assertOk()->assertJsonPath('message', $expected);
+
+        Notification::assertSentToTimes($known, ResetPassword::class, 1);
     }
 
     public function test_reset_password_with_valid_token_updates_password(): void
@@ -59,7 +65,15 @@ class PasswordResetTest extends TestCase
             'email' => $user->email,
             'password' => 'new-password-123',
             'password_confirmation' => 'new-password-123',
-        ])->assertStatus(422);
+        ])->assertStatus(422)->assertJsonPath('message', __('passwords.token'));
+
+        // Email inesistente: stessa risposta del token errato.
+        $this->postJson('/api/auth/reset-password', [
+            'token' => 'wrong-token',
+            'email' => 'nobody@example.com',
+            'password' => 'new-password-123',
+            'password_confirmation' => 'new-password-123',
+        ])->assertStatus(422)->assertJsonPath('message', __('passwords.token'));
     }
 
     public function test_reset_password_requires_confirmation(): void

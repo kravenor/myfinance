@@ -21,7 +21,7 @@ class ScenarioItemController extends Controller
         $items = $scenario->items()
             ->orderBy('starts_on')
             ->orderBy('id')
-            ->paginate($request->integer('per_page', 100));
+            ->paginate($this->perPage($request, 100));
 
         return ScenarioItemResource::collection($items);
     }

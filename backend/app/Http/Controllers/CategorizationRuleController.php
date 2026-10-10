@@ -34,7 +34,7 @@ class CategorizationRuleController extends Controller
         $query->orderBy('priority')->orderBy('id');
 
         return CategorizationRuleResource::collection(
-            $query->paginate($request->integer('per_page', 25))
+            $query->paginate($this->perPage($request, 25))
         );
     }
 

@@ -73,7 +73,7 @@ class TransactionController extends Controller
         }
 
         return TransactionResource::collection(
-            $query->paginate($request->integer('per_page', 25))
+            $query->paginate($this->perPage($request, 25))
         );
     }
 

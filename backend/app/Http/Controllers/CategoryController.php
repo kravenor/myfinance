@@ -33,7 +33,7 @@ class CategoryController extends Controller
         }
 
         return CategoryResource::collection(
-            $query->paginate($request->integer('per_page', 50))
+            $query->paginate($this->perPage($request, 50))
         );
     }
 

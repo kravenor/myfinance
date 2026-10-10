@@ -27,11 +27,13 @@ class InvestmentHistoryService
 
     /**
      * Con $holdingId la serie (e XIRR/TWR) è di quel solo holding; lo scope
-     * utente vale comunque, un id altrui dà una serie vuota.
+     * utente vale comunque, un id altrui dà una serie vuota. $from/$to
+     * restringono solo i punti restituiti: versato e XIRR/TWR si calcolano
+     * comunque dal primo movimento, sono cumulati.
      *
      * @return array<string, mixed>
      */
-    public function monthly(?int $holdingId = null): array
+    public function monthly(?int $holdingId = null, ?Carbon $from = null, ?Carbon $to = null): array
     {
         $base = strtoupper(Auth::user()->currency);
         $holdings = InvestmentHolding::query()
@@ -132,6 +134,10 @@ class InvestmentHistoryService
 
             $growth *= 1 + $this->dietzReturn($startValue, $marketValue, $periodFlows, $periodStart, $at);
             $periodStart = $at;
+
+            if (($from && $at->lt($from)) || ($to && $at->gt($to))) {
+                continue;
+            }
 
             $points[] = [
                 'month' => $at->format('Y-m'),

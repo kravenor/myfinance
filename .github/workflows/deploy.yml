@@ -7,6 +7,10 @@ on:
 
 concurrency: deploy
 
+# Il token serve solo al checkout della CI chiamata: il deploy passa da SSH.
+permissions:
+  contents: read
+
 jobs:
   ci:
     uses: ./.github/workflows/ci.yml
@@ -17,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: SSH deploy
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
         env:
           TAG: ${{ github.ref_name }}
         with:
@@ -45,7 +49,12 @@ jobs:
             cp "$ENV_BACKUP" .env.production
 
             COMPOSE="docker compose --env-file .env.production -f docker-compose.vps.yml"
-            APP_VERSION="$TAG" $COMPOSE up -d --build
+            # Immagini base aggiornate a ogni deploy: senza pull restano quelle in cache,
+            # senza le patch di sicurezza uscite sullo stesso tag (php, nginx, node).
+            # mysql e redis per nome: php, scheduler e queue usano un'immagine locale.
+            $COMPOSE pull mysql redis
+            APP_VERSION="$TAG" $COMPOSE build --pull
+            $COMPOSE up -d
 
             # Backup prima di toccare lo schema: il codice si torna indietro con git,
             # una migration no. Lo stack è già su, quindi il dump non può fallire

@@ -7,6 +7,8 @@ use App\Models\Category;
 use App\Models\RecurringTransaction;
 use App\Models\Scenario;
 use App\Models\ScenarioItem;
+use App\Support\BusinessDay;
+use App\Support\Cadence;
 use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
@@ -275,13 +277,14 @@ class ExpenseForecastService
                 if ($r->ends_on && $cursor->gt($r->ends_on)) {
                     break;
                 }
-                if ($cursor->gte($start)) {
-                    $key = FinancialMonth::key($cursor);
+                $on = BusinessDay::next($cursor);
+                if ($on->gte($start) && $on->lte($end)) {
+                    $key = FinancialMonth::key($on);
                     if (isset($valid[$key])) {
-                        $totals[$key] += $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
+                        $totals[$key] += $this->converter->convert((float) $r->amount, $r->currency, $base, $on);
                     }
                 }
-                $cursor = $this->advance($cursor, $r->cadence, $interval);
+                $cursor = Cadence::advance($cursor, $r->cadence, $interval, $r->starts_on->day);
             }
         }
 
@@ -354,15 +357,16 @@ class ExpenseForecastService
                 if ($r->ends_on && $cursor->gt($r->ends_on)) {
                     break;
                 }
-                if ($cursor->gte($start)) {
-                    $key = FinancialMonth::key($cursor);
+                $on = BusinessDay::next($cursor);
+                if ($on->gte($start) && $on->lte($end)) {
+                    $key = FinancialMonth::key($on);
                     if (isset($valid[$key])) {
-                        $amount = $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
+                        $amount = $this->converter->convert((float) $r->amount, $r->currency, $base, $on);
                         $cid = (int) $r->category_id;
                         $totals[$cid][$key] = ($totals[$cid][$key] ?? 0.0) + $amount;
                     }
                 }
-                $cursor = $this->advance($cursor, $r->cadence, $interval);
+                $cursor = Cadence::advance($cursor, $r->cadence, $interval, $r->starts_on->day);
             }
         }
 
@@ -464,24 +468,10 @@ class ExpenseForecastService
 
         while ($cursor->lte($end)) {
             $out[] = $cursor->copy();
-            $cursor = $this->advance($cursor, $cadence, $interval);
+            $cursor = Cadence::advance($cursor, $cadence, $interval, $from->day);
         }
 
         return $out;
-    }
-
-    private function advance(Carbon $from, string $cadence, int $interval): Carbon
-    {
-        return match ($cadence) {
-            'daily' => $from->copy()->addDays($interval),
-            'weekly' => $from->copy()->addWeeks($interval),
-            'biweekly' => $from->copy()->addWeeks(2 * $interval),
-            'monthly' => $from->copy()->addMonthsNoOverflow($interval),
-            'quarterly' => $from->copy()->addMonthsNoOverflow(3 * $interval),
-            'yearly' => $from->copy()->addYearsNoOverflow($interval),
-            'one_time' => $from->copy()->addYears(1000),
-            default => throw new \UnexpectedValueException("Cadenza non supportata: {$cadence}"),
-        };
     }
 
     private function fmt(float $value): string

@@ -9,6 +9,8 @@ use App\Models\InvestmentTransaction;
 use App\Models\RecurringTransaction;
 use App\Models\Tag;
 use App\Models\Transaction;
+use App\Support\BusinessDay;
+use App\Support\Cadence;
 use App\Support\FinancialMonth;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -219,13 +221,14 @@ class ReportService
                 if ($r->ends_on && $cursor->gt($r->ends_on)) {
                     break;
                 }
-                if ($cursor->gte($start)) {
-                    $key = FinancialMonth::key($cursor);
+                $on = BusinessDay::next($cursor);
+                if ($on->gte($start) && $on->lte($end)) {
+                    $key = FinancialMonth::key($on);
                     if (isset($deltas[$key])) {
-                        $deltas[$key][$r->type] += $this->converter->convert((float) $r->amount, $r->currency, $base, $cursor);
+                        $deltas[$key][$r->type] += $this->converter->convert((float) $r->amount, $r->currency, $base, $on);
                     }
                 }
-                $cursor = $this->advance($cursor, $r->cadence, max(1, (int) $r->interval));
+                $cursor = Cadence::advance($cursor, $r->cadence, max(1, (int) $r->interval), $r->starts_on->day);
             }
         }
 
@@ -317,19 +320,6 @@ class ReportService
         }
 
         return $this->fmt((($current - $previous) / $previous) * 100);
-    }
-
-    private function advance(Carbon $from, string $cadence, int $interval): Carbon
-    {
-        return match ($cadence) {
-            'daily' => $from->copy()->addDays($interval),
-            'weekly' => $from->copy()->addWeeks($interval),
-            'biweekly' => $from->copy()->addWeeks(2 * $interval),
-            'monthly' => $from->copy()->addMonthsNoOverflow($interval),
-            'quarterly' => $from->copy()->addMonthsNoOverflow(3 * $interval),
-            'yearly' => $from->copy()->addYearsNoOverflow($interval),
-            default => throw new \UnexpectedValueException("Cadenza non supportata: {$cadence}"),
-        };
     }
 
     /**

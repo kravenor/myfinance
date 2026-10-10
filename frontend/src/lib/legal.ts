@@ -4,5 +4,5 @@ export const LEGAL = {
   email: 'simone@simonebaldelli.com',
   hosting: 'OVH s.r.l.',
   mail: 'OVH s.r.l.',
-  updatedAt: '2026-10-02',
+  updatedAt: '2026-10-08',
 }

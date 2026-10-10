@@ -30,7 +30,7 @@ class InvestmentTransactionController extends Controller
         $movements = $investmentHolding->transactions()
             ->orderByDesc('occurred_at')
             ->orderByDesc('id')
-            ->paginate($request->integer('per_page', 100));
+            ->paginate($this->perPage($request, 100));
 
         return InvestmentTransactionResource::collection($movements);
     }

@@ -27,7 +27,7 @@ class ScenarioController extends Controller
         }
 
         return ScenarioResource::collection(
-            $query->paginate($request->integer('per_page', 50))
+            $query->paginate($this->perPage($request, 50))
         );
     }
 

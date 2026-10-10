@@ -83,11 +83,11 @@ class TransactionImportExportController extends Controller
             'mapping.category' => ['nullable', 'string'],
             'mapping.external_id' => ['nullable', 'string'],
             'date_format' => ['nullable', 'string', 'max:32'],
-            'currency' => ['nullable', 'string', 'size:3'],
         ]);
 
         $accountId = (int) $request->integer('account_id');
-        $currency = $request->string('currency')->value() ?: Account::query()->where('id', $accountId)->value('currency') ?: 'EUR';
+        // Come TransactionController: la valuta è sempre quella del conto.
+        $currency = (string) Account::query()->whereKey($accountId)->value('currency');
 
         $result = $this->importer->import(
             file: $request->file('file'),

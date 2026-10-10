@@ -32,7 +32,7 @@ class InvestmentHoldingController extends Controller
             $query->where('asset_type', $request->string('asset_type'));
         }
 
-        $holdings = $query->paginate($request->integer('per_page', 100));
+        $holdings = $query->paginate($this->perPage($request, 100));
         $priceResolver->hydrate(collect($holdings->items()));
 
         return InvestmentHoldingResource::collection($holdings);

@@ -20,6 +20,7 @@ export interface User {
   date_format: string
   month_start_day: number
   notification_preferences?: NotificationPreferences
+  two_factor_enabled?: boolean
   created_at: string
 }
 
@@ -141,6 +142,8 @@ export interface RecurringTransaction {
   starts_on: string
   ends_on: string | null
   next_run_at: string
+  /** next_run_at spostato al primo giorno lavorativo: data del prossimo movimento. */
+  next_occurs_on: string
   last_run_at: string | null
   is_active: boolean
   created_at: string
