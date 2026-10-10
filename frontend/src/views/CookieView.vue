@@ -4,7 +4,7 @@ import LegalPage from '@/components/LegalPage.vue'
 const COOKIES = [
   { name: 'finance_session', purpose: 'Mantiene l\'accesso mentre usi l\'app.', duration: '120 minuti di inattività, o fino all\'uscita' },
   { name: 'XSRF-TOKEN', purpose: 'Protegge dalle richieste contraffatte da altri siti (CSRF).', duration: 'Come la sessione' },
-  { name: 'remember_web_…', purpose: 'Ti tiene connesso tra una visita e l\'altra, solo se scegli «Ricordami».', duration: 'Fino a 400 giorni, o fino all\'uscita' },
+  { name: 'remember_web_…', purpose: 'Ti tiene connesso tra una visita e l\'altra, solo se scegli «Ricordami».', duration: 'Fino a 90 giorni, o fino all\'uscita' },
 ]
 const STORAGE = [
   { name: 'theme', purpose: 'Tema scelto in Impostazioni (automatico, chiaro o scuro).' },

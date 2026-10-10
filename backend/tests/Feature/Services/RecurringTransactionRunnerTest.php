@@ -37,11 +37,12 @@ class RecurringTransactionRunnerTest extends TestCase
             'user_id' => $user->id,
             'account_id' => $account->id,
             'recurring_transaction_id' => $recurring->id,
-            'occurred_at' => '2026-01-01',
+            // 1/1 è festivo: il movimento slitta al primo giorno lavorativo.
+            'occurred_at' => '2026-01-02',
         ]);
 
         $this->assertSame('2026-02-01', $recurring->fresh()->next_run_at->toDateString());
-        $this->assertSame('2026-01-01', $recurring->fresh()->last_run_at->toDateString());
+        $this->assertSame('2026-01-02', $recurring->fresh()->last_run_at->toDateString());
         $this->assertTrue($recurring->fresh()->is_active);
     }
 
@@ -129,7 +130,7 @@ class RecurringTransactionRunnerTest extends TestCase
         $this->assertSame(2, $holding->transactions()->count());
         $first = $holding->transactions()->orderBy('occurred_at')->first();
         $this->assertSame('buy', $first->side);
-        $this->assertSame('2026-01-01', $first->occurred_at->toDateString());
+        $this->assertSame('2026-01-02', $first->occurred_at->toDateString());
         $this->assertSame('2.00000000', $first->quantity);
         $this->assertSame('50.00000000', $first->price);
         $this->assertSame('4.00000000', $holding->fresh()->quantity);
@@ -171,5 +172,56 @@ class RecurringTransactionRunnerTest extends TestCase
         $this->assertSame('2.00', $movement->fees);
         // Il versato resta la rata intera: i costi sono cassa uscita.
         $this->assertSame('100.00', $holding->fresh()->net_invested);
+    }
+
+    public function test_non_working_day_shifts_only_the_transaction_date(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        // 14/02/2026 è sabato: il movimento slitta a lunedì 16, la cadenza resta ancorata al 14.
+        $recurring = RecurringTransaction::factory()->for($user)->for($account, 'account')->create([
+            'cadence' => 'monthly',
+            'interval' => 1,
+            'starts_on' => '2026-02-14',
+            'next_run_at' => '2026-02-14',
+        ]);
+
+        $runner = app(RecurringTransactionRunner::class);
+
+        // Sabato e domenica non registra nulla: la data effettiva non è ancora arrivata.
+        $this->assertSame(0, $runner->run(Carbon::parse('2026-02-15')));
+
+        $this->assertSame(1, $runner->run(Carbon::parse('2026-02-16')));
+        $recurring->refresh();
+        $this->assertSame('2026-02-16', $recurring->last_run_at->toDateString());
+        $this->assertSame('2026-03-14', $recurring->next_run_at->toDateString());
+
+        // 14/03 sabato → 16/03; 14/04 martedì, nessuno slittamento.
+        $runner->run(Carbon::parse('2026-04-30'));
+        $this->assertSame(
+            ['2026-02-16', '2026-03-16', '2026-04-14'],
+            Transaction::withoutGlobalScopes()->orderBy('occurred_at')->pluck('occurred_at')->map(fn ($d) => Carbon::parse($d)->toDateString())->all(),
+        );
+    }
+
+    public function test_month_end_recurring_keeps_its_day_after_february(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        // Mensile del 31: 28/02 è sabato → 2/3, poi torna al 31 (31/03 martedì, 30/04 giovedì).
+        $recurring = RecurringTransaction::factory()->for($user)->for($account, 'account')->create([
+            'cadence' => 'monthly',
+            'interval' => 1,
+            'starts_on' => '2026-01-31',
+            'next_run_at' => '2026-02-28',
+        ]);
+
+        app(RecurringTransactionRunner::class)->run(Carbon::parse('2026-04-30'));
+
+        $this->assertSame(
+            ['2026-03-02', '2026-03-31', '2026-04-30'],
+            Transaction::withoutGlobalScopes()->orderBy('occurred_at')->pluck('occurred_at')->map(fn ($d) => Carbon::parse($d)->toDateString())->all(),
+        );
+        $this->assertSame('2026-05-31', $recurring->fresh()->next_run_at->toDateString());
     }
 }

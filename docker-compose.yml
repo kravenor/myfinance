@@ -2,7 +2,7 @@ name: finance
 
 services:
   nginx:
-    image: nginx:1.27-alpine
+    image: nginx:1.30-alpine
     container_name: finance_nginx
     restart: unless-stopped
     ports:
@@ -91,7 +91,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD:-rootsecret}"]
+      # Password dall'env del container: in argv sarebbe visibile in `ps` sull'host.
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysqladmin ping -h 127.0.0.1 -uroot --silent"]
       interval: 10s
       timeout: 5s
       retries: 10

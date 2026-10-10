@@ -2,14 +2,21 @@
 
 namespace App\Http\Requests\Auth;
 
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 
 class RegisterRequest extends FormRequest
 {
+    // Prima della validazione: a registrazione spenta, unique:users non rivela quali email esistono.
     public function authorize(): bool
     {
-        return true;
+        return (bool) config('finance.registration');
+    }
+
+    protected function failedAuthorization(): void
+    {
+        throw new AuthorizationException('Registrazione disattivata.');
     }
 
     /**

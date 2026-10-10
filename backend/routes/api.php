@@ -23,16 +23,26 @@ use App\Http\Controllers\TransactionImportExportController;
 use App\Http\Middleware\ScanNotificationsAfterWrite;
 use Illuminate\Support\Facades\Route;
 
+Route::get('/auth/registration', [AuthController::class, 'registrationStatus'])->name('auth.registration');
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->name('auth.register');
 Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
+Route::post('/auth/two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:5,1')->name('auth.two-factor.challenge');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1')->name('password.email');
 Route::post('/auth/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1')->name('password.update');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
-    Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
     Route::put('/auth/preferences', [AuthController::class, 'updatePreferences'])->name('auth.preferences.update');
     Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
+    // Rotte che verificano la password attuale: senza limite diventano un oracolo per indovinarla.
+    Route::middleware('throttle:5,1')->group(function () {
+        Route::put('/auth/password', [AuthController::class, 'updatePassword'])->name('auth.password.update');
+        Route::post('/auth/logout-other-devices', [AuthController::class, 'logoutOtherDevices'])->name('auth.logout-other-devices');
+        Route::post('/auth/two-factor', [AuthController::class, 'enableTwoFactor'])->name('auth.two-factor.enable');
+        Route::post('/auth/two-factor/confirm', [AuthController::class, 'confirmTwoFactor'])->name('auth.two-factor.confirm');
+        Route::delete('/auth/two-factor', [AuthController::class, 'disableTwoFactor'])->name('auth.two-factor.disable');
+        Route::post('/auth/two-factor/recovery-codes', [AuthController::class, 'regenerateRecoveryCodes'])->name('auth.two-factor.recovery-codes');
+    });
 
     Route::get('exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
     Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');
@@ -54,9 +64,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('notifications/{id}', [NotificationController::class, 'destroy'])->name('notifications.destroy');
 
     Route::get('investments/overview', [InvestmentController::class, 'overview'])->name('investments.overview');
-    Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->name('investments.lookup');
+    Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->middleware('throttle:10,1,prices-lookup')->name('investments.lookup');
     Route::get('investments/history', [InvestmentController::class, 'history'])->name('investments.history');
-    Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->name('investments.refresh-prices');
+    Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->middleware('throttle:2,1,prices-refresh')->name('investments.refresh-prices');
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
     Route::apiResource('investment-holdings.transactions', InvestmentTransactionController::class)

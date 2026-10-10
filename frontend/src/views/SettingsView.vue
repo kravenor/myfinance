@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { ALWAYS_VISIBLE, NAV_ITEMS, useMenuStore } from '@/stores/menu'
 import { useThemeStore, type ThemePreference } from '@/stores/theme'
 import AppIcon from '@/components/ui/AppIcon.vue'
+import TwoFactorCard from '@/components/TwoFactorCard.vue'
 import { disablePush, enablePush, pushState, sendTestPush, type PushState } from '@/lib/push'
 import { useToastStore } from '@/stores/toast'
 import type { NotificationPreferences, User } from '@/types/api'
@@ -41,6 +42,12 @@ const loading = ref(true)
 const saving = ref(false)
 const saved = ref(false)
 const error = ref('')
+// Cambiare l'indirizzo delle notifiche richiede la password attuale (al vecchio arriva un avviso).
+const savedAddress = ref('')
+const addressPassword = ref('')
+const addressChanged = computed(
+  () => (form.value.email_address ?? '').trim().toLowerCase() !== savedAddress.value.toLowerCase(),
+)
 
 const passwordForm = ref({
   current_password: '',
@@ -61,10 +68,31 @@ async function onPasswordSubmit() {
     passwordForm.value = { current_password: '', password: '', password_confirmation: '' }
   } catch (e: unknown) {
     passwordError.value =
-      'Aggiornamento non riuscito. Controlla la password attuale e i requisiti della nuova.'
+      (e as { response?: { status?: number } }).response?.status === 429
+        ? 'Troppi tentativi: attendi un minuto.'
+        : 'Aggiornamento non riuscito. Controlla la password attuale e i requisiti della nuova.'
     throw e
   } finally {
     passwordSaving.value = false
+  }
+}
+
+// Esci dagli altri dispositivi: l'unico modo per revocare sessioni e «Ricordami» aperti altrove.
+const othersPassword = ref('')
+const othersBusy = ref(false)
+const othersError = ref('')
+async function onLogoutOthers() {
+  othersBusy.value = true
+  othersError.value = ''
+  try {
+    await api.post('/auth/logout-other-devices', { current_password: othersPassword.value })
+    othersPassword.value = ''
+    toast.success('Gli altri dispositivi sono stati scollegati.')
+  } catch (e: unknown) {
+    const status = (e as { response?: { status?: number } }).response?.status
+    othersError.value = status === 429 ? 'Troppi tentativi: attendi un minuto.' : 'Password non corretta.'
+  } finally {
+    othersBusy.value = false
   }
 }
 
@@ -100,6 +128,8 @@ async function onDateSubmit() {
 }
 
 function hydrate(prefs: NotificationPreferences) {
+  savedAddress.value = prefs.email_address ?? ''
+  addressPassword.value = ''
   form.value = {
     email: prefs.email,
     email_address: prefs.email_address ?? '',
@@ -122,13 +152,17 @@ async function onSubmit() {
     const payload = {
       ...form.value,
       email_address: form.value.email_address?.trim() || null,
+      ...(addressChanged.value ? { current_password: addressPassword.value } : {}),
     }
     const { data } = await api.put<{ data: NotificationPreferences }>('/notification-preferences', payload)
     hydrate(data.data)
     saved.value = true
     await auth.fetchMe()
   } catch (e: unknown) {
-    error.value = 'Salvataggio non riuscito. Controlla i campi.'
+    const errors = (e as { response?: { data?: { errors?: Record<string, string[]> } } }).response?.data?.errors
+    error.value = errors?.current_password
+      ? "Per cambiare l'indirizzo serve la password attuale corretta."
+      : 'Salvataggio non riuscito. Controlla i campi.'
     throw e
   } finally {
     saving.value = false
@@ -228,6 +262,21 @@ onMounted(async () => {
               aria-describedby="hint-email-address"
             />
             <p id="hint-email-address" class="field-hint">Lascia vuoto per usare l'email dell'account.</p>
+            <div v-if="addressChanged" class="mt-3">
+              <label class="label" for="address-password">Password attuale</label>
+              <input
+                id="address-password"
+                v-model="addressPassword"
+                type="password"
+                class="input"
+                autocomplete="current-password"
+                required
+                aria-describedby="hint-address-password"
+              />
+              <p id="hint-address-password" class="field-hint">
+                Serve per cambiare l'indirizzo. Al vecchio indirizzo arriva un'email che segnala il cambio.
+              </p>
+            </div>
             <div class="mt-2 flex flex-wrap items-center gap-3">
               <button type="button" class="btn-secondary" :disabled="testingEmail" @click="sendTestEmail">
                 {{ testingEmail ? 'Invio…' : 'Invia email di prova' }}
@@ -332,7 +381,7 @@ onMounted(async () => {
       <form class="space-y-5" @submit.prevent="onPasswordSubmit">
         <div>
           <h2 class="font-medium">Password</h2>
-          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account. Questo dispositivo resta collegato; gli altri, dopo 2 ore di inattività, ti chiederanno di accedere di nuovo.</p>
+          <p class="text-sm text-slate-500 mt-1">Cambia la password di accesso al tuo account. Questo dispositivo resta collegato; gli altri ti chiederanno di accedere di nuovo.</p>
         </div>
 
         <div>
@@ -375,6 +424,35 @@ onMounted(async () => {
         </div>
       </form>
     </div>
+    <div class="p-4 card sm:p-6">
+      <form class="space-y-5" @submit.prevent="onLogoutOthers">
+        <div>
+          <h2 class="font-medium">Dispositivi collegati</h2>
+          <p class="text-sm text-slate-500 mt-1">
+            «Esci» chiude solo questo dispositivo. Se hai usato Finance su un computer non tuo o temi che qualcuno abbia
+            accesso, scollega tutti gli altri: anche quelli con «Ricordami» ti chiederanno di accedere di nuovo.
+          </p>
+        </div>
+        <div>
+          <label class="label" for="others-password">Password attuale</label>
+          <input
+            id="others-password"
+            v-model="othersPassword"
+            type="password"
+            class="input"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button type="submit" class="btn-secondary" :disabled="othersBusy">
+            {{ othersBusy ? 'Attendi…' : 'Esci dagli altri dispositivi' }}
+          </button>
+          <span v-if="othersError" role="alert" class="text-sm text-danger-600">{{ othersError }}</span>
+        </div>
+      </form>
+    </div>
+    <TwoFactorCard />
     <div class="card p-4 sm:p-6">
       <form class="space-y-5" @submit.prevent="onDateSubmit">
         <div>

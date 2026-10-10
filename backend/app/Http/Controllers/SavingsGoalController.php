@@ -29,7 +29,7 @@ class SavingsGoalController extends Controller
             $query->where('status', $request->string('status'));
         }
 
-        $paginator = $query->paginate($request->integer('per_page', 50));
+        $paginator = $query->paginate($this->perPage($request, 50));
 
         $this->progress->attachProgress($paginator->getCollection()->all());
 

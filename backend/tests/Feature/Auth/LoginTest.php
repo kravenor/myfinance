@@ -82,4 +82,21 @@ class LoginTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['email', 'password']);
     }
+
+    public function test_login_is_limited_per_email_across_ips(): void
+    {
+        User::factory()->create(['email' => 'mario@example.com', 'password' => Hash::make('Password123!')]);
+
+        // Un IP diverso per tentativo: il limite email+IP non scatta, quello per sola email sì.
+        for ($i = 1; $i <= 10; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "203.0.113.{$i}"])
+                ->postJson('/api/auth/login', ['email' => 'mario@example.com', 'password' => 'wrong'])
+                ->assertJsonValidationErrors(['email' => __('auth.failed')]);
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.99'])
+            ->postJson('/api/auth/login', ['email' => 'mario@example.com', 'password' => 'Password123!'])
+            ->assertJsonValidationErrors(['email' => 'Troppi tentativi di accesso. Riprova tra 15 minuti.']);
+        $this->assertGuest();
+    }
 }

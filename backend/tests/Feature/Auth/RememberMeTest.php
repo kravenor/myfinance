@@ -5,6 +5,7 @@ namespace Tests\Feature\Auth;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -70,5 +71,39 @@ class RememberMeTest extends TestCase
         $this->artisan('rules:apply --dry-run')->assertSuccessful();
 
         $this->assertSame('token-del-telefono', $user->fresh()->remember_token);
+    }
+
+    public function test_logout_other_devices_revokes_their_sessions_and_remember_cookies(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('Password123!'), 'remember_token' => 'token-condiviso']);
+        // Un altro dispositivo: sessione con l'hash della password di adesso.
+        $otherDevice = ['password_hash_web' => Auth::guard('web')->hashPasswordForCookie($user->password)];
+
+        $this->fromRememberedDevice($user)->postJson('/api/auth/logout-other-devices', ['current_password' => 'sbagliata'])
+            ->assertJsonValidationErrors('current_password');
+        $this->assertSame('token-condiviso', $user->fresh()->remember_token);
+
+        $this->fromRememberedDevice($user)->postJson('/api/auth/logout-other-devices', ['current_password' => 'Password123!'])
+            ->assertNoContent()
+            // Questo dispositivo resta ricordato, con il token nuovo.
+            ->assertCookie($this->recaller());
+
+        $fresh = $user->fresh();
+        $this->assertNotSame('token-condiviso', $fresh->remember_token);
+        $this->assertTrue(Hash::check('Password123!', $fresh->password));
+
+        Auth::forgetGuards();
+        $this->withHeader('Referer', 'http://localhost')->withCredentials()->withSession($otherDevice)
+            ->actingAs($fresh)->getJson('/api/auth/me')->assertUnauthorized();
+    }
+
+    public function test_remember_cookie_lasts_ninety_days(): void
+    {
+        User::factory()->create(['email' => 'mario@example.com', 'password' => Hash::make('Password123!')]);
+
+        $this->postJson('/api/auth/login', ['email' => 'mario@example.com', 'password' => 'Password123!', 'remember' => true])->assertOk();
+
+        $expires = Cookie::queued($this->recaller())->getExpiresTime();
+        $this->assertEqualsWithDelta(now()->addMinutes(60 * 24 * 90)->getTimestamp(), $expires, 60);
     }
 }
