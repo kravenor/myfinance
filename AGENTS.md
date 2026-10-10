@@ -246,7 +246,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Categoria coerente col tipo**: transazioni, ricorrenti e voci degli scenari validano nel `withValidator` (store e update) con [CategoryTypeCheck](backend/app/Support/CategoryTypeCheck.php): un giroconto non ha categoria, entrate e uscite accettano solo categorie dello stesso tipo. In update tipo e categoria mancanti nel payload si leggono dal record, così cambiare solo il tipo è controllato. Errore su `category_id`.
 - **Messaggi in italiano**: `APP_LOCALE=it` con traduzioni in `backend/lang/it/` (`validation.php`, `auth.php`, `passwords.php`). `validation.php` contiene solo le regole usate dalle Form Request (le chiavi mancanti ricadono sull'inglese del framework) e la mappa `attributes` campo → nome leggibile: un nuovo campo in una Form Request va aggiunto lì, una nuova regola pure.
 - **Code style**: Laravel Pint (preset `laravel`)
-- **Test**: PHPUnit / Pest, feature test per ogni endpoint. Test DB su SQLite in-memory (vedi `phpunit.xml`).
+- **Test**: PHPUnit / Pest, feature test per ogni endpoint. Test DB su SQLite in-memory (vedi `phpunit.xml`). `phpunit.xml` dà ai test cache di config, rotte ed eventi separate (`APP_*_CACHE`), così un `artisan optimize` in sviluppo non li manda sul MySQL; `Tests\TestCase::setUpTraits()` si ferma prima di `RefreshDatabase` se la connessione non è sqlite in memoria.
 
 ### Frontend (Vue)
 - **TypeScript** obbligatorio
