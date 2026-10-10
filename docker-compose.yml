@@ -118,10 +118,16 @@ services:
     container_name: finance_mail
     restart: unless-stopped
     ports:
-      - 25:25
-      - "143:143"
+      - '127.0.0.1:5000:80'    # Localhost only
+      - '127.0.0.1:25:25'      # Localhost only
+      - '127.0.0.1:143:143'    # Localhost only
+      - '127.0.0.1:110:110'    # POP3 plain (localhost only)
     volumes:
         - ../datadir/smtp4dev:/smtp4dev
+    environment:
+      # Container configuration (this binds within the container)
+      - ServerOptions__Urls=http://*:80
+      - ServerOptions__HostName=smtp4dev
     networks:
       - finance
 volumes:
