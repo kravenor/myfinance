@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-10**
-Fase corrente: **Audit di sicurezza — `fix/prices-per-provider`** (finding 20); prossimi candidati nella coda «Da fare» di §7
+Ultimo aggiornamento: **2026-10-12**
+Fase corrente: **nessuna in corso** — audit di sicurezza chiuso salvo il finding 13; prossimi candidati nella coda «Da fare» di §7
 
 ---
 
@@ -317,10 +317,13 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Estensione** — Filtro di periodo lato server sulla serie investimenti (ADR 0002 U7): `from`/`to` opzionali su `/investments/history`, filtrano solo i punti in uscita; il grafico continua a filtrare lato client
 - [x] **Estensione** — Autenticazione a due fattori ([analisi](docs/analysis/TWO-FACTOR-AUTH-ANALYSIS.md)): TOTP facoltativo per utente con 8 codici di recupero, login in due passi, gestione da Impostazioni ([TwoFactorCard](frontend/src/components/TwoFactorCard.vue)), command d'emergenza `user:two-factor-disable` — dettagli in §8.1
 - [x] **Audit di sicurezza** ([analisi](docs/analysis/SECURITY-AUDIT-ANALYSIS.md)): nessun finding critico o alto; fix in quattro branch. Fatti `fix/auth-hardening` (secondo fattore per rigenerare i codici di recupero, limite per email sul login, risposte uniformi nel recupero password, throttle sul cambio password) e `fix/request-limits` (throttle globale API, periodo massimo dei report, tetti e transazione nell'import, refresh quotazioni limitato all'utente, `per_page` tra 1 e 200, `starts_on` al massimo 5 anni fa) e `fix/output-escaping` (formule neutralizzate nell'export CSV, markdown sicuro nelle email, regex validata anche quando la PATCH cambia solo il pattern), poi `fix/notification-email-change` (password per cambiare l'indirizzo delle notifiche, avviso al vecchio) e `fix/security-logging` (registro di sicurezza su canale dedicato, 90 giorni), `fix/remember-me-revocation` («Esci dagli altri dispositivi», «Ricordami» a 90 giorni) e infine `chore/infra-hardening` (action a SHA con `permissions`, pull delle immagini nel deploy, nginx 1.30 con CSP e `server_tokens off`, niente `X-Forwarded-Host` e `trustHosts`, backup 0600, healthcheck MySQL senza password in argv), `fix/prices-per-provider` (finding 20: quote per provider, batch CoinGecko a blocchi). Resta da decidere il finding 13
+- [x] **Estensione** — Riepilogo mensile con grafica propria ([MonthlySummaryNotification](backend/app/Notifications/MonthlySummaryNotification.php) + vista `mail.monthly-summary`) e logo nell'header comune delle email; smtp4dev con interfaccia web in dev, test bloccati sul database di sviluppo
 - [x] **Fix** — Ricorrenti nei giorni non lavorativi ([analisi](docs/analysis/RECURRING-BUSINESS-DAYS-ANALYSIS.md)): weekend e festivi nazionali italiani fanno slittare il movimento al primo giorno lavorativo successivo, senza spostare la cadenza; stessa regola in previsioni e report
 - [x] **Fix** — Ricorrenti a fine mese ([analisi](docs/analysis/RECURRING-MONTH-END-ANALYSIS.md)): le cadenze mensile/trimestrale/annuale tornano sul giorno di `starts_on` dopo un mese più corto (31/1 → 28/2 → 31/3); calcolo unico in `App\Support\Cadence`, usato anche dalle voci degli scenari
 
 ### Da fare (coda, non ancora analizzati salvo dove indicato)
+- [ ] **Audit finding 13** — `uncompromised()` sulla password: va deciso, richiede di dichiarare Have I Been Pwned in Privacy e Cookie
+- [ ] **Riconciliazione conto** — branch `feat/riconciliazione` (fermo al 2026-09-03, non mergiato): decidere se riprenderlo o scartarlo
 - [ ] **Multitenant / workspace condivisi** — [analisi](docs/analysis/MULTITENANT_ANALYSIS.md) pronta, nessuna implementazione
 - [ ] **ADR 0002 U5** — aggancio movimento investimento ↔ transazione di cassa (prima decidere chi comanda)
 - [ ] **ADR 0002 U4** — FIFO come metodo di costo alternativo (solo se serve per la dichiarazione fiscale)
