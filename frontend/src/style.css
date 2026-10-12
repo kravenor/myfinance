@@ -222,3 +222,15 @@
 :root.dark .btn-danger:hover:not(:disabled) {
   background-color: rgb(185 28 28);
 }
+
+/* Colori di sfondo stampati (barre della classifica, card); canvas a tutta larghezza del foglio. */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  canvas {
+    width: 100% !important;
+    height: auto !important;
+  }
+}
