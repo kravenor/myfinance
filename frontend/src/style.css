@@ -223,8 +223,12 @@
   background-color: rgb(185 28 28);
 }
 
-/* Chart.js fissa le dimensioni del canvas in px: in stampa lo si scala sulla larghezza del foglio. */
+/* Colori di sfondo stampati (barre della classifica, card); canvas scalati sulla larghezza del foglio. */
 @media print {
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
   canvas {
     max-width: 100% !important;
     height: auto !important;

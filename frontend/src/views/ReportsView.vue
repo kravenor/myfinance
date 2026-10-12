@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { financialMonthRange, financialMonthStart, formatDate, formatMonth, toIsoDate } from '@/lib/date'
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { Bar, Doughnut, Line } from 'vue-chartjs'
 import {
   Chart as ChartJS,
@@ -182,12 +182,41 @@ async function refresh() {
 
 onMounted(refresh)
 
-const print = () => window.print()
+// In stampa il confronto entrate/uscite c'è sempre: fuori da "Andamento" la timeline si carica solo qui.
+const printing = ref(false)
+const showComparison = computed(() => tab.value === 'trend' || printing.value)
+const today = toIsoDate(new Date())
+const printChartOptions = { ...chartOptions, animation: false as const }
+
+async function print() {
+  if (tab.value !== 'trend') {
+    const { from, to } = range.value
+    timeline.value = (await api.get<{ data: TimelinePoint[] }>('/reports/timeline', { params: { from, to } })).data.data
+  }
+  printing.value = true
+  await nextTick()
+  window.addEventListener('afterprint', () => (printing.value = false), { once: true })
+  window.print()
+}
 </script>
 
 <template>
   <div class="space-y-4">
-    <div class="flex flex-wrap items-center justify-between gap-3">
+    <header class="hidden items-center justify-between gap-4 border-b border-slate-200 pb-3 print:flex">
+      <div class="flex items-center gap-3">
+        <img src="/icon-192.png" alt="" class="h-10 w-10 rounded-lg" />
+        <div>
+          <p class="text-lg font-semibold text-slate-900">Finance</p>
+          <p class="text-xs text-slate-500">Riepilogo finanziario</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <p class="text-sm font-semibold text-slate-900">{{ formatDate(range.from) }} – {{ formatDate(range.to) }}</p>
+        <p class="text-xs text-slate-500">Importi in {{ baseCurrency }}, giroconti esclusi · stampato il {{ formatDate(today) }}</p>
+      </div>
+    </header>
+
+    <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
       <div>
         <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
         <p class="page-desc">
@@ -195,16 +224,16 @@ const print = () => window.print()
         </p>
       </div>
       <!-- ponytail: stampa del browser («Salva come PDF»); PDF lato server solo se serve allegarlo alle email -->
-      <button type="button" class="btn-secondary print:hidden" @click="print">Stampa</button>
+      <button type="button" class="btn-secondary" @click="print">Stampa</button>
     </div>
 
-    <div class="card space-y-3 p-4 print:border-0 print:p-0 print:shadow-none">
-      <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
+    <div class="card space-y-3 p-4 print:hidden">
+      <div class="flex flex-wrap items-center justify-between gap-3">
         <SegmentedControl v-model="tab" :options="TABS" label="Report" />
         <SegmentedControl v-if="tab !== 'trend'" v-model="kind" :options="KINDS" label="Tipo di movimento" />
       </div>
-      <SegmentedControl v-model="period" :options="PERIODS" label="Periodo" class="print:hidden" />
-      <div v-if="period === 'custom'" class="grid grid-cols-2 gap-3 sm:max-w-md print:hidden">
+      <SegmentedControl v-model="period" :options="PERIODS" label="Periodo" />
+      <div v-if="period === 'custom'" class="grid grid-cols-2 gap-3 sm:max-w-md">
         <div>
           <label class="label" for="rep-from">Da</label>
           <input id="rep-from" v-model="filters.from" type="date" class="input" />
@@ -222,61 +251,63 @@ const print = () => window.print()
 
     <div v-if="loading && !loaded" class="card h-80 animate-pulse bg-slate-100" aria-busy="true" aria-label="Caricamento" />
 
-    <section v-else-if="tab !== 'trend'" class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
-      <div class="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 class="font-semibold text-slate-900">
-          {{ kind === 'income' ? 'Entrate' : 'Uscite' }} per {{ tab === 'tag' ? 'tag' : 'categoria' }}
-        </h2>
-        <p v-if="breakdown.length" class="num text-lg font-semibold" :class="kind === 'income' ? 'text-income-600' : 'text-expense-600'">
-          {{ formatCurrency(breakdownTotal, baseCurrency) }}
-        </p>
-      </div>
-      <p class="mt-1 text-xs text-slate-500">
-        <template v-if="tab === 'tag'">Una transazione con più tag conta per intero in ognuno, quindi la somma può superare il totale reale.</template>
-        <template v-else>Le sottocategorie hanno un totale proprio e non si sommano alla categoria padre.</template>
-      </p>
-
-      <div v-if="breakdown.length" class="mt-4 grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,15rem)_1fr] print:grid-cols-[minmax(0,15rem)_1fr]">
-        <div class="mx-auto h-52 w-52 md:h-60 md:w-60">
-          <Doughnut :data="donutData" :options="donutOptions" />
-        </div>
-        <BreakdownList :items="breakdown" :currency="baseCurrency" />
-      </div>
-      <EmptyState
-        v-else
-        :title="tab === 'tag'
-          ? 'Nessuna transazione con tag nel periodo.'
-          : kind === 'income' ? 'Nessuna entrata nel periodo.' : 'Nessuna uscita nel periodo.'"
-      />
-    </section>
-
     <template v-else>
-      <div class="grid grid-cols-3 gap-3 transition-opacity" :class="{ 'opacity-60': loading }">
-        <div class="card p-3 sm:p-4">
-          <p class="text-xs font-medium text-slate-500">Entrate</p>
-          <p class="num mt-1 text-base font-semibold text-income-600 sm:text-xl">{{ formatCurrency(totals.income, baseCurrency) }}</p>
+      <template v-if="showComparison">
+        <div class="grid grid-cols-3 gap-3 transition-opacity" :class="{ 'opacity-60': loading }">
+          <div class="card p-3 sm:p-4">
+            <p class="text-xs font-medium text-slate-500">Entrate</p>
+            <p class="num mt-1 text-base font-semibold text-income-600 sm:text-xl">{{ formatCurrency(totals.income, baseCurrency) }}</p>
+          </div>
+          <div class="card p-3 sm:p-4">
+            <p class="text-xs font-medium text-slate-500">Uscite</p>
+            <p class="num mt-1 text-base font-semibold text-expense-600 sm:text-xl">{{ formatCurrency(totals.expense, baseCurrency) }}</p>
+          </div>
+          <div class="card p-3 sm:p-4">
+            <p class="text-xs font-medium text-slate-500">Saldo</p>
+            <p class="num mt-1 text-base font-semibold sm:text-xl" :class="totals.net >= 0 ? 'text-income-600' : 'text-expense-600'">
+              {{ totals.net > 0 ? '+' : totals.net < 0 ? '−' : '' }}{{ formatCurrency(Math.abs(totals.net), baseCurrency) }}
+            </p>
+          </div>
         </div>
-        <div class="card p-3 sm:p-4">
-          <p class="text-xs font-medium text-slate-500">Uscite</p>
-          <p class="num mt-1 text-base font-semibold text-expense-600 sm:text-xl">{{ formatCurrency(totals.expense, baseCurrency) }}</p>
-        </div>
-        <div class="card p-3 sm:p-4">
-          <p class="text-xs font-medium text-slate-500">Saldo</p>
-          <p class="num mt-1 text-base font-semibold sm:text-xl" :class="totals.net >= 0 ? 'text-income-600' : 'text-expense-600'">
-            {{ totals.net > 0 ? '+' : totals.net < 0 ? '−' : '' }}{{ formatCurrency(Math.abs(totals.net), baseCurrency) }}
+
+        <section class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
+          <h2 class="font-semibold text-slate-900">Entrate e uscite per mese</h2>
+          <div v-if="hasTrend" class="mt-4 h-64 sm:h-80">
+            <Bar :data="barData" :options="printing ? printChartOptions : chartOptions" />
+          </div>
+          <EmptyState v-else title="Nessuna transazione nel periodo." />
+        </section>
+      </template>
+
+      <section v-if="tab !== 'trend'" class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="font-semibold text-slate-900">
+            {{ kind === 'income' ? 'Entrate' : 'Uscite' }} per {{ tab === 'tag' ? 'tag' : 'categoria' }}
+          </h2>
+          <p v-if="breakdown.length" class="num text-lg font-semibold" :class="kind === 'income' ? 'text-income-600' : 'text-expense-600'">
+            {{ formatCurrency(breakdownTotal, baseCurrency) }}
           </p>
         </div>
-      </div>
+        <p class="mt-1 text-xs text-slate-500">
+          <template v-if="tab === 'tag'">Una transazione con più tag conta per intero in ognuno, quindi la somma può superare il totale reale.</template>
+          <template v-else>Le sottocategorie hanno un totale proprio e non si sommano alla categoria padre.</template>
+        </p>
 
-      <section class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
-        <h2 class="font-semibold text-slate-900">Entrate e uscite per mese</h2>
-        <div v-if="hasTrend" class="mt-4 h-64 sm:h-80">
-          <Bar :data="barData" :options="chartOptions" />
+        <div v-if="breakdown.length" class="mt-4 grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,15rem)_1fr] print:grid-cols-[minmax(0,15rem)_1fr]">
+          <div class="mx-auto h-52 w-52 md:h-60 md:w-60">
+            <Doughnut :data="donutData" :options="donutOptions" />
+          </div>
+          <BreakdownList :items="breakdown" :currency="baseCurrency" />
         </div>
-        <EmptyState v-else title="Nessuna transazione nel periodo." />
+        <EmptyState
+          v-else
+          :title="tab === 'tag'
+            ? 'Nessuna transazione con tag nel periodo.'
+            : kind === 'income' ? 'Nessuna entrata nel periodo.' : 'Nessuna uscita nel periodo.'"
+        />
       </section>
 
-      <section class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
+      <section v-else class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
         <h2 class="font-semibold text-slate-900">Patrimonio netto</h2>
         <p class="mt-1 text-xs text-slate-500">Somma dei saldi di tutti i conti alla fine di ogni mese.</p>
         <div v-if="netWorth.length" class="mt-4 h-64 sm:h-80">

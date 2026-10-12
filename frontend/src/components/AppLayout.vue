@@ -213,7 +213,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
         </div>
       </header>
 
-      <main class="flex-1 bg-slate-50 p-4 sm:p-6">
+      <main class="flex-1 bg-slate-50 p-4 sm:p-6 print:bg-white print:p-0">
         <RouterView />
       </main>
     </div>
