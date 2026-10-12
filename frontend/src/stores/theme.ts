@@ -38,6 +38,9 @@ export const useThemeStore = defineStore('theme', () => {
     apply()
   })
   media.addEventListener('change', apply)
+  // Su carta sempre tema chiaro: in dark i testi chiari sparirebbero sul foglio bianco.
+  window.addEventListener('beforeprint', () => document.documentElement.classList.remove('dark'))
+  window.addEventListener('afterprint', apply)
   apply()
 
   return { preference, dark }

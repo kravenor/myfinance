@@ -222,3 +222,11 @@
 :root.dark .btn-danger:hover:not(:disabled) {
   background-color: rgb(185 28 28);
 }
+
+/* Chart.js fissa le dimensioni del canvas in px: in stampa lo si scala sulla larghezza del foglio. */
+@media print {
+  canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+}

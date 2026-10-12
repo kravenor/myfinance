@@ -181,24 +181,30 @@ async function refresh() {
 }
 
 onMounted(refresh)
+
+const print = () => window.print()
 </script>
 
 <template>
   <div class="space-y-4">
-    <div>
-      <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
-      <p class="page-desc">
-        Dove vanno e da dove arrivano i soldi nel periodo scelto, con importi convertiti nella tua valuta principale.
-      </p>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-semibold">Report</h1>
+        <p class="page-desc">
+          Dove vanno e da dove arrivano i soldi nel periodo scelto, con importi convertiti nella tua valuta principale.
+        </p>
+      </div>
+      <!-- ponytail: stampa del browser («Salva come PDF»); PDF lato server solo se serve allegarlo alle email -->
+      <button type="button" class="btn-secondary print:hidden" @click="print">Stampa</button>
     </div>
 
-    <div class="card space-y-3 p-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+    <div class="card space-y-3 p-4 print:border-0 print:p-0 print:shadow-none">
+      <div class="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <SegmentedControl v-model="tab" :options="TABS" label="Report" />
         <SegmentedControl v-if="tab !== 'trend'" v-model="kind" :options="KINDS" label="Tipo di movimento" />
       </div>
-      <SegmentedControl v-model="period" :options="PERIODS" label="Periodo" />
-      <div v-if="period === 'custom'" class="grid grid-cols-2 gap-3 sm:max-w-md">
+      <SegmentedControl v-model="period" :options="PERIODS" label="Periodo" class="print:hidden" />
+      <div v-if="period === 'custom'" class="grid grid-cols-2 gap-3 sm:max-w-md print:hidden">
         <div>
           <label class="label" for="rep-from">Da</label>
           <input id="rep-from" v-model="filters.from" type="date" class="input" />
@@ -216,7 +222,7 @@ onMounted(refresh)
 
     <div v-if="loading && !loaded" class="card h-80 animate-pulse bg-slate-100" aria-busy="true" aria-label="Caricamento" />
 
-    <section v-else-if="tab !== 'trend'" class="card p-4 sm:p-5 transition-opacity" :class="{ 'opacity-60': loading }">
+    <section v-else-if="tab !== 'trend'" class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
         <h2 class="font-semibold text-slate-900">
           {{ kind === 'income' ? 'Entrate' : 'Uscite' }} per {{ tab === 'tag' ? 'tag' : 'categoria' }}
@@ -230,7 +236,7 @@ onMounted(refresh)
         <template v-else>Le sottocategorie hanno un totale proprio e non si sommano alla categoria padre.</template>
       </p>
 
-      <div v-if="breakdown.length" class="mt-4 grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,15rem)_1fr]">
+      <div v-if="breakdown.length" class="mt-4 grid grid-cols-1 items-start gap-6 md:grid-cols-[minmax(0,15rem)_1fr] print:grid-cols-[minmax(0,15rem)_1fr]">
         <div class="mx-auto h-52 w-52 md:h-60 md:w-60">
           <Doughnut :data="donutData" :options="donutOptions" />
         </div>
@@ -262,7 +268,7 @@ onMounted(refresh)
         </div>
       </div>
 
-      <section class="card p-4 sm:p-5 transition-opacity" :class="{ 'opacity-60': loading }">
+      <section class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
         <h2 class="font-semibold text-slate-900">Entrate e uscite per mese</h2>
         <div v-if="hasTrend" class="mt-4 h-64 sm:h-80">
           <Bar :data="barData" :options="chartOptions" />
@@ -270,7 +276,7 @@ onMounted(refresh)
         <EmptyState v-else title="Nessuna transazione nel periodo." />
       </section>
 
-      <section class="card p-4 sm:p-5 transition-opacity" :class="{ 'opacity-60': loading }">
+      <section class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
         <h2 class="font-semibold text-slate-900">Patrimonio netto</h2>
         <p class="mt-1 text-xs text-slate-500">Somma dei saldi di tutti i conti alla fine di ogni mese.</p>
         <div v-if="netWorth.length" class="mt-4 h-64 sm:h-80">

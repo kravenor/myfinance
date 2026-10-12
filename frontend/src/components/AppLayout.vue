@@ -98,7 +98,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
     />
 
     <aside
-      class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-slate-200 bg-surface transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:translate-x-0"
+      class="fixed inset-y-0 left-0 z-40 flex w-64 print:hidden flex-col border-r border-slate-200 bg-surface transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:translate-x-0"
       :class="mobileOpen ? 'translate-x-0' : '-translate-x-full'"
     >
       <div class="flex h-14 items-center justify-between gap-2 px-5">
@@ -153,7 +153,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header
-        class="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-slate-200 bg-surface/90 px-4 backdrop-blur sm:px-6"
+        class="sticky top-0 z-30 flex h-14 print:hidden items-center gap-3 border-b border-slate-200 bg-surface/90 px-4 backdrop-blur sm:px-6"
       >
         <button
           type="button"
