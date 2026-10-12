@@ -195,8 +195,25 @@ async function print() {
   }
   printing.value = true
   await nextTick()
-  window.addEventListener('afterprint', () => (printing.value = false), { once: true })
+  resizeCharts(true)
+  window.addEventListener(
+    'afterprint',
+    () => {
+      printing.value = false
+      resizeCharts(false)
+    },
+    { once: true },
+  )
   window.print()
+}
+
+// Su mobile il canvas è largo quanto il telefono: per la stampa lo si ridisegna a misura di foglio.
+function resizeCharts(forPrint: boolean) {
+  for (const chart of Object.values(ChartJS.instances)) {
+    if (!forPrint) chart.resize()
+    else if ('type' in chart.config && chart.config.type === 'doughnut') chart.resize(240, 240)
+    else chart.resize(720, 320)
+  }
 }
 </script>
 
@@ -272,7 +289,7 @@ async function print() {
 
         <section class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
           <h2 class="font-semibold text-slate-900">Entrate e uscite per mese</h2>
-          <div v-if="hasTrend" class="mt-4 h-64 sm:h-80">
+          <div v-if="hasTrend" class="mt-4 h-64 sm:h-80 print:h-auto">
             <Bar :data="barData" :options="printing ? printChartOptions : chartOptions" />
           </div>
           <EmptyState v-else title="Nessuna transazione nel periodo." />
@@ -310,7 +327,7 @@ async function print() {
       <section v-else class="card p-4 sm:p-5 transition-opacity print:break-inside-avoid" :class="{ 'opacity-60': loading }">
         <h2 class="font-semibold text-slate-900">Patrimonio netto</h2>
         <p class="mt-1 text-xs text-slate-500">Somma dei saldi di tutti i conti alla fine di ogni mese.</p>
-        <div v-if="netWorth.length" class="mt-4 h-64 sm:h-80">
+        <div v-if="netWorth.length" class="mt-4 h-64 sm:h-80 print:h-auto">
           <Line :data="lineData" :options="chartOptions" />
         </div>
         <EmptyState v-else title="Nessun dato sul patrimonio nel periodo." />
