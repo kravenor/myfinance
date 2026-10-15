@@ -53,6 +53,7 @@ return [
             'crypto' => 'coingecko',
             'bond' => 'borsaitaliana',
             'certificate' => 'teleborsa',
+            'real_estate' => 'istat',
         ],
         'yahoo' => [
             'url' => env('FINANCE_YAHOO_URL', 'https://query1.finance.yahoo.com'),
@@ -76,6 +77,17 @@ return [
             // riferimento in HTML. Nessuna API, si legge la pagina.
             'url' => env('FINANCE_TELEBORSA_URL', 'https://www.teleborsa.it/sedex-securitised-derivates'),
             'timeout' => (int) env('FINANCE_PRICES_TIMEOUT', 15),
+        ],
+        'istat' => [
+            // Indice dei prezzi delle abitazioni esistenti (IPAB), API SDMX pubblica.
+            'url' => env('FINANCE_ISTAT_URL', 'https://esploradati.istat.it/SDMXWS/rest'),
+            // Serie nazionale BIS dal 1927: estende all'indietro l'IPAB, che parte dal 2010.
+            'bis_url' => env('FINANCE_BIS_URL', 'https://stats.bis.org/api/v2'),
+            'timeout' => (int) env('FINANCE_ISTAT_TIMEOUT', 60),
+            // Serie trimestrale nella base corrente (105 = base 2025): da cambiare quando ISTAT ribasa.
+            'data_type' => env('FINANCE_ISTAT_IPAB_DATA_TYPE', '105'),
+            // Territori pubblicati: Italia, ripartizioni (Nord-ovest, Nord-est, Centro, Sud e Isole), Torino, Milano, Roma.
+            'areas' => ['IT', 'ITC', 'ITD', 'ITE', 'ITFG', 'ITC11', 'ITC45', 'ITE43'],
         ],
     ],
 

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 
 /**
  * Posizione (holding) su un asset detenuto in un conto di tipo investment.
@@ -77,6 +78,10 @@ class InvestmentHolding extends Model
             if (in_array($holding->asset_type, ['bond', 'certificate'], true) && ! $holding->symbol && $holding->isin) {
                 $holding->symbol = $holding->isin;
             }
+            // Immobili: senza territorio scelto si indicizza sulla media nazionale.
+            if ($holding->asset_type === 'real_estate' && ! $holding->symbol) {
+                $holding->symbol = 'IT';
+            }
         });
     }
 
@@ -126,6 +131,39 @@ class InvestmentHolding extends Model
     public function priceKey(): string
     {
         return InstrumentPrice::key($this->priceProvider(), $this->symbol);
+    }
+
+    /** Le quote di questo holding sono un numero indice da applicare a un valore, non un prezzo. */
+    public function isIndexed(): bool
+    {
+        return $this->asset_type === 'real_estate';
+    }
+
+    /**
+     * Valore indicizzato al $at: l'ancora × indice($at) / indice(data dell'ancora). L'ancora
+     * è la valutazione manuale (`last_price` a `last_price_at`) se non è successiva a $at,
+     * altrimenti il costo ($cost al $costAt, il primo movimento). A differenza delle quote,
+     * qui `last_price` vale anche nel passato: è una stima datata, non un prezzo di oggi.
+     * Null se manca l'indice per una delle due date (serie non ancora scaricata).
+     *
+     * @param  SupportCollection<int, InstrumentPrice>  $index  ordinato per as_of
+     */
+    public function indexedPrice(SupportCollection $index, Carbon $at, float $cost, ?Carbon $costAt): ?float
+    {
+        [$anchor, $anchorAt] = $this->last_price !== null && $this->last_price_at?->lte($at)
+            ? [(float) $this->last_price, $this->last_price_at]
+            : [$cost, $costAt];
+
+        if ($anchorAt === null) {
+            return null;
+        }
+
+        $from = $index->last(fn (InstrumentPrice $p) => $p->as_of->lte($anchorAt));
+        $to = $index->last(fn (InstrumentPrice $p) => $p->as_of->lte($at));
+
+        return $from && $to && (float) $from->price > 0
+            ? $anchor * (float) $to->price / (float) $from->price
+            : null;
     }
 
     /**
