@@ -81,6 +81,8 @@ return [
         'istat' => [
             // Indice dei prezzi delle abitazioni esistenti (IPAB), API SDMX pubblica.
             'url' => env('FINANCE_ISTAT_URL', 'https://esploradati.istat.it/SDMXWS/rest'),
+            // Serie nazionale BIS dal 1927: estende all'indietro l'IPAB, che parte dal 2010.
+            'bis_url' => env('FINANCE_BIS_URL', 'https://stats.bis.org/api/v2'),
             'timeout' => (int) env('FINANCE_ISTAT_TIMEOUT', 60),
             // Serie trimestrale nella base corrente (105 = base 2025): da cambiare quando ISTAT ribasa.
             'data_type' => env('FINANCE_ISTAT_IPAB_DATA_TYPE', '105'),

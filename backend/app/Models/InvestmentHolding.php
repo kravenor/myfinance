@@ -144,7 +144,7 @@ class InvestmentHolding extends Model
      * è la valutazione manuale (`last_price` a `last_price_at`) se non è successiva a $at,
      * altrimenti il costo ($cost al $costAt, il primo movimento). A differenza delle quote,
      * qui `last_price` vale anche nel passato: è una stima datata, non un prezzo di oggi.
-     * Null se manca l'indice per una delle due date (prima del 2010 o serie non scaricata).
+     * Null se manca l'indice per una delle due date (serie non ancora scaricata).
      *
      * @param  SupportCollection<int, InstrumentPrice>  $index  ordinato per as_of
      */

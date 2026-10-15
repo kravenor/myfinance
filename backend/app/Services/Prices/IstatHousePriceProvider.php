@@ -2,6 +2,7 @@
 
 namespace App\Services\Prices;
 
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -13,11 +14,15 @@ use Illuminate\Support\Facades\Http;
  *
  * Ogni chiamata scarica la serie intera dal 2010 (una richiesta per tutti i
  * territori, poche centinaia di righe): così lo storico è sempre completo e le
- * revisioni dei dati provvisori sovrascrivono i valori vecchi.
+ * revisioni dei dati provvisori sovrascrivono i valori vecchi. Prima del 2010
+ * la serie prosegue con l'indice nazionale BIS, vedi backcast().
  */
 class IstatHousePriceProvider implements PriceProvider
 {
     private const DATAFLOW = 'IT1,143_497,1.0';
+
+    /** Prezzi nominali delle abitazioni in Italia, trimestrali dal 1927 (BIS, Selected property prices). */
+    private const BIS_SERIES = 'dataflow/BIS/WS_SPP/1.0/Q.IT.N.628';
 
     public function fetch(array $symbols): array
     {
@@ -40,12 +45,8 @@ class IstatHousePriceProvider implements PriceProvider
             return [];
         }
 
-        $lines = preg_split('/\r?\n/', trim($response->body()));
-        $header = str_getcsv((string) array_shift($lines), escape: '');
-
         $out = [];
-        foreach ($lines as $line) {
-            $row = array_combine($header, array_pad(str_getcsv($line, escape: ''), count($header), ''));
+        foreach ($this->csvRows($response->body()) as $row) {
             $asOf = $this->quarterStart($row['TIME_PERIOD'] ?? '');
             if ($asOf === null || ! is_numeric($row['OBS_VALUE'] ?? null)) {
                 continue;
@@ -59,7 +60,84 @@ class IstatHousePriceProvider implements PriceProvider
             ];
         }
 
+        return $out === [] ? [] : [...$this->backcast($out), ...$out];
+    }
+
+    /**
+     * Trimestri prima del primo dato ISTAT di ogni territorio, dalla serie nazionale BIS
+     * riscalata su quel primo trimestre: la serie resta continua e gli immobili comprati
+     * prima del 2010 si possono indicizzare. Senza BIS la serie parte dal 2010.
+     *
+     * ponytail: prima del 2010 ogni territorio, città comprese, segue la media nazionale.
+     *
+     * @param  list<array{symbol: string, price: float, currency: string, as_of: string}>  $istat
+     * @return list<array{symbol: string, price: float, currency: string, as_of: string}>
+     */
+    private function backcast(array $istat): array
+    {
+        $bis = $this->bisSeries();
+
+        $first = [];
+        foreach ($istat as $row) {
+            if (! isset($first[$row['symbol']]) || $row['as_of'] < $first[$row['symbol']]['as_of']) {
+                $first[$row['symbol']] = $row;
+            }
+        }
+
+        $out = [];
+        foreach ($first as $area => $row) {
+            $base = $bis[$row['as_of']] ?? null;
+            if (! $base) {
+                continue;
+            }
+
+            foreach ($bis as $asOf => $value) {
+                if ($asOf < $row['as_of']) {
+                    $out[] = ['symbol' => $area, 'price' => round($row['price'] * $value / $base, 8), 'currency' => 'XXX', 'as_of' => $asOf];
+                }
+            }
+        }
+
         return $out;
+    }
+
+    /** @return array<string, float> as_of (inizio trimestre) => indice */
+    private function bisSeries(): array
+    {
+        try {
+            $response = Http::timeout((int) config('finance.prices.istat.timeout', 60))
+                ->get(rtrim((string) config('finance.prices.istat.bis_url'), '/').'/data/'.self::BIS_SERIES, ['format' => 'csv']);
+        } catch (ConnectionException $e) {
+            report($e); // la serie ISTAT va salvata comunque
+
+            return [];
+        }
+
+        if ($response->failed()) {
+            return [];
+        }
+
+        $series = [];
+        foreach ($this->csvRows($response->body()) as $row) {
+            $asOf = $this->quarterStart($row['TIME_PERIOD'] ?? '');
+            if ($asOf !== null && is_numeric($row['OBS_VALUE'] ?? null) && (float) $row['OBS_VALUE'] > 0) {
+                $series[$asOf] = (float) $row['OBS_VALUE'];
+            }
+        }
+
+        return $series;
+    }
+
+    /** @return list<array<string, string>> righe di un CSV con intestazione */
+    private function csvRows(string $body): array
+    {
+        $lines = preg_split('/\r?\n/', trim($body));
+        $header = str_getcsv((string) array_shift($lines), escape: '');
+
+        return array_map(
+            fn (string $line) => array_combine($header, array_pad(str_getcsv($line, escape: ''), count($header), '')),
+            array_filter($lines, fn (string $line) => $line !== ''),
+        );
     }
 
     /** "2026-Q2" → "2026-04-01": il trimestre si data al suo primo giorno, vedi InvestmentHolding::indexedPrice(). */
