@@ -91,6 +91,14 @@ class RealEstateTest extends TestCase
             ->assertJsonPath('data.price_source', 'manual');
     }
 
+    public function test_history_without_index_falls_back_to_cost(): void
+    {
+        $this->createProperty();
+
+        $this->getJson('/api/investments/history')->assertOk()
+            ->assertJsonPath('points.0.market_value', '200000.00');
+    }
+
     public function test_history_indexes_cost_until_the_valuation_then_the_valuation(): void
     {
         $this->createProperty(['last_price' => 300000, 'last_price_at' => '2025-08-10']);

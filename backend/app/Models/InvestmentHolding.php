@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection as SupportCollection;
 
 /**
  * Posizione (holding) su un asset detenuto in un conto di tipo investment.
@@ -145,9 +146,9 @@ class InvestmentHolding extends Model
      * qui `last_price` vale anche nel passato: è una stima datata, non un prezzo di oggi.
      * Null se manca l'indice per una delle due date (prima del 2010 o serie non scaricata).
      *
-     * @param  Collection<int, InstrumentPrice>  $index  ordinato per as_of
+     * @param  SupportCollection<int, InstrumentPrice>  $index  ordinato per as_of
      */
-    public function indexedPrice(Collection $index, Carbon $at, float $cost, ?Carbon $costAt): ?float
+    public function indexedPrice(SupportCollection $index, Carbon $at, float $cost, ?Carbon $costAt): ?float
     {
         [$anchor, $anchorAt] = $this->last_price !== null && $this->last_price_at?->lte($at)
             ? [(float) $this->last_price, $this->last_price_at]
