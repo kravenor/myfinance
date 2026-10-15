@@ -50,7 +50,7 @@ class InvestmentHoldingController extends Controller
             // La posizione dichiarata alla creazione entra nel registro come
             // movimento di apertura: da qui in poi la governano i movimenti.
             if ((float) $data['quantity'] > 0) {
-                $this->recalculator->openingMovement($holding, (float) $data['quantity'], (float) $data['avg_cost']);
+                $this->recalculator->openingMovement($holding, (float) $data['quantity'], (float) $data['avg_cost'], $data['opened_at'] ?? null);
             }
 
             return $holding;

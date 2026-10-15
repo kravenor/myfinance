@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\InstrumentPrice;
 use App\Models\InvestmentHolding;
+use App\Models\InvestmentTransaction;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -44,12 +45,22 @@ class InvestmentPriceResolver
             ->get()
             ->groupBy(fn (InstrumentPrice $p) => InstrumentPrice::key($p->provider, $p->symbol));
 
+        $firstMovementAt = $this->firstMovementDates($holdings->filter->isIndexed());
+
         foreach ($holdings as $holding) {
-            $quote = $holding->symbol
-                ? ($quotesBySymbol[$holding->priceKey()] ?? null)?->last()
-                : null;
+            $quotes = $holding->symbol ? ($quotesBySymbol[$holding->priceKey()] ?? null) : null;
+            $quote = $quotes?->last();
 
             if ($quote === null) {
+                continue;
+            }
+
+            if ($holding->isIndexed()) {
+                $price = $holding->indexedPrice($quotes, $asOf, (float) $holding->avg_cost, $firstMovementAt[$holding->id] ?? null);
+                if ($price !== null) {
+                    $holding->usingResolvedPrice($price, $quote->as_of->toDateString());
+                }
+
                 continue;
             }
 
@@ -63,6 +74,27 @@ class InvestmentPriceResolver
                 $quote->as_of->toDateString(),
             );
         }
+    }
+
+    /**
+     * Data del primo movimento per holding, ancora del costo negli holding indicizzati.
+     * Senza scope utente: gli id arrivano dalla collection già filtrata dal chiamante.
+     *
+     * @param  Collection<int, InvestmentHolding>  $holdings
+     * @return Collection<int, Carbon>
+     */
+    private function firstMovementDates(Collection $holdings): Collection
+    {
+        if ($holdings->isEmpty()) {
+            return collect();
+        }
+
+        return InvestmentTransaction::withoutGlobalScopes()
+            ->whereIn('investment_holding_id', $holdings->pluck('id'))
+            ->groupBy('investment_holding_id')
+            ->selectRaw('investment_holding_id, MIN(occurred_at) as first_at')
+            ->pluck('first_at', 'investment_holding_id')
+            ->map(fn (string $at) => Carbon::parse($at));
     }
 
     /**

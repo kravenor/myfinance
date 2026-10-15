@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-12**
+Ultimo aggiornamento: **2026-10-15**
 Fase corrente: **nessuna in corso** — audit di sicurezza chiuso salvo il finding 13; prossimi candidati nella coda «Da fare» di §7
 
 ---
@@ -71,7 +71,7 @@ Finance/
 │   │   └── Resources/          # UserResource + Account/Category/Tag/Transaction/Budget/RecurringTransaction/CategorizationRule/SavingsGoalResource
 │   ├── app/Services/           # RecurringTransactionRunner, CategorizationRuleMatcher, CategorizationRuleApplier, BudgetAlertService, SavingsGoalProgressService, ExchangeRateProvider, CurrencyConverter, ReportService, ExpenseForecastService, InvestmentService, HoldingPositionRecalculator, InvestmentHistoryService, InvestmentPriceFetcher, InvestmentPriceResolver, NotificationScanner, TransactionImportService, TransactionExportService
 │   │   ├── Import/             # ImportReader (abstract) + CsvReader/OfxReader/QifReader + ImportReaderFactory
-│   │   └── Prices/             # PriceProvider (interfaccia) + Yahoo/CoinGecko/BorsaItaliana/TeleborsaProvider + YahooSymbolLookup
+│   │   └── Prices/             # PriceProvider (interfaccia) + Yahoo/CoinGecko/BorsaItaliana/Teleborsa/IstatHousePriceProvider + YahooSymbolLookup
 │   ├── app/Notifications/  # BudgetThresholdNotification, SavingsGoalRiskNotification (+ Contracts/Dedupable)
 │   ├── app/Console/Commands/   # RunRecurringTransactions (`recurring:run`), ApplyCategorizationRules (`rules:apply`), FetchExchangeRates (`exchange-rates:fetch`), FetchInstrumentPrices (`prices:fetch`), BackfillInstrumentPrices (`prices:backfill`), ScanNotifications (`notifications:scan`)
 │   ├── app/Policies/      # OwnedByUserPolicy + per-model policies
@@ -321,6 +321,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Fix** — Ricorrenti nei giorni non lavorativi ([analisi](docs/analysis/RECURRING-BUSINESS-DAYS-ANALYSIS.md)): weekend e festivi nazionali italiani fanno slittare il movimento al primo giorno lavorativo successivo, senza spostare la cadenza; stessa regola in previsioni e report
 - [x] **Fix** — Ricorrenti a fine mese ([analisi](docs/analysis/RECURRING-MONTH-END-ANALYSIS.md)): le cadenze mensile/trimestrale/annuale tornano sul giorno di `starts_on` dopo un mese più corto (31/1 → 28/2 → 31/3); calcolo unico in `App\Support\Cadence`, usato anche dalle voci degli scenari
 - [x] **Estensione** — Stampa dei Report: pulsante «Stampa» in [ReportsView](frontend/src/views/ReportsView.vue) con `window.print()` (PDF via «Salva come PDF» del browser); in stampa intestazione con logo e periodo, totali e grafico entrate/uscite sempre presenti (timeline caricata al clic fuori da «Andamento»), sidebar, header e filtri con `print:hidden`, canvas scalati in `@media print`, tema chiaro forzato in stampa dallo store del tema
+- [x] **Estensione** — Immobili negli investimenti (branch `feat/real-estate`, merge da decidere): `asset_type = 'real_estate'`, valore = costo d'acquisto o ultima valutazione manuale rivalutati con l'indice ISTAT IPAB delle abitazioni esistenti (dettagli in §17)
 
 ### Da fare (coda, non ancora analizzati salvo dove indicato)
 - [ ] **Audit finding 13** — `uncompromised()` sulla password: va deciso, richiede di dichiarare Have I Been Pwned in Privacy e Cookie
@@ -351,7 +352,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `savings_goals` | `name`, `target_amount`, `currency` (default `EUR`), `account_id` (nullable, `nullOnDelete`), `target_date` (nullable), `recurrence` (none/weekly/monthly/yearly), `start_date` (nullable), `color`, `icon`, `status` (active/completed/archived), `notes` — progresso derivato live dalle transazioni del conto, nessun ledger separato |
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
-| `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/certificate/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
+| `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/certificate/real_estate/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
 | `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell/fee: `fee` è un costo puro, quantità e prezzo a 0), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`. Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
 | `investment_holdings` (agg.) | `realized_pl` e `net_invested` `decimal(15,2)`: cache derivate dal registro (P/L chiuso sulle vendite, cassa netta immessa). **Non si scrivono da API**: `quantity` e `avg_cost` sono usciti da `UpdateInvestmentHoldingRequest` |
 | `notifications` | Tabella standard Laravel (`uuid` id, `type`, `notifiable` morph, `data` json, `read_at`). In-app notifications via canale database |
@@ -815,6 +816,13 @@ Ogni scrittura sul registro ricalcola la posizione nella stessa transazione DB. 
 - **Nessuna divisione per 100**: i certificati si quotano in euro per certificato, quindi `quantity` è il numero di certificati e `quantity × price` è già il controvalore.
 - La scheda non espone la valuta: il SeDeX/Cert-X negozia in **EUR**, hardcoded nel provider.
 - Symbol non in forma ISIN → nessuna richiesta. Certificato scaduto/senza scambi → pagina senza `Prezzo di riferimento`, symbol omesso (resta l'ultimo prezzo noto o quello manuale). 1 richiesta per ISIN, ~130 KB di HTML.
+
+### Immobili (indice ISTAT)
+`asset_type = 'real_estate'` → [IstatHousePriceProvider](backend/app/Services/Prices/IstatHousePriceProvider.php): API SDMX pubblica di ISTAT (dataflow `143_497`, serie trimestrale abitazioni esistenti, `data_type` della base corrente in config). Il `symbol` è il **territorio** (`finance.prices.istat.areas`: IT, ripartizioni, Torino, Milano, Roma; vuoto = `IT` via hook `saving`, validato con `Rule::in` nelle Form Request). Ogni `prices:fetch` scarica la serie intera dal 2010 in una richiesta, datando ogni trimestre al suo **primo giorno**; in `instrument_prices` il `price` è il numero indice con valuta `XXX`.
+- [InvestmentHolding::indexedPrice()](backend/app/Models/InvestmentHolding.php): ancora × indice(data) / indice(data dell'ancora). Ancora = `last_price` a `last_price_at` (valutazione manuale) se non successiva alla data, altrimenti il costo al primo movimento. Usata da `InvestmentPriceResolver` (oggi e patrimonio passato dei Report) e da `InvestmentHistoryService`: qui, a differenza delle quote, `last_price` vale anche nel passato perché è una stima datata. Senza indice per una delle due date si ripiega su valutazione e poi costo.
+- `opened_at` facoltativo su `POST /investment-holdings` data il movimento di apertura (prima era sempre oggi): per un immobile è la data d'acquisto da cui parte l'indicizzazione.
+- Avviso quotazioni ferme: per gli indicizzati la soglia è `NotificationScanner::STALE_INDEX_DAYS` (300 giorni), perché l'IPAB esce con circa sei mesi di ritardo.
+- Frontend: con tipo Immobile il form mostra la select del territorio al posto di ticker/ISIN, «Costo d'acquisto», «Data d'acquisto», «Valutazione» con la sua data; il badge del prezzo è `ISTAT · T2 2026`. Il `last_price_at` degli altri tipi ora cambia solo quando cambia il prezzo (prima ogni salvataggio lo riportava a oggi).
 
 - Config [config/finance.php](backend/config/finance.php) sezione `prices`: mappa `asset_type`→provider, URL/timeout per provider, `vs_currency` (CoinGecko). Nessuna API key necessaria (Yahoo è keyless, CoinGecko gira sulla free tier senza key, Borsa Italiana e Teleborsa sono scraping pubblico). Sono **API non ufficiali/free per uso personale/non commerciale** (cfr. [ADR 0001](docs/adr/0001-ordine-autofetch-vs-multitenant.md) per il conflitto licenza↔multi-tenant). Nota storica: EODHD era la scelta iniziale (D2) ma il suo free tier copre **solo i mercati USA** (EU → 404, verificato live), da cui lo switch a Yahoo.
 - Comando `php artisan prices:fetch [--symbol=]`, schedulato giornalmente alle **06:30** in [routes/console.php](backend/routes/console.php).

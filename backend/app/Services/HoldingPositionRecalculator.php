@@ -109,11 +109,11 @@ class HoldingPositionRecalculator
     }
 
     /** Registra il movimento di apertura di un holding creato con una posizione già in essere. */
-    public function openingMovement(InvestmentHolding $holding, float $quantity, float $avgCost): void
+    public function openingMovement(InvestmentHolding $holding, float $quantity, float $avgCost, ?string $occurredAt = null): void
     {
         $holding->transactions()->create([
             'side' => 'buy',
-            'occurred_at' => $holding->created_at?->toDateString() ?? now()->toDateString(),
+            'occurred_at' => $occurredAt ?? $holding->created_at?->toDateString() ?? now()->toDateString(),
             'quantity' => $quantity,
             'price' => $avgCost,
             'fees' => 0,

@@ -22,6 +22,9 @@ class NotificationScanner
     /** Giorni senza quotazioni dopo i quali uno strumento in portafoglio è «fermo». */
     public const STALE_PRICE_DAYS = 7;
 
+    /** IPAB trimestrale datato a inizio trimestre e pubblicato quasi sei mesi dopo: fino a ~260 giorni è normale. */
+    public const STALE_INDEX_DAYS = 300;
+
     /** Il riepilogo del mese chiuso si manda solo nei primi giorni del mese nuovo. */
     public const MONTHLY_SUMMARY_DAYS = 7;
 
@@ -108,10 +111,10 @@ class NotificationScanner
             ->get()
             ->mapWithKeys(fn (object $row) => [InstrumentPrice::key($row->provider, $row->symbol) => $row->last_as_of]);
 
-        $limit = $now->copy()->subDays(self::STALE_PRICE_DAYS)->startOfDay();
         $sent = 0;
 
         foreach ($holdings as $holding) {
+            $limit = $now->copy()->subDays($holding->isIndexed() ? self::STALE_INDEX_DAYS : self::STALE_PRICE_DAYS)->startOfDay();
             $last = $lastQuote[$holding->priceKey()] ?? null;
             $lastAsOf = $last !== null ? Carbon::parse($last)->toDateString() : null;
             // Uno strumento appena creato non è «fermo»: si conta dalla sua creazione.

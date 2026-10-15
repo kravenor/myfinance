@@ -8,6 +8,7 @@ use App\Models\InvestmentTransaction;
 use App\Services\Prices\BorsaItalianaProvider;
 use App\Services\Prices\CoinGeckoProvider;
 use App\Services\Prices\HistoricalPriceProvider;
+use App\Services\Prices\IstatHousePriceProvider;
 use App\Services\Prices\PriceProvider;
 use App\Services\Prices\TeleborsaProvider;
 use App\Services\Prices\YahooFinanceProvider;
@@ -73,7 +74,7 @@ class InvestmentPriceFetcher
         foreach ($this->symbolsByProvider($only) as $providerKey => $symbols) {
             $provider = $this->provider($providerKey);
             if (! $provider instanceof HistoricalPriceProvider) {
-                continue; // Borsa Italiana, Teleborsa, CoinGecko: nessuno storico
+                continue; // Borsa Italiana, Teleborsa, CoinGecko: nessuno storico; ISTAT lo scarica già in fetch()
             }
 
             foreach ($symbols as $symbol) {
@@ -139,6 +140,7 @@ class InvestmentPriceFetcher
             'coingecko' => app(CoinGeckoProvider::class),
             'borsaitaliana' => app(BorsaItalianaProvider::class),
             'teleborsa' => app(TeleborsaProvider::class),
+            'istat' => app(IstatHousePriceProvider::class),
             default => throw new RuntimeException("Provider quotazioni sconosciuto: {$key}"),
         };
     }
