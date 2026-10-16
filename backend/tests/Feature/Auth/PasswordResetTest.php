@@ -56,6 +56,25 @@ class PasswordResetTest extends TestCase
         $this->assertTrue(Hash::check('new-password-123', $user->fresh()->password));
     }
 
+    public function test_reset_password_revokes_channels_linked_before(): void
+    {
+        // Chi ha registrato l'indirizzo senza possederlo ha collegato il suo browser e la sua email.
+        $user = User::factory()->create(['notification_preferences' => ['email_address' => 'attacker@example.test', 'budget' => false]]);
+        $user->updatePushSubscription('https://fcm.googleapis.com/fcm/send/attacker-device', 'k', 'a');
+
+        $this->postJson('/api/auth/reset-password', [
+            'token' => Password::createToken($user),
+            'email' => $user->email,
+            'password' => 'new-password-123',
+            'password_confirmation' => 'new-password-123',
+        ])->assertOk();
+
+        $user = $user->fresh();
+        $this->assertSame(0, $user->pushSubscriptions()->count());
+        $this->assertSame($user->email, $user->routeNotificationForMail());
+        $this->assertFalse($user->notificationPreference('budget')); // le altre preferenze restano
+    }
+
     public function test_reset_password_with_invalid_token_fails(): void
     {
         $user = User::factory()->create();
