@@ -3,8 +3,8 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-12**
-Fase corrente: **nessuna in corso** — audit di sicurezza chiuso salvo il finding 13; prossimi candidati nella coda «Da fare» di §7
+Ultimo aggiornamento: **2026-10-16**
+Fase corrente: **nessuna in corso** — secondo audit di sicurezza chiuso (fix mergiati, 5 ipotesi da validare); prossimi candidati nella coda «Da fare» di §7
 
 ---
 
@@ -322,7 +322,11 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - [x] **Fix** — Ricorrenti a fine mese ([analisi](docs/analysis/RECURRING-MONTH-END-ANALYSIS.md)): le cadenze mensile/trimestrale/annuale tornano sul giorno di `starts_on` dopo un mese più corto (31/1 → 28/2 → 31/3); calcolo unico in `App\Support\Cadence`, usato anche dalle voci degli scenari
 - [x] **Estensione** — Stampa dei Report: pulsante «Stampa» in [ReportsView](frontend/src/views/ReportsView.vue) con `window.print()` (PDF via «Salva come PDF» del browser); in stampa intestazione con logo e periodo, totali e grafico entrate/uscite sempre presenti (timeline caricata al clic fuori da «Andamento»), sidebar, header e filtri con `print:hidden`, canvas scalati in `@media print`, tema chiaro forzato in stampa dallo store del tema
 
+- [x] **Secondo audit di sicurezza** (2026-10-16, intero repository su `2dfddcb`, verifiche solo sul sorgente e in sandbox offline): nessun finding critico o alto, 8 confermati e corretti in PR singole (#95-#102). Medium: una ricorrente in errore non ferma più `recurring:run` per gli altri utenti (`try/catch` per ricorrente); regex delle regole con `pcre.backtrack_limit` 10.000 e massimo 50 per utente; movimenti di investimento dal 1970 in poi e massimo 200 strumenti per utente (storico mensile). Low: `throttle:5,1` su `PUT notification-preferences` (verifica `current_password`); `App\Support\MailText::escape` sulle righe email con testo salvato (un `\[` riapriva i link markdown); il reset password elimina le push e l'indirizzo di notifica collegati prima (account registrato da altri); `restore.sh` azzera `remember_token`, `sessions` e il DB Redis di default; `FINANCE_REGISTRATION` chiusa se manca. Rivalidati i fix del primo audit: tengono. `composer audit` e `npm audit --omit=dev` puliti; `npm audit` completo segnala 6 advisory solo in devDependencies (braces via Tailwind 3 e `@vue/eslint-config-typescript`, input solo dalle configurazioni del repo), senza fix se non passando a Tailwind 4
 ### Da fare (coda, non ancora analizzati salvo dove indicato)
+- [ ] **Audit 2026-10-16, da validare** — ipotesi senza conferma: push non revocata al logout (né il client né `AuthController::logout` cancellano la subscription); compose di sviluppo con MySQL e nginx su tutte le interfacce e credenziali di default; formule CSV dopo un `;` (Excel italiano); collation `utf8mb4_unicode_ci` sui simboli contro la chiave PHP case-sensitive dei prezzi condivisi; richieste notturne ai provider proporzionali ai simboli di tutti gli utenti. Primo restore reale di `restore.sh` da provare su uno stack di sviluppo
+- [ ] **Tailwind 4** — migrazione (config CSS-first): chiude gli advisory dev su braces/chokidar e permette di togliere l'override di `postcss-selector-parser`
+- [ ] **`LoginTest` instabile** — `login is limited per email across ips` fallisce su macchine lente («14 minuti» invece di 15): fissare il tempo con `Carbon::setTestNow()`
 - [ ] **Audit finding 13** — `uncompromised()` sulla password: va deciso, richiede di dichiarare Have I Been Pwned in Privacy e Cookie
 - [ ] **Riconciliazione conto** — branch `feat/riconciliazione` (fermo al 2026-09-03, non mergiato): decidere se riprenderlo o scartarlo
 - [ ] **Multitenant / workspace condivisi** — [analisi](docs/analysis/MULTITENANT_ANALYSIS.md) pronta, nessuna implementazione
