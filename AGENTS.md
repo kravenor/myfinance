@@ -376,7 +376,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | Metodo | Path | Middleware | Note |
 |--------|------|------------|------|
 | GET | `/sanctum/csrf-cookie` | — | Pre-flight CSRF (gestito da Sanctum) |
-| GET | `/api/auth/registration` | — | `{enabled}`: stato del flag `finance.registration` (env `FINANCE_REGISTRATION`, default true); il frontend nasconde il link «Registrati» e il form |
+| GET | `/api/auth/registration` | — | `{enabled}`: stato del flag `finance.registration` (env `FINANCE_REGISTRATION`, default false; `true` nel template di sviluppo); il frontend nasconde il link «Registrati» e il form |
 | POST | `/api/auth/register` | — | Crea utente, esegue `CategorySeeder::seedFor`, fa login, ritorna `UserResource` (201). Con `FINANCE_REGISTRATION=false` → 403 «Registrazione disattivata.», controllato in `RegisterRequest::authorize()` prima della validazione (niente `unique:users` che riveli le email esistenti) |
 | POST | `/api/auth/login` | — | Throttle 5 tentativi/IP+email al minuto e 10 per sola email in 15 minuti (brute force da più IP), ritorna `UserResource`. `remember` (bool, opzionale) attiva il recaller cookie di Laravel: alla scadenza della sessione l'utente viene ri-autenticato senza reinserire la password |
 | POST | `/api/auth/forgot-password` | `throttle:5,1` | Invia link reset (Password broker). Risposta sempre `passwords.sent`, anche per email inesistente o in throttle del broker (no enumeration), 200 |
@@ -623,7 +623,7 @@ Lato applicazione serve una cosa sola, già configurata: `trustProxies` in [boot
     # SSLCertificateFile/KeyFile: gestiti da certbot
 </VirtualHost>
 ```
-Header di sicurezza: HSTS qui (chi termina il TLS), CSP (`script-src 'self'`: niente script inline in `index.html`, vanno in `frontend/public/`), `nosniff` e `Referrer-Policy` in [prod.conf](docker/nginx/prod.conf) (una location con un proprio `add_header` non li eredita: ripeterli). In `.env.production` `FINANCE_REGISTRATION=false` dopo aver creato il proprio utente. Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
+Header di sicurezza: HSTS qui (chi termina il TLS), CSP (`script-src 'self'`: niente script inline in `index.html`, vanno in `frontend/public/`), `nosniff` e `Referrer-Policy` in [prod.conf](docker/nginx/prod.conf) (una location con un proprio `add_header` non li eredita: ripeterli). Registrazione chiusa di default (`FINANCE_REGISTRATION` mancante = false): per creare il proprio utente metterla a `true` in `.env.production`, registrarsi, poi rimetterla a `false` (aperta, il form rivela quali email hanno un account). Richiede `a2enmod proxy proxy_http headers ssl`; certificato con `certbot --apache -d finance.example.com` (rinnovo automatico via timer systemd). Il vhost `:80` fa solo redirect a `:443`. In `.env.production`: `APP_URL`/`FRONTEND_URL` in `https://`, `SESSION_SECURE_COOKIE=true` (già nel template).
 
 **Raspberry Pi (Traefik, LAN)** — l'impianto è nel repo `infra` fuori da qui: aggiungere l'entrypoint `:443` e, non essendo `*.pi.lan` risolvibile da Let's Encrypt, un certificato self-signed (o una CA locale da installare sui client). Finché resta in LAN, HTTP + `SESSION_SECURE_COOKIE=false` è la config supportata.
 

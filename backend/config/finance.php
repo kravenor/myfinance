@@ -15,10 +15,11 @@ return [
     |--------------------------------------------------------------------------
     | Registrazione
     |--------------------------------------------------------------------------
-    | Con false nessuno può creare nuovi account (403). Su un'istanza personale
-    | esposta su internet va spenta dopo aver creato il proprio utente.
+    | Con false nessuno può creare nuovi account (403). Chiusa se la variabile
+    | manca: aperta, il form rivela quali email hanno già un account. Su
+    | un'istanza personale si apre solo per creare il proprio utente.
     */
-    'registration' => (bool) env('FINANCE_REGISTRATION', true),
+    'registration' => (bool) env('FINANCE_REGISTRATION', false),
 
     /*
     |--------------------------------------------------------------------------
