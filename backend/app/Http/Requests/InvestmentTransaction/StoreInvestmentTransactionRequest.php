@@ -29,7 +29,8 @@ class StoreInvestmentTransactionRequest extends FormRequest
 
         return [
             'side' => ['required', Rule::in(['buy', 'sell', 'fee'])],
-            'occurred_at' => ['required', 'date'],
+            // Limite inferiore: lo storico mensile itera dal primo movimento a oggi.
+            'occurred_at' => ['required', 'date', 'after_or_equal:1970-01-01'],
             'quantity' => ['required', 'numeric', $isFee ? 'in:0' : 'gt:0', 'between:0,9999999999999.99999999'],
             'price' => ['required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
             'fees' => [$isFee ? 'required' : 'sometimes', 'numeric', $isFee ? 'gt:0' : 'min:0', 'max:9999999999999.99'],

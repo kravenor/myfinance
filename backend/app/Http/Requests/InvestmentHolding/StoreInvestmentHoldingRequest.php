@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\InvestmentHolding;
 
+use App\Models\InvestmentHolding;
+use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -39,6 +41,15 @@ class StoreInvestmentHoldingRequest extends FormRequest
             'last_price_at' => ['nullable', 'date'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $v) {
+            if (InvestmentHolding::query()->count() >= InvestmentHolding::MAX_PER_USER) {
+                $v->errors()->add('holdings', 'Puoi avere al massimo '.InvestmentHolding::MAX_PER_USER.' strumenti.');
+            }
+        });
     }
 
     protected function prepareForValidation(): void

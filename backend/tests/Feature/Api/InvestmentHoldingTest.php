@@ -46,6 +46,24 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.price_as_of', null);
     }
 
+    public function test_holdings_are_capped_per_user(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+        InvestmentHolding::factory()->for($user)->count(InvestmentHolding::MAX_PER_USER)->create(['account_id' => $account->id]);
+
+        $this->actingAs($user)->postJson('/api/investment-holdings', [
+            'account_id' => $account->id, 'name' => 'Uno di troppo', 'asset_type' => 'etf', 'quantity' => 0, 'avg_cost' => 0,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['holdings']);
+
+        // Il tetto è per utente.
+        $other = User::factory()->create();
+        $otherAccount = Account::factory()->for($other)->create(['type' => 'investment', 'currency' => 'EUR']);
+        $this->actingAs($other)->postJson('/api/investment-holdings', [
+            'account_id' => $otherAccount->id, 'name' => 'Primo', 'asset_type' => 'etf', 'quantity' => 0, 'avg_cost' => 0,
+        ])->assertCreated();
+    }
+
     public function test_bond_uses_isin_as_symbol_when_symbol_is_empty(): void
     {
         $user = User::factory()->create();
