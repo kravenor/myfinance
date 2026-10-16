@@ -47,6 +47,12 @@ class UpdateCategorizationRuleRequest extends FormRequest
             if ($matchType !== 'regex') {
                 return;
             }
+            if ($rule->match_type !== 'regex'
+                && CategorizationRule::query()->where('match_type', 'regex')->count() >= CategorizationRule::MAX_REGEX_RULES) {
+                $v->errors()->add('match_type', 'Puoi avere al massimo '.CategorizationRule::MAX_REGEX_RULES.' regole con espressione regolare.');
+
+                return;
+            }
             $pattern = (string) $this->input('pattern', $rule->pattern);
             if ($pattern === '') {
                 return;

@@ -25,6 +25,9 @@ class CategorizationRule extends Model
 {
     use BelongsToUser, HasFactory;
 
+    /** Regole regex per utente: ognuna gira su ogni transazione importata o riapplicata. */
+    public const MAX_REGEX_RULES = 50;
+
     protected $fillable = [
         'user_id',
         'category_id',
