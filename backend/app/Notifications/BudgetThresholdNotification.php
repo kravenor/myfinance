@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
+use App\Support\MailText;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -54,7 +55,7 @@ class BudgetThresholdNotification extends Notification implements Dedupable, Sho
         return (new MailMessage)
             ->subject("Budget {$verb}: {$category}")
             ->greeting('Avviso budget')
-            ->line("Il budget per «{$category}» è {$verb}.")
+            ->line('Il budget per «'.MailText::escape($category)."» è {$verb}.")
             ->line("Spesi {$a['spent']} su {$a['amount']} ({$a['percent']}%).")
             ->action('Vai ai budget', url('/budgets'));
     }

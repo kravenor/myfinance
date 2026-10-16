@@ -5,6 +5,7 @@ namespace App\Notifications;
 use App\Models\SavingsGoal;
 use App\Notifications\Concerns\ChannelsFromPreferences;
 use App\Notifications\Contracts\Dedupable;
+use App\Support\MailText;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -48,7 +49,7 @@ class SavingsGoalRiskNotification extends Notification implements Dedupable, Sho
         return (new MailMessage)
             ->subject($this->headline())
             ->greeting('Obiettivo di risparmio')
-            ->line($this->detail())
+            ->line(MailText::escape($this->detail()))
             ->action('Vai agli obiettivi', url('/savings-goals'));
     }
 
