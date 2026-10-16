@@ -39,8 +39,16 @@ class RecurringTransactionRunner
 
         $created = 0;
 
+        // Le ricorrenti di tutti gli utenti girano nello stesso ciclo: un errore su una
+        // (es. importo convertito fuori dalla precisione della colonna) va registrato e
+        // saltato, altrimenti ferma ogni notte le ricorrenti degli altri. La sua
+        // transazione è già annullata e next_run_at resta fermo: riprova al run successivo.
         foreach ($recurrings as $recurring) {
-            $created += $this->process($recurring, $until);
+            try {
+                $created += $this->process($recurring, $until);
+            } catch (\Throwable $e) {
+                report($e);
+            }
         }
 
         return $created;
