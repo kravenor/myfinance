@@ -50,8 +50,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('notification-preferences', [NotificationPreferenceController::class, 'show'])->name('notification-preferences.show');
     Route::post('notification-preferences/test-email', [NotificationPreferenceController::class, 'testEmail'])
         ->middleware('throttle:5,1')->name('notification-preferences.test-email');
+    // Verifica la password attuale quando cambia l'indirizzo: stesso limite delle rotte sopra.
     Route::put('notification-preferences', [NotificationPreferenceController::class, 'update'])->name('notification-preferences.update')
-        ->middleware(ScanNotificationsAfterWrite::class);
+        ->middleware(['throttle:5,1', ScanNotificationsAfterWrite::class]);
 
     Route::get('push-subscriptions/key', [PushSubscriptionController::class, 'key'])->name('push-subscriptions.key');
     Route::post('push-subscriptions', [PushSubscriptionController::class, 'store'])->name('push-subscriptions.store');
