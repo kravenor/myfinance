@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\RecurringTransactionRunner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class RecurringTransactionRunnerTest extends TestCase
@@ -44,6 +45,27 @@ class RecurringTransactionRunnerTest extends TestCase
         $this->assertSame('2026-02-01', $recurring->fresh()->next_run_at->toDateString());
         $this->assertSame('2026-01-02', $recurring->fresh()->last_run_at->toDateString());
         $this->assertTrue($recurring->fresh()->is_active);
+    }
+
+    public function test_a_failing_recurring_does_not_stop_the_others(): void
+    {
+        $attacker = User::factory()->create();
+        $broken = RecurringTransaction::factory()->for($attacker)->for(Account::factory()->for($attacker), 'account')->create([
+            'cadence' => 'monthly', 'interval' => 1, 'starts_on' => '2026-01-01', 'next_run_at' => '2026-01-01',
+        ]);
+        $victim = User::factory()->create();
+        $ok = RecurringTransaction::factory()->for($victim)->for(Account::factory()->for($victim), 'account')->create([
+            'cadence' => 'monthly', 'interval' => 1, 'starts_on' => '2026-01-01', 'next_run_at' => '2026-01-01',
+        ]);
+        // Emula l'errore di MySQL strict su un valore fuori range per la prima ricorrente.
+        DB::statement("CREATE TRIGGER fail_one BEFORE INSERT ON transactions WHEN NEW.recurring_transaction_id = {$broken->id} BEGIN SELECT RAISE(ABORT, 'Out of range value'); END");
+
+        $count = app(RecurringTransactionRunner::class)->run(Carbon::parse('2026-01-15'));
+
+        $this->assertSame(1, $count);
+        $this->assertDatabaseHas('transactions', ['recurring_transaction_id' => $ok->id]);
+        $this->assertDatabaseMissing('transactions', ['recurring_transaction_id' => $broken->id]);
+        $this->assertSame('2026-01-01', $broken->fresh()->next_run_at->toDateString());
     }
 
     public function test_creates_multiple_transactions_for_backlog(): void
