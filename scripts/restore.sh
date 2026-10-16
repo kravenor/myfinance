@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Ripristina un dump prodotto da scripts/backup.sh.
-# DISTRUTTIVO: sovrascrive le tabelle del database corrente.
+# DISTRUTTIVO: sovrascrive le tabelle del database corrente, poi chiude tutte le
+# sessioni (anche i cookie «Ricordami») e svuota il DB Redis di sessioni e code.
 #
 #   ./scripts/restore.sh backups/finance-20260903-030000.sql.gz [-y]
 #
@@ -25,4 +26,21 @@ fi
 gzip -dc "$FILE" | docker compose exec -T mysql sh -c \
     'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$MYSQL_DATABASE"'
 
+# Il dump riporta password, remember_token e 2FA di quando è stato fatto: senza questo
+# passo un «Esci dagli altri dispositivi» o un cambio password successivi al dump
+# verrebbero annullati e un cookie «Ricordami» o una sessione rubati tornerebbero validi.
+docker compose exec -T mysql sh -c \
+    'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysql -uroot "$MYSQL_DATABASE" -e "UPDATE users SET remember_token = NULL; DELETE FROM sessions;"'
+# Con SESSION_DRIVER=redis le sessioni stanno nella connessione Redis di default
+# (REDIS_DB), la stessa delle code: si svuota tutto il DB. I job in coda persi puntano
+# comunque a righe di prima del restore.
+docker compose exec -T php sh -c 'printf "%s\n%s\n" "${REDIS_DB:-0}" "${REDIS_PASSWORD:-}"' | {
+    read -r REDIS_DB
+    read -r REDIS_PASSWORD || true
+    [ "$REDIS_PASSWORD" = "null" ] && REDIS_PASSWORD=
+    docker compose exec -T -e REDISCLI_AUTH="$REDIS_PASSWORD" redis redis-cli -n "$REDIS_DB" FLUSHDB > /dev/null
+}
+
 echo "✓ database ripristinato da $FILE"
+echo "! sessioni e cookie «Ricordami» invalidati: tutti gli utenti devono rifare l'accesso." >&2
+echo "! cambi di password, 2FA ed «Esci dagli altri dispositivi» fatti dopo il dump sono persi: avvisa gli utenti." >&2

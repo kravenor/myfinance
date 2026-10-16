@@ -630,7 +630,7 @@ Header di sicurezza: HSTS qui (chi termina il TLS), CSP (`script-src 'self'`: ni
 ### Backup
 [scripts/backup.sh](scripts/backup.sh) — `mysqldump --single-transaction` gzippato in `backups/` (gitignored), nome `finance-YYYYMMDD-HHMMSS.sql.gz`, retention `BACKUP_KEEP_DAYS` (default 14). Le credenziali sono lette dall'env del container (`MYSQL_PWD`), non passano dalla riga di comando dell'host. Il dump viene scritto in `.part` e promosso solo se termina con `-- Dump completed`: un file troncato non sostituisce mai un backup valido, e lo script esce **1** (niente `.part` residuo).
 
-[scripts/restore.sh](scripts/restore.sh) — ripristino dal dump, con conferma esplicita (`-y` per saltarla in automatismi).
+[scripts/restore.sh](scripts/restore.sh) — ripristino dal dump, con conferma esplicita (`-y` per saltarla in automatismi). Dopo l'import azzera `remember_token`, svuota la tabella `sessions` e il DB Redis di default (`REDIS_DB`: sessioni e code): il dump riporta password e token di quando è stato fatto, e senza questo passo un «Esci dagli altri dispositivi» successivo al dump verrebbe annullato. Tutti devono rifare l'accesso.
 
 ```bash
 make backup                                     # stack di sviluppo
