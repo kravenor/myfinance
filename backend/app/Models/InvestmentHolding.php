@@ -40,6 +40,9 @@ class InvestmentHolding extends Model
 {
     use BelongsToUser, HasFactory;
 
+    /** Strumenti per utente: lo storico mensile e le quotazioni notturne lavorano su ognuno. */
+    public const MAX_PER_USER = 200;
+
     protected $fillable = [
         'user_id',
         'account_id',
