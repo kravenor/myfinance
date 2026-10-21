@@ -59,7 +59,8 @@ class InvestmentPriceFetcher
             ->whereNotNull('investment_holdings.symbol')
             ->groupBy('investment_holdings.symbol')
             ->selectRaw('investment_holdings.symbol as symbol, MIN(investment_transactions.occurred_at) as first_at')
-            ->pluck('first_at', 'symbol');
+            ->pluck('first_at', 'symbol')
+            ->mapWithKeys(fn (string $firstAt, string $symbol) => [mb_strtolower($symbol) => $firstAt]);
 
         $firstQuote = InstrumentPrice::query()->toBase()
             ->groupBy('provider', 'symbol')
@@ -77,10 +78,11 @@ class InvestmentPriceFetcher
             }
 
             foreach ($symbols as $symbol) {
-                if (! isset($firstMovement[$symbol])) {
+                $first = $firstMovement[mb_strtolower($symbol)] ?? null;
+                if ($first === null) {
                     continue;
                 }
-                $from = Carbon::parse($firstMovement[$symbol])->startOfMonth();
+                $from = Carbon::parse($first)->startOfMonth();
                 $firstAt = $firstQuote[InstrumentPrice::key($providerKey, $symbol)] ?? null;
                 $covered = $firstAt !== null && Carbon::parse($firstAt)->lte($from->copy()->endOfMonth());
                 if ($covered && ! $force) {
