@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/lib/api'
+import { disablePush } from '@/lib/push'
 import type { User } from '@/types/api'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -74,6 +75,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function logout(): Promise<void> {
     try {
+      // Su un dispositivo condiviso le notifiche dell'utente uscito continuerebbero ad arrivare.
+      await disablePush().catch(() => {})
       await api.post('/auth/logout')
     } finally {
       user.value = null
