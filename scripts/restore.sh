@@ -38,7 +38,9 @@ docker compose exec -T php sh -c 'printf "%s\n%s\n" "${REDIS_DB:-0}" "${REDIS_PA
     read -r REDIS_DB
     read -r REDIS_PASSWORD || true
     [ "$REDIS_PASSWORD" = "null" ] && REDIS_PASSWORD=
-    docker compose exec -T -e REDISCLI_AUTH="$REDIS_PASSWORD" redis redis-cli -n "$REDIS_DB" FLUSHDB > /dev/null
+    # Anche vuota, REDISCLI_AUTH fa mandare un AUTH che fallisce su Redis senza password.
+    if [ -n "$REDIS_PASSWORD" ]; then set -- -e REDISCLI_AUTH="$REDIS_PASSWORD"; else set --; fi
+    docker compose exec -T "$@" redis redis-cli -n "$REDIS_DB" FLUSHDB > /dev/null
 }
 
 echo "✓ database ripristinato da $FILE"
