@@ -462,7 +462,7 @@ onMounted(async () => {
           </div>
           <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
             <p v-if="lookupError" class="text-sm text-danger-600">{{ lookupError }}</p>
-            <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
+            <ul v-else class="border border-slate-200 rounded-sm divide-y divide-slate-100 text-sm">
               <li
                 v-for="c in lookupResults"
                 :key="c.symbol"
@@ -519,7 +519,7 @@ onMounted(async () => {
             <p id="hint-avg-cost" class="field-hint">Prezzo medio pagato per quota, commissioni comprese.</p>
             <FieldError :errors="fieldErrors" name="avg_cost" />
           </div>
-          <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
+          <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded-sm p-3">
             Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
           </div>
           <div>

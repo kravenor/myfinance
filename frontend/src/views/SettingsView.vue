@@ -239,7 +239,7 @@ onMounted(async () => {
         </div>
 
         <div v-if="loading" class="space-y-3" aria-busy="true" aria-label="Caricamento">
-          <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded bg-slate-100" />
+          <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-sm bg-slate-100" />
         </div>
 
         <template v-else>

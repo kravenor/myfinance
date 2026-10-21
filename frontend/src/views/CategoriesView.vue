@@ -156,7 +156,7 @@ onMounted(() => list({ per_page: 200 }))
             </button>
             <RowActions @edit="startEdit(node.category)" @delete="onDelete(node.category)" />
           </div>
-          <ul v-if="node.children.length" class="ml-[1.375rem] border-l border-slate-200">
+          <ul v-if="node.children.length" class="ml-5.5 border-l border-slate-200">
             <li v-for="child in node.children" :key="child.id" class="flex items-center gap-3 py-2 pl-5 pr-4">
               <span class="h-2 w-2 shrink-0 rounded-full" :style="{ background: colorOf(child) }" aria-hidden="true" />
               <p class="min-w-0 flex-1 truncate text-sm text-slate-700">{{ child.name }}</p>
@@ -212,7 +212,7 @@ onMounted(() => list({ per_page: 200 }))
             <legend class="label">Colore</legend>
             <div class="flex flex-wrap gap-2">
               <label
-                class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 text-xs text-slate-500 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500"
+                class="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border-2 text-xs text-slate-500 has-focus-visible:ring-2 has-focus-visible:ring-primary-500"
                 :class="form.color === null ? 'border-primary-500' : 'border-slate-200'"
                 title="Nessuno"
               >
@@ -222,7 +222,7 @@ onMounted(() => list({ per_page: 200 }))
               <label
                 v-for="c in CATEGORY_PALETTE"
                 :key="c"
-                class="h-9 w-9 cursor-pointer rounded-full ring-offset-2 ring-offset-surface has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary-500"
+                class="h-9 w-9 cursor-pointer rounded-full ring-offset-2 ring-offset-surface has-focus-visible:ring-2 has-focus-visible:ring-primary-500"
                 :class="form.color === c ? 'ring-2 ring-slate-900' : ''"
                 :style="{ background: c }"
               >
