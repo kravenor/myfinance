@@ -154,7 +154,7 @@ function download() {
       <img
         :src="qrSrc"
         alt="QR code da inquadrare con l'app di autenticazione"
-        class="h-48 w-48 rounded bg-white p-1"
+        class="h-48 w-48 rounded-sm bg-white p-1"
       />
       <div>
         <p class="text-sm text-slate-500">Non riesci a inquadrarlo? Inserisci a mano questa chiave:</p>

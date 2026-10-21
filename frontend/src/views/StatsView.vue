@@ -242,7 +242,7 @@ onMounted(refresh)
       </div>
       <div class="h-64 sm:h-80">
         <Line v-if="trend && trend.categories.length" :data="trendData" :options="chartOptions" />
-        <div v-else-if="loading && !trend" class="h-full animate-pulse rounded bg-slate-100" />
+        <div v-else-if="loading && !trend" class="h-full animate-pulse rounded-sm bg-slate-100" />
         <EmptyState
           v-else
           :title="trendType === 'expense' ? 'Nessuna spesa negli ultimi 12 mesi.' : 'Nessuna entrata negli ultimi 12 mesi.'"
@@ -272,7 +272,7 @@ onMounted(refresh)
       </div>
       <div class="h-64 sm:h-80">
         <Line v-if="forecast.length" :data="forecastData" :options="forecastOptions" />
-        <div v-else-if="loading" class="h-full animate-pulse rounded bg-slate-100" />
+        <div v-else-if="loading" class="h-full animate-pulse rounded-sm bg-slate-100" />
         <EmptyState v-else title="Nessuna ricorrente attiva per la proiezione." />
       </div>
       <p class="text-xs text-slate-500 mt-2">

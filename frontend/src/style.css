@@ -1,6 +1,111 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+/* Palette semantica: punta alle variabili di theme.css, invertite da :root.dark. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-slate-50: rgb(var(--c-slate-50));
+  --color-slate-100: rgb(var(--c-slate-100));
+  --color-slate-200: rgb(var(--c-slate-200));
+  --color-slate-300: rgb(var(--c-slate-300));
+  --color-slate-400: rgb(var(--c-slate-400));
+  --color-slate-500: rgb(var(--c-slate-500));
+  --color-slate-600: rgb(var(--c-slate-600));
+  --color-slate-700: rgb(var(--c-slate-700));
+  --color-slate-800: rgb(var(--c-slate-800));
+  --color-slate-900: rgb(var(--c-slate-900));
+  --color-slate-950: rgb(var(--c-slate-950));
+
+  --color-surface: rgb(var(--c-surface));
+
+  --color-primary-50: rgb(var(--c-primary-50));
+  --color-primary-100: rgb(var(--c-primary-100));
+  --color-primary-200: rgb(var(--c-primary-200));
+  --color-primary-300: rgb(var(--c-primary-300));
+  --color-primary-400: rgb(var(--c-primary-400));
+  --color-primary-500: rgb(var(--c-primary-500));
+  --color-primary-600: rgb(var(--c-primary-600));
+  --color-primary-700: rgb(var(--c-primary-700));
+  --color-primary-800: rgb(var(--c-primary-800));
+  --color-primary-900: rgb(var(--c-primary-900));
+  --color-primary-950: rgb(var(--c-primary-950));
+
+  --color-income-50: rgb(var(--c-income-50));
+  --color-income-100: rgb(var(--c-income-100));
+  --color-income-200: rgb(var(--c-income-200));
+  --color-income-300: rgb(var(--c-income-300));
+  --color-income-400: rgb(var(--c-income-400));
+  --color-income-500: rgb(var(--c-income-500));
+  --color-income-600: rgb(var(--c-income-600));
+  --color-income-700: rgb(var(--c-income-700));
+  --color-income-800: rgb(var(--c-income-800));
+  --color-income-900: rgb(var(--c-income-900));
+  --color-income-950: rgb(var(--c-income-950));
+
+  --color-expense-50: rgb(var(--c-expense-50));
+  --color-expense-100: rgb(var(--c-expense-100));
+  --color-expense-200: rgb(var(--c-expense-200));
+  --color-expense-300: rgb(var(--c-expense-300));
+  --color-expense-400: rgb(var(--c-expense-400));
+  --color-expense-500: rgb(var(--c-expense-500));
+  --color-expense-600: rgb(var(--c-expense-600));
+  --color-expense-700: rgb(var(--c-expense-700));
+  --color-expense-800: rgb(var(--c-expense-800));
+  --color-expense-900: rgb(var(--c-expense-900));
+  --color-expense-950: rgb(var(--c-expense-950));
+
+  --color-transfer-50: rgb(var(--c-transfer-50));
+  --color-transfer-100: rgb(var(--c-transfer-100));
+  --color-transfer-200: rgb(var(--c-transfer-200));
+  --color-transfer-300: rgb(var(--c-transfer-300));
+  --color-transfer-400: rgb(var(--c-transfer-400));
+  --color-transfer-500: rgb(var(--c-transfer-500));
+  --color-transfer-600: rgb(var(--c-transfer-600));
+  --color-transfer-700: rgb(var(--c-transfer-700));
+  --color-transfer-800: rgb(var(--c-transfer-800));
+  --color-transfer-900: rgb(var(--c-transfer-900));
+  --color-transfer-950: rgb(var(--c-transfer-950));
+
+  --color-warning-50: rgb(var(--c-warning-50));
+  --color-warning-100: rgb(var(--c-warning-100));
+  --color-warning-200: rgb(var(--c-warning-200));
+  --color-warning-300: rgb(var(--c-warning-300));
+  --color-warning-400: rgb(var(--c-warning-400));
+  --color-warning-500: rgb(var(--c-warning-500));
+  --color-warning-600: rgb(var(--c-warning-600));
+  --color-warning-700: rgb(var(--c-warning-700));
+  --color-warning-800: rgb(var(--c-warning-800));
+  --color-warning-900: rgb(var(--c-warning-900));
+  --color-warning-950: rgb(var(--c-warning-950));
+
+  --color-danger-50: rgb(var(--c-danger-50));
+  --color-danger-100: rgb(var(--c-danger-100));
+  --color-danger-200: rgb(var(--c-danger-200));
+  --color-danger-300: rgb(var(--c-danger-300));
+  --color-danger-400: rgb(var(--c-danger-400));
+  --color-danger-500: rgb(var(--c-danger-500));
+  --color-danger-600: rgb(var(--c-danger-600));
+  --color-danger-700: rgb(var(--c-danger-700));
+  --color-danger-800: rgb(var(--c-danger-800));
+  --color-danger-900: rgb(var(--c-danger-900));
+  --color-danger-950: rgb(var(--c-danger-950));
+}
+
+/* In Tailwind 4 il bordo predefinito è currentcolor: torna al gray-200 di v3 per i bordi senza colore. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+/* Base dei pulsanti: si applica solo dentro .btn-primary, .btn-secondary e .btn-danger. */
+@utility btn {
+  @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed;
+}
 
 @layer base {
   html {
@@ -14,6 +119,11 @@
   textarea {
     font-size: 16px;
   }
+  /* Tailwind 4 non mette più il cursore a manina sui pulsanti. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
   @media (min-width: 640px) {
     input,
     select,
@@ -24,9 +134,6 @@
 }
 
 @layer components {
-  .btn {
-    @apply inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface disabled:opacity-50 disabled:cursor-not-allowed;
-  }
   .btn-primary {
     @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
   }
@@ -37,7 +144,7 @@
     @apply btn bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
   }
   .input {
-    @apply block w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500;
+    @apply block w-full rounded-md border border-slate-300 bg-surface px-3 py-2 text-sm shadow-xs focus:border-primary-500 focus:outline-hidden focus:ring-1 focus:ring-primary-500;
   }
   .input-invalid {
     @apply border-danger-500 focus:border-danger-500 focus:ring-danger-500;
@@ -90,18 +197,18 @@
   }
 
   .nav-link {
-    @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500;
+    @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500;
   }
   .nav-link-active {
     @apply bg-primary-50 text-primary-700 hover:bg-primary-50 hover:text-primary-700;
   }
   .menu-item {
-    @apply flex items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 focus:outline-none focus-visible:bg-slate-100;
+    @apply flex items-center gap-2 px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 focus:outline-hidden focus-visible:bg-slate-100;
   }
 
   /* AppModal: a tutto schermo sotto sm, finestra centrata da sm in su. */
   .modal {
-    @apply m-0 h-[100dvh] max-h-[100dvh] w-full max-w-none overflow-hidden bg-surface p-0 text-slate-900 shadow-xl sm:m-auto sm:h-fit sm:max-h-[90vh] sm:rounded-xl;
+    @apply m-0 h-dvh max-h-dvh w-full max-w-none overflow-hidden bg-surface p-0 text-slate-900 shadow-xl sm:m-auto sm:h-fit sm:max-h-[90vh] sm:rounded-xl;
   }
   .modal::backdrop {
     @apply bg-black/50;
@@ -113,7 +220,7 @@
     @apply block text-sm font-medium text-slate-700 mb-1;
   }
   .card {
-    @apply bg-surface rounded-lg shadow-sm border border-slate-200;
+    @apply bg-surface rounded-lg shadow-xs border border-slate-200;
   }
   .table {
     @apply min-w-full divide-y divide-slate-200 text-slate-800;
@@ -128,7 +235,7 @@
     @apply bg-slate-50;
   }
   .icon-btn {
-    @apply inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 rounded-md transition focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center w-11 h-11 sm:w-8 sm:h-8 rounded-md transition focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-offset-surface disabled:opacity-40 disabled:cursor-not-allowed;
   }
   .icon-btn-edit {
     @apply text-slate-500 hover:bg-primary-50 hover:text-primary-600 focus:ring-primary-500;
