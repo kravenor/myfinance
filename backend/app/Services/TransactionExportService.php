@@ -75,10 +75,11 @@ class TransactionExportService
 
     /**
      * Testo libero (descrizioni importate dalla banca, nomi): Excel esegue le celle che iniziano
-     * con = + - @ tab o CR come formule. L'apostrofo le fa leggere come testo.
+     * con = + - @ tab o CR come formule. L'apostrofo le fa leggere come testo. Anche dopo un `;`:
+     * Excel in italiano lo usa come separatore e le virgolette di fputcsv restano a metà campo.
      */
     private static function cell(string $value): string
     {
-        return $value !== '' && str_contains("=+-@\t\r", $value[0]) ? "'".$value : $value;
+        return (string) preg_replace('/(^|;)([=+\-@\t\r])/', "$1'$2", $value);
     }
 }

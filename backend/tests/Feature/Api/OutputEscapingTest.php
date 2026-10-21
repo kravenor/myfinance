@@ -23,11 +23,14 @@ class OutputEscapingTest extends TestCase
             'description' => '=HYPERLINK("https://evil.example";"Apri")',
             'notes' => 'Nota normale',
         ]);
+        Transaction::factory()->for($user)->for($account, 'account')->create(['description' => 'RIMBORSO;=1+1;']);
 
         $body = $this->actingAs($user)->get('/api/transactions/export')->streamedContent();
 
         $this->assertStringContainsString('"\'=HYPERLINK(""https://evil.example"";""Apri"")"', $body);
         $this->assertStringContainsString("'@Conto", $body);
+        // Excel in italiano divide le colonne sul `;`.
+        $this->assertStringContainsString("RIMBORSO;'=1+1;", $body);
         // Il testo normale resta com'è.
         $this->assertStringContainsString(',"Nota normale",', $body);
     }
