@@ -141,12 +141,14 @@ Finance/
 
 | Servizio | Container | Porta host | Porta interna | Ruolo |
 |----------|-----------|------------|---------------|-------|
-| `nginx` | `finance_nginx` | `${APP_PORT:-8080}` | 80 | Entry point HTTP, reverse-proxy a Vite + FastCGI a PHP |
+| `nginx` | `finance_nginx` | `127.0.0.1:${APP_PORT:-8080}` | 80 | Entry point HTTP, reverse-proxy a Vite + FastCGI a PHP |
 | `php` | `finance_php` | — | 9000 | PHP-FPM, Laravel |
 | `queue` | `finance_queue` | — | — | Worker della coda (`queue:listen`, rilegge il codice a ogni job): email e push delle notifiche. Usa l'immagine `finance-php` del servizio `php` |
 | `node` | `finance_node` | — | 5173 | Vite dev server (proxato da nginx) |
-| `mysql` | `finance_mysql` | `${DB_PORT:-3306}` | 3306 | Database |
+| `mysql` | `finance_mysql` | `127.0.0.1:${DB_PORT:-3306}` | 3306 | Database |
 | `redis` | `finance_redis` | — | 6379 | Cache, queue, sessioni |
+
+Le porte di sviluppo ascoltano solo su `127.0.0.1` (credenziali di default in `.env.example`): per aprire l'app da un altro dispositivo della LAN serve un `docker-compose.override.yml` locale.
 
 **Routing nginx**:
 - `/api/*`, `/sanctum/*`, `/storage/*` → Laravel (PHP-FPM)
