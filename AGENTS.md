@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-21**
+Ultimo aggiornamento: **2026-10-22**
 Fase corrente: **nessuna in corso** — secondo audit di sicurezza chiuso, ipotesi validate; prossimi candidati nella coda «Da fare» di §7
 
 ---
@@ -35,7 +35,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 | Notifiche push | laravel-notification-channels/webpush (su minishlink/web-push) | 13.x |
 | 2FA (TOTP + QR) | pragmarx/google2fa + bacon/bacon-qr-code (no Fortify) | 9.x / 3.x |
 | Web server | Nginx | 1.30 |
-| PHP runtime | PHP-FPM | 8.3 (Alpine) |
+| PHP runtime | PHP-FPM | 8.3.36 (Alpine, patch fissata: CVE-2026-109618, CVE-2026-109619) |
 | Node runtime | Node | 24 LTS (Alpine) |
 | Orchestrazione | Docker Compose | v2 |
 
