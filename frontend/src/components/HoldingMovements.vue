@@ -33,6 +33,9 @@ const blank = () => ({
 })
 const form = ref(blank())
 const isFee = computed(() => form.value.side === 'fee')
+const editingNeedsConfirmation = computed(
+  () => movements.value.find((m) => m.id === editingId.value)?.needs_confirmation ?? false,
+)
 
 const base = computed(() => `/investment-holdings/${props.holding.id}/transactions`)
 
@@ -192,6 +195,7 @@ onMounted(load)
             <label class="label">Prezzo ({{ holding.currency }})</label>
             <input v-model="form.price" type="number" step="0.00000001" min="0" class="input" required aria-describedby="hint-mv-price" />
             <p id="hint-mv-price" class="field-hint">Prezzo per quota a cui è stato eseguito l'ordine; parte dalla quotazione attuale.</p>
+            <p v-if="editingNeedsConfirmation" class="field-hint text-warning-700">Rata PAC automatica: inserisci data, quote e prezzo dell'eseguito della banca. Salvando, il movimento risulta confermato.</p>
           </div>
           <div v-if="!isFee">
             <label class="label">Quantità</label>
@@ -243,6 +247,11 @@ onMounted(load)
           <div class="min-w-0">
             <p class="text-sm font-medium" :class="sideClass(m.side)">
               {{ INVESTMENT_SIDE_LABEL[m.side] }} · {{ formatDate(m.occurred_at) }}
+              <span
+                v-if="m.needs_confirmation"
+                class="ml-1 inline-block px-2 py-0.5 rounded-full text-xs font-normal bg-warning-100 text-warning-700"
+                title="Rata PAC calcolata sulla quotazione del giorno di addebito: modificala con data, quote e prezzo dell'eseguito della banca."
+              >Da confermare</span>
             </p>
             <p v-if="m.side !== 'fee'" class="num text-xs text-slate-500 mt-0.5">
               {{ m.quantity }} × {{ formatCurrency(m.price, holding.currency) }}
