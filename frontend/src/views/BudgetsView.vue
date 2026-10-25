@@ -232,12 +232,12 @@ onMounted(async () => {
             <RowActions @edit="startEdit(b)" @delete="onDelete(b)" />
           </div>
           <div class="mt-3 flex items-center gap-2">
-            <div class="flex-1 bg-slate-200 rounded h-2">
-              <div class="h-2 rounded" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
+            <div class="flex-1 bg-slate-200 rounded-sm h-2">
+              <div class="h-2 rounded-sm" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
             </div>
             <span
               v-if="status(b) !== 'ok'"
-              class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
+              class="text-xs px-1.5 py-0.5 rounded-sm whitespace-nowrap"
               :class="status(b) === 'exceeded' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'"
             >{{ rawPercent(b) }}%</span>
           </div>
@@ -278,12 +278,12 @@ onMounted(async () => {
             <td class="text-right"><Amount :value="b.spent ?? 0" :currency="currency" /></td>
             <td>
               <div class="flex items-center gap-2">
-                <div class="flex-1 bg-slate-200 rounded h-2">
-                  <div class="h-2 rounded" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
+                <div class="flex-1 bg-slate-200 rounded-sm h-2">
+                  <div class="h-2 rounded-sm" :class="barClass(b)" :style="{ width: progress(b) + '%' }" />
                 </div>
                 <span
                   v-if="status(b) !== 'ok'"
-                  class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap"
+                  class="text-xs px-1.5 py-0.5 rounded-sm whitespace-nowrap"
                   :class="status(b) === 'exceeded' ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'"
                 >
                   {{ rawPercent(b) }}%

@@ -132,7 +132,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
             <span class="flex-1 truncate">{{ item.label }}</span>
             <span
               v-if="item.name === 'notifications' && notifications.unreadCount > 0"
-              class="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-primary-600 px-1.5 text-xs text-white"
+              class="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary-600 px-1.5 text-xs text-white"
             >
               {{ notifications.unreadCount }}
             </span>
@@ -153,7 +153,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
 
     <div class="flex min-w-0 flex-1 flex-col">
       <header
-        class="sticky top-0 z-30 flex h-14 print:hidden items-center gap-3 border-b border-slate-200 bg-surface/90 px-4 backdrop-blur sm:px-6"
+        class="sticky top-0 z-30 flex h-14 print:hidden items-center gap-3 border-b border-slate-200 bg-surface/90 px-4 backdrop-blur-sm sm:px-6"
       >
         <button
           type="button"
@@ -175,7 +175,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
           >
             <AppIcon name="plus" class="h-4 w-4" />
             Transazione
-            <kbd class="ml-1 rounded border border-white/40 px-1.5 text-xs font-normal leading-5">N</kbd>
+            <kbd class="ml-1 rounded-sm border border-white/40 px-1.5 text-xs font-normal leading-5">N</kbd>
           </RouterLink>
 
           <RouterLink
@@ -193,7 +193,7 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
 
           <details ref="userMenu" class="relative hidden lg:block">
             <summary
-              class="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 hover:bg-primary-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden"
+              class="flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 hover:bg-primary-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500 [&::-webkit-details-marker]:hidden"
               aria-label="Menu utente"
             >
               {{ initial }}

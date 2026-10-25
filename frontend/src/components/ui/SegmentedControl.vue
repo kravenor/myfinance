@@ -10,8 +10,8 @@ defineProps<{ options: { value: T; label: string; count?: number }[]; label: str
       v-for="opt in options"
       :key="opt.value"
       type="button"
-      class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 sm:px-3 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
-      :class="model === opt.value ? 'bg-surface text-slate-900 shadow-sm ring-1 ring-slate-300' : 'text-slate-600 hover:text-slate-900'"
+      class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2.5 py-1.5 sm:px-3 text-sm font-medium transition focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
+      :class="model === opt.value ? 'bg-surface text-slate-900 shadow-xs ring-1 ring-slate-300' : 'text-slate-600 hover:text-slate-900'"
       :aria-pressed="model === opt.value"
       @click="model = opt.value"
     >

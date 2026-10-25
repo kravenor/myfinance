@@ -34,8 +34,8 @@ const STORAGE = [
         <tbody class="divide-y divide-slate-100">
           <tr v-for="c in COOKIES" :key="c.name">
             <td data-label="Nome" class="font-mono text-xs">{{ c.name }}</td>
-            <td data-label="A cosa serve" class="!whitespace-normal">{{ c.purpose }}</td>
-            <td data-label="Durata" class="!whitespace-normal">{{ c.duration }}</td>
+            <td data-label="A cosa serve" class="whitespace-normal!">{{ c.purpose }}</td>
+            <td data-label="Durata" class="whitespace-normal!">{{ c.duration }}</td>
           </tr>
         </tbody>
       </table>

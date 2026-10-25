@@ -511,7 +511,7 @@ watch(() => route.query.new, () => {
           <tr v-for="tx in items" :key="tx.id">
             <td>{{ formatDate(tx.occurred_at) }}</td>
             <td>
-              <span class="inline-block rounded px-2 py-0.5 text-xs font-medium" :class="TX_BADGE_CLASS[tx.type]">
+              <span class="inline-block rounded-sm px-2 py-0.5 text-xs font-medium" :class="TX_BADGE_CLASS[tx.type]">
                 {{ TX_TYPE_LABEL[tx.type] }}
               </span>
             </td>
@@ -524,7 +524,7 @@ watch(() => route.query.new, () => {
             </td>
             <td
               class="max-w-xs cursor-pointer"
-              :class="expandedDescriptions.has(tx.id) ? '!whitespace-normal break-words' : 'line-clamp-2 break-words'"
+              :class="expandedDescriptions.has(tx.id) ? 'whitespace-normal! wrap-break-word' : 'line-clamp-2 wrap-break-word'"
               :title="tx.description ?? ''"
               @click="toggleDescription(tx.id)"
             >{{ tx.description ?? '—' }}</td>
