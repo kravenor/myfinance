@@ -481,7 +481,7 @@ onMounted(async () => {
               <p class="font-medium text-slate-800 truncate">{{ r.name }}</p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">
                 {{ RULE_MATCH_LABEL[r.match_type] }}
-                <code class="ml-1 px-1 bg-slate-100 rounded text-xs">{{ r.pattern }}</code>
+                <code class="ml-1 px-1 bg-slate-100 rounded-sm text-xs">{{ r.pattern }}</code>
               </p>
               <p class="text-xs text-slate-500 mt-1 flex items-center gap-1 truncate">
                 <span
@@ -495,7 +495,7 @@ onMounted(async () => {
             <div class="text-right shrink-0 flex flex-col items-end gap-2">
               <button
                 type="button"
-                class="text-xs px-2 py-1 rounded whitespace-nowrap"
+                class="text-xs px-2 py-1 rounded-sm whitespace-nowrap"
                 :class="r.is_active ? 'bg-income-100 text-income-700' : 'bg-slate-200 text-slate-600'"
                 @click="toggleActive(r)"
               >
@@ -533,7 +533,7 @@ onMounted(async () => {
             <td class="font-medium">{{ r.name }}</td>
             <td>
               <span class="text-slate-500">{{ RULE_MATCH_LABEL[r.match_type] }}</span>
-              <code class="ml-1 px-1 bg-slate-100 rounded text-xs">{{ r.pattern }}</code>
+              <code class="ml-1 px-1 bg-slate-100 rounded-sm text-xs">{{ r.pattern }}</code>
             </td>
             <td>{{ RULE_APPLIES_LABEL[r.applies_to_type] }}</td>
             <td>
@@ -548,7 +548,7 @@ onMounted(async () => {
             <td>
               <button
                 type="button"
-                class="text-xs px-2 py-1 rounded"
+                class="text-xs px-2 py-1 rounded-sm"
                 :class="r.is_active ? 'bg-income-100 text-income-700' : 'bg-slate-200 text-slate-600'"
                 @click="toggleActive(r)"
               >
