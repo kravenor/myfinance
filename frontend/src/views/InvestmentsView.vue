@@ -626,7 +626,7 @@ onMounted(async () => {
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!(loading && !items.length)" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table max-md:hidden">
         <thead class="bg-slate-100">
           <tr>
             <th>Asset</th>
