@@ -494,7 +494,7 @@ watch(() => route.query.new, () => {
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!(loading && !items.length)" class="table hidden md:table" :class="{ 'opacity-60': loading }">
+      <table v-if="!(loading && !items.length)" class="table max-md:hidden" :class="{ 'opacity-60': loading }">
         <thead class="bg-slate-100">
           <tr>
             <th>Data</th>
