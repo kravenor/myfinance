@@ -25,6 +25,7 @@ class InvestmentTransactionResource extends JsonResource
             'price' => $this->price,
             'fees' => $this->fees,
             'notes' => $this->notes,
+            'needs_confirmation' => $this->needs_confirmation,
             // Cassa mossa dal movimento, nella valuta dell'holding.
             'cash_flow' => number_format($this->cashFlow(), 2, '.', ''),
             'created_at' => $this->created_at?->toIso8601String(),

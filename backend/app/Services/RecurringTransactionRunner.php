@@ -177,6 +177,8 @@ class RecurringTransactionRunner
             'price' => number_format($price, 8, '.', ''),
             'fees' => number_format($fees, 2, '.', ''),
             'notes' => $recurring->description,
+            // La banca esegue l'ordine giorni dopo l'addebito: quote e prezzo sono una stima.
+            'needs_confirmation' => true,
         ]);
 
         return ['quantity' => $invested / $price, 'price' => $price, 'estimated' => $quoted === null];

@@ -236,6 +236,7 @@ export interface InvestmentTransaction {
   price: string
   fees: string
   notes: string | null
+  needs_confirmation: boolean
   cash_flow: string
   created_at: string
 }

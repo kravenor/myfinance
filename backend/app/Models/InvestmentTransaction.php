@@ -23,6 +23,7 @@ use Illuminate\Support\Carbon;
  * @property string $price
  * @property string $fees
  * @property string|null $notes
+ * @property bool $needs_confirmation rata PAC automatica non ancora allineata all'eseguito
  * @property-read InvestmentHolding|null $holding
  */
 class InvestmentTransaction extends Model
@@ -38,6 +39,7 @@ class InvestmentTransaction extends Model
         'price',
         'fees',
         'notes',
+        'needs_confirmation',
     ];
 
     protected function casts(): array
@@ -47,6 +49,7 @@ class InvestmentTransaction extends Model
             'quantity' => 'decimal:8',
             'price' => 'decimal:8',
             'fees' => 'decimal:2',
+            'needs_confirmation' => 'boolean',
         ];
     }
 

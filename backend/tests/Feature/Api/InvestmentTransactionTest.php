@@ -186,6 +186,26 @@ class InvestmentTransactionTest extends TestCase
         $this->assertSame('450.00', $holding->net_invested);
     }
 
+    public function test_updating_an_automatic_pac_buy_confirms_it(): void
+    {
+        $user = User::factory()->create();
+        $holding = $this->holding($user);
+        $movement = $holding->transactions()->create([
+            'user_id' => $user->id,
+            'side' => 'buy',
+            'occurred_at' => '2026-01-02',
+            'quantity' => 2,
+            'price' => 50,
+            'fees' => 0,
+            'needs_confirmation' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->patchJson("/api/investment-holdings/{$holding->id}/transactions/{$movement->id}", ['occurred_at' => '2026-01-05', 'quantity' => 1.98, 'price' => 50.5])
+            ->assertOk()
+            ->assertJsonPath('data.needs_confirmation', false);
+    }
+
     public function test_creating_a_holding_with_a_position_records_an_opening_movement(): void
     {
         $user = User::factory()->create();

@@ -61,7 +61,8 @@ class InvestmentTransactionController extends Controller
         $this->authorize('update', $investmentHolding);
 
         DB::transaction(function () use ($request, $investmentHolding, $transaction) {
-            $transaction->update($request->validated());
+            // Modificarlo a mano vuol dire averlo allineato all'eseguito.
+            $transaction->update([...$request->validated(), 'needs_confirmation' => false]);
             $this->recalculator->recalculate($investmentHolding);
         });
 

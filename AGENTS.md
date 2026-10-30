@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-22**
+Ultimo aggiornamento: **2026-10-25**
 Fase corrente: **nessuna in corso** — secondo audit di sicurezza chiuso, ipotesi validate; prossimi candidati nella coda «Da fare» di §7
 
 ---
@@ -356,7 +356,7 @@ Tutte le tabelle di dominio hanno `user_id` con `cascadeOnDelete`. Importi `deci
 | `transactions` (agg.) | aggiunto `transfer_amount` `decimal(15,2)` nullable: importo accreditato sul conto destinazione (valuta destinazione) per i transfer cross-valuta; fallback su `amount` se uguale/null |
 | `exchange_rates` | `date`, `currency` (3), `rate` `decimal(20,10)` = unità di valuta per 1 unità pivot (EUR). Unique `(date, currency)`. Dato **globale** (no `user_id`, no global scope) |
 | `investment_holdings` | `account_id` (cascade, conto `investment`), `name`, `symbol` (nullable), `asset_type` (stock/etf/fund/bond/crypto/commodity/certificate/cash/other), `currency`, `quantity` `decimal(24,8)`, `avg_cost` `decimal(24,8)`, `last_price` `decimal(24,8)` nullable, `last_price_at`, `notes` |
-| `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell/fee: `fee` è un costo puro, quantità e prezzo a 0), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`. Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
+| `investment_transactions` | `investment_holding_id` (cascade), `side` enum(buy/sell/fee: `fee` è un costo puro, quantità e prezzo a 0), `occurred_at` (date), `quantity` `decimal(24,8)`, `price` `decimal(24,8)`, `fees` `decimal(15,2)`, `notes`, `needs_confirmation` (bool: rata PAC automatica stimata sulla quotazione del giorno di addebito, la banca esegue con ritardo variabile; badge "Da confermare" in HoldingMovements, azzerato da qualsiasi PATCH del movimento). Index `(investment_holding_id, occurred_at, id)` = ordine di ricalcolo |
 | `investment_holdings` (agg.) | `realized_pl` e `net_invested` `decimal(15,2)`: cache derivate dal registro (P/L chiuso sulle vendite, cassa netta immessa). **Non si scrivono da API**: `quantity` e `avg_cost` sono usciti da `UpdateInvestmentHoldingRequest` |
 | `notifications` | Tabella standard Laravel (`uuid` id, `type`, `notifiable` morph, `data` json, `read_at`). In-app notifications via canale database |
 

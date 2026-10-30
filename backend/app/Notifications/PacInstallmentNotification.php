@@ -42,9 +42,9 @@ class PacInstallmentNotification extends Notification implements Dedupable, Shou
 
         $quantity = rtrim(rtrim(number_format($r['quantity'], 6, ',', '.'), '0'), ',');
         $message = "{$when}: {$quantity} quote a ".Money::format((float) $r['price'], $r['currency']).'.';
-        if ($r['estimated']) {
-            $message .= ' Prezzo stimato perché non c\'è ancora una quotazione: verificalo con l\'eseguito del broker.';
-        }
+        $message .= $r['estimated']
+            ? ' Prezzo stimato perché non c\'è ancora una quotazione: verificalo con l\'eseguito del broker.'
+            : ' Stima sulla quotazione del giorno di addebito: allinea quote e prezzo all\'eseguito del broker.';
 
         return $this->payload($r['estimated'] ? 'warning' : 'info', "Rata PAC registrata: {$r['holding']}", $message);
     }

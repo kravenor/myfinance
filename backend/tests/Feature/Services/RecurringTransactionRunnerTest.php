@@ -156,6 +156,7 @@ class RecurringTransactionRunnerTest extends TestCase
         $this->assertSame('2026-01-02', $first->occurred_at->toDateString());
         $this->assertSame('2.00000000', $first->quantity);
         $this->assertSame('50.00000000', $first->price);
+        $this->assertTrue($first->needs_confirmation);
         $this->assertSame('4.00000000', $holding->fresh()->quantity);
         $this->assertSame('200.00', $holding->fresh()->net_invested);
     }
