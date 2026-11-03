@@ -95,6 +95,36 @@ class BudgetTest extends TestCase
             ->assertJsonPath('data.0.spent', '120.00');
     }
 
+    public function test_spent_includes_subcategories(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $parent = Category::factory()->for($user)->create(['type' => 'expense']);
+        $child = Category::factory()->for($user)->create(['type' => 'expense', 'parent_id' => $parent->id]);
+        Budget::factory()->for($user)->for($parent)->create(['year' => 2026, 'month' => 5, 'amount' => 100]);
+        Budget::factory()->for($user)->for($child)->create(['year' => 2026, 'month' => 5, 'amount' => 500]);
+
+        foreach ([[$parent, 30], [$child, 50]] as [$category, $amount]) {
+            Transaction::factory()->for($user)->for($account, 'account')->for($category, 'category')->create([
+                'type' => 'expense',
+                'amount' => $amount,
+                'occurred_at' => '2026-05-10',
+            ]);
+        }
+
+        $spent = collect($this->actingAs($user)->getJson('/api/budgets?year=2026&month=5')->assertOk()->json('data'))
+            ->pluck('spent', 'category_id');
+
+        $this->assertSame('80.00', $spent[$parent->id]);
+        $this->assertSame('50.00', $spent[$child->id]);
+
+        $this->getJson('/api/budgets/alerts?year=2026&month=5')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.category_id', $parent->id)
+            ->assertJsonPath('data.0.spent', '80.00');
+    }
+
     public function test_update_and_destroy(): void
     {
         $user = User::factory()->create();

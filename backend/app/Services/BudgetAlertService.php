@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Budget;
+use App\Models\Category;
 use App\Models\Transaction;
 use App\Support\FinancialMonth;
 
@@ -32,15 +33,7 @@ class BudgetAlertService
             return [];
         }
 
-        [$start, $end] = FinancialMonth::forYearMonth($year, $month);
-
-        $spentByCategory = Transaction::query()
-            ->where('type', 'expense')
-            ->whereIn('category_id', $budgets->pluck('category_id')->all())
-            ->whereBetween('occurred_at', [$start->toDateString(), $end->toDateString()])
-            ->groupBy('category_id')
-            ->selectRaw('category_id, SUM(amount) as total')
-            ->pluck('total', 'category_id');
+        $spentByCategory = $this->spentByCategory($budgets->pluck('category_id')->all(), $year, $month);
 
         $alerts = [];
         foreach ($budgets as $budget) {
@@ -80,5 +73,45 @@ class BudgetAlertService
         usort($alerts, fn (array $a, array $b): int => $b['percent'] <=> $a['percent']);
 
         return $alerts;
+    }
+
+    /**
+     * Speso del mese per categoria, includendo le spese delle sotto-categorie dirette.
+     *
+     * @param  array<int, int>  $categoryIds
+     * @return array<int, float>
+     */
+    public function spentByCategory(array $categoryIds, int $year, int $month): array
+    {
+        if ($categoryIds === []) {
+            return [];
+        }
+
+        $parentOf = Category::query()
+            ->whereIn('parent_id', $categoryIds)
+            ->pluck('parent_id', 'id')
+            ->all();
+
+        [$start, $end] = FinancialMonth::forYearMonth($year, $month);
+
+        $totals = Transaction::query()
+            ->where('type', 'expense')
+            ->whereIn('category_id', [...$categoryIds, ...array_keys($parentOf)])
+            ->whereBetween('occurred_at', [$start->toDateString(), $end->toDateString()])
+            ->groupBy('category_id')
+            ->selectRaw('category_id, SUM(amount) as total')
+            ->pluck('total', 'category_id');
+
+        $spent = array_fill_keys($categoryIds, 0.0);
+        foreach ($totals as $categoryId => $total) {
+            if (isset($spent[$categoryId])) {
+                $spent[$categoryId] += (float) $total;
+            }
+            if (isset($parentOf[$categoryId])) {
+                $spent[$parentOf[$categoryId]] += (float) $total;
+            }
+        }
+
+        return $spent;
     }
 }

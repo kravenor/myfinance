@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-10-25**
+Ultimo aggiornamento: **2026-11-03**
 Fase corrente: **nessuna in corso** — secondo audit di sicurezza chiuso, ipotesi validate; prossimi candidati nella coda «Da fare» di §7
 
 ---
@@ -444,13 +444,13 @@ Validazione di appartenenza: tutti i `*_id` riferiti a risorse di dominio passan
 ### Budgets — `apiResource('budgets')`
 | Metodo | Path | Note |
 |--------|------|------|
-| GET | `/api/budgets` | filtri `year`, `month`, `category_id`. Ogni risorsa include `spent` = somma `expense` per (category, year, month) |
+| GET | `/api/budgets` | filtri `year`, `month`, `category_id`. Ogni risorsa include `spent` = somma `expense` per (category, year, month), **incluse le sotto-categorie dirette** (una query per periodo) |
 | GET | `/api/budgets/alerts` | filtri `year`, `month` (default mese corrente). Ritorna `[{budget_id, category_id, category_name, category_color, year, month, amount, spent, percent, status}]` per i soli budget in `warning` (≥80%) o `exceeded` (≥100%), ordinati per `percent` desc. Rotta registrata **prima** dell'`apiResource` |
 | POST | `/api/budgets` | unique (`user_id`, `category_id`, `year`, `month`) verificato in validation + DB |
 | PATCH | `/api/budgets/{budget}` | stessa unicità in update |
 | DELETE | `/api/budgets/{budget}` | 204 |
 
-Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (`WARNING_THRESHOLD = 80`): unica query `SUM ... GROUP BY category_id` sulle `expense` del mese; `amount=0` con speso>0 → `exceeded`. Frontend: banner "Alert budget" in [DashboardView](frontend/src/views/DashboardView.vue) (mese corrente) + barra/badge colorati (ambra ≥80%, rosso ≥100%) in [BudgetsView](frontend/src/views/BudgetsView.vue).
+Alert calcolati da [BudgetAlertService](backend/app/Services/BudgetAlertService.php) (`WARNING_THRESHOLD = 80`): `spentByCategory()` (condiviso con `BudgetController`) somma le `expense` del mese della categoria e delle sue sotto-categorie dirette (due query: figlie + `SUM ... GROUP BY category_id`); con budget sia sul padre sia sulla figlia la spesa della figlia conta in entrambi; `amount=0` con speso>0 → `exceeded`. Frontend: banner "Alert budget" in [DashboardView](frontend/src/views/DashboardView.vue) (mese corrente) + barra/badge colorati (ambra ≥80%, rosso ≥100%) in [BudgetsView](frontend/src/views/BudgetsView.vue).
 
 ### Recurring transactions — `apiResource('recurring-transactions')`
 | Metodo | Path | Note |
