@@ -11,7 +11,7 @@
         "laravel-notification-channels/webpush": "^13.0",
         "laravel/framework": "^12.61",
         "laravel/sanctum": "^4.0",
-        "laravel/tinker": "^2.9",
+        "laravel/tinker": "^3.0",
         "pragmarx/google2fa": "^9.1"
     },
     "require-dev": {
