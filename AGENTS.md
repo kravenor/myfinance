@@ -781,7 +781,7 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 ### Endpoint `auth:sanctum`
 | Metodo | Path | Note |
 |--------|------|------|
-| GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name` |
+| GET | `/api/investment-holdings` | Lista paginata. Filtri `account_id`, `asset_type`. Ordine `name`. Solo qui ogni risorsa include `total_fees` (somma delle `fees` dei movimenti, `null` senza movimenti) |
 | POST | `/api/investment-holdings` | `account_id` (deve essere un conto **investment** dell'utente), `name`, `asset_type`, `quantity`, `avg_cost`, `symbol?`, `isin?`, `currency?`, `last_price?`, `last_price_at?`, `notes?`. `quantity`/`avg_cost` diventano il **movimento di apertura** del registro |
 | GET/PATCH/DELETE | `/api/investment-holdings/{investment_holding}` | CRUD standard. In PATCH `quantity` e `avg_cost` **non sono accettati**: sono derivati dal registro |
 | GET | `/api/investments/history?holding=&from=&to=` | `{base_currency, points, xirr_pct, twr_pct}` (con `holding` opzionale serie e XIRR di quel solo holding; id altrui → serie vuota per il global scope; `from`/`to` opzionali (date, `to >= from`) restringono solo i punti restituiti, versato e XIRR/TWR restano calcolati dal primo movimento): serie mensile `{month, as_of, invested, market_value, unrealized_pl}` nella valuta base, vuota finché il registro è vuoto; l'ultimo punto è oggi, così combacia con `overview`. `xirr_pct` = rendimento annualizzato money-weighted (buy/fee flussi negativi, sell positivi, valore di mercato di oggi come flusso finale), `null` sotto 365 giorni dal primo movimento o se non risolvibile |
@@ -790,7 +790,7 @@ Tracking **per-asset** delle posizioni nei conti di tipo `investment`. Prezzo co
 | PATCH/DELETE | `/api/investment-holdings/{investment_holding}/transactions/{transaction}` | Binding `scoped()`: un movimento non è raggiungibile da un altro holding |
 
 Ogni scrittura sul registro ricalcola la posizione nella stessa transazione DB. Se il registro portasse la quantità sotto zero (vendita superiore alle quote possedute a quella data, anche retrodatata) il ricalcolo solleva `ValidationException` su `quantity` e la scrittura viene annullata. Metodo di costo: **media ponderata** — una vendita non muove `avg_cost`, scarica il costo delle quote vendute e realizza la differenza in `realized_pl`.
-| GET | `/api/investments/overview` | Riepilogo portafoglio convertito in valuta base: `total_market_value`, `total_cost_basis`, `total_unrealized_pl(_pct)`, `by_asset_type[]` (allocation %), `accounts[]` |
+| GET | `/api/investments/overview` | Riepilogo portafoglio convertito in valuta base: `total_market_value`, `total_cost_basis`, `total_unrealized_pl(_pct)`, `total_fees` (commissioni + costi `fee` di tutto lo storico, una `withSum`), `by_asset_type[]` (allocation %), `accounts[]` |
 | GET | `/api/investments/lookup?q=&currency=` | Risolve ISIN/ticker/nome nei symbol Yahoo quotabili: `[{symbol, name, exchange, type, currency, price}]`, con la `currency` preferita in cima ([YahooSymbolLookup](backend/app/Services/Prices/YahooSymbolLookup.php), via search + chart Yahoo). `throttle:10,1,prices-lookup` |
 | POST | `/api/investments/refresh-prices` | Aggiorna subito le quotazioni dei soli simboli dell'utente (il refresh di tutti resta allo scheduler); `{updated}`. `throttle:2,1,prices-refresh` |
 

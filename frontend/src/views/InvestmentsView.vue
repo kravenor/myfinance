@@ -371,6 +371,9 @@ onMounted(async () => {
         <p class="text-xs text-slate-500 mt-1">
           Costo: <Amount :value="overview.total_cost_basis" :currency="overview.base_currency" />
         </p>
+        <p class="text-xs text-slate-500 mt-1" title="Commissioni di acquisti e vendite più costi (bollo, custodia, gestione) di tutto lo storico">
+          Spese totali: <Amount :value="overview.total_fees" :currency="overview.base_currency" />
+        </p>
       </div>
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Plus/minus latente</p>

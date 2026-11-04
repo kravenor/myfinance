@@ -22,7 +22,7 @@ class InvestmentHoldingController extends Controller
     {
         $this->authorize('viewAny', InvestmentHolding::class);
 
-        $query = InvestmentHolding::query()->orderBy('name');
+        $query = InvestmentHolding::query()->withSum('transactions', 'fees')->orderBy('name');
 
         if ($request->filled('account_id')) {
             $query->where('account_id', $request->integer('account_id'));

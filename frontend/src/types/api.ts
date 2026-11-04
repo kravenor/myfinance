@@ -205,6 +205,7 @@ export interface InvestmentHolding {
   unrealized_pl: string
   unrealized_pl_pct: string | null
   net_invested: string
+  total_fees?: string | null
   realized_pl: string
   created_at: string
   updated_at: string
@@ -256,6 +257,7 @@ export interface InvestmentOverview {
   total_market_value: string
   total_cost_basis: string
   total_unrealized_pl: string
+  total_fees: string
   total_unrealized_pl_pct: string | null
   by_asset_type: { asset_type: AssetType; market_value: string; pct: string }[]
   accounts: {
