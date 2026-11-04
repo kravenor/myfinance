@@ -151,6 +151,9 @@ onMounted(load)
         <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">Versato netto</dt>
           <dd class="font-medium"><Amount :value="holding.net_invested" :currency="holding.currency" /></dd>
+          <dd v-if="parseFloat(holding.total_fees ?? '0') > 0" class="text-xs text-slate-500" title="Commissioni di acquisti e vendite più costi (bollo, custodia, gestione)">
+            di cui spese <Amount :value="holding.total_fees ?? 0" :currency="holding.currency" />
+          </dd>
         </div>
         <div class="bg-surface p-3">
           <dt class="text-xs text-slate-500">Valore attuale</dt>

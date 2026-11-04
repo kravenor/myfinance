@@ -35,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $notes
  * @property-read Account|null $account
  * @property-read Collection<int, InvestmentTransaction> $transactions
+ * @property-read string|null $transactions_sum_fees solo con withSum('transactions', 'fees')
  */
 class InvestmentHolding extends Model
 {

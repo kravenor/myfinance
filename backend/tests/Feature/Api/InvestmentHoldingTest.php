@@ -200,6 +200,38 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.by_asset_type.0.pct', '100.00');
     }
 
+    public function test_overview_sums_fees_of_all_movements(): void
+    {
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+        $holding = InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['currency' => 'EUR']);
+
+        $this->actingAs($user);
+        $holding->transactions()->create(['side' => 'buy', 'occurred_at' => '2026-01-05', 'quantity' => 1, 'price' => 98.5, 'fees' => 1.5]);
+        $holding->transactions()->create(['side' => 'fee', 'occurred_at' => '2026-06-30', 'quantity' => 0, 'price' => 0, 'fees' => 2]);
+
+        $this->getJson('/api/investments/overview')
+            ->assertOk()
+            ->assertJsonPath('data.total_fees', '3.50');
+    }
+
+    public function test_index_sums_fees_per_holding(): void
+    {
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+        $holding = InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['name' => 'A', 'currency' => 'EUR']);
+        InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['name' => 'B', 'currency' => 'EUR']);
+
+        $this->actingAs($user);
+        $holding->transactions()->create(['side' => 'buy', 'occurred_at' => '2026-01-05', 'quantity' => 1, 'price' => 98.5, 'fees' => 1.5]);
+        $holding->transactions()->create(['side' => 'fee', 'occurred_at' => '2026-06-30', 'quantity' => 0, 'price' => 0, 'fees' => 2]);
+
+        $this->getJson('/api/investment-holdings')
+            ->assertOk()
+            ->assertJsonPath('data.0.total_fees', '3.50')
+            ->assertJsonPath('data.1.total_fees', null);
+    }
+
     public function test_overview_uses_auto_quote_over_manual_price(): void
     {
         $user = User::factory()->create(['currency' => 'EUR']);

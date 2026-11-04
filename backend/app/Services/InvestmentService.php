@@ -25,11 +25,12 @@ class InvestmentService
         $base = strtoupper(Auth::user()->currency);
         $now = Carbon::now();
 
-        $holdings = InvestmentHolding::query()->with('account')->get();
+        $holdings = InvestmentHolding::query()->with('account')->withSum('transactions', 'fees')->get();
         $this->priceResolver->hydrate($holdings, $now);
 
         $totalMarketValue = 0.0;
         $totalCostBasis = 0.0;
+        $totalFees = 0.0;
         /** @var array<string, float> $byType */
         $byType = [];
         /** @var array<int, array{account_id: int, name: ?string, currency: ?string, market_value: float, cost_basis: float}> $byAccount */
@@ -41,6 +42,7 @@ class InvestmentService
 
             $totalMarketValue += $mv;
             $totalCostBasis += $cb;
+            $totalFees += $this->converter->convert((float) $h->transactions_sum_fees, $h->currency, $base, $now);
 
             $byType[$h->asset_type] = ($byType[$h->asset_type] ?? 0.0) + $mv;
 
@@ -66,6 +68,7 @@ class InvestmentService
             'total_market_value' => $this->fmt($totalMarketValue),
             'total_cost_basis' => $this->fmt($totalCostBasis),
             'total_unrealized_pl' => $this->fmt($pl),
+            'total_fees' => $this->fmt($totalFees),
             'total_unrealized_pl_pct' => $totalCostBasis > 0 ? $this->fmt($pl / $totalCostBasis * 100) : null,
             'by_asset_type' => collect($byType)
                 ->map(fn ($value, $type) => [
