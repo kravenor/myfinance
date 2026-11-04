@@ -264,7 +264,7 @@ onMounted(load)
           <div class="text-right shrink-0">
             <Amount
               class="block text-sm font-medium whitespace-nowrap"
-              :value="m.cash_flow"
+              :value="m.side === 'fee' ? m.fees : parseFloat(m.quantity) * parseFloat(m.price)"
               :currency="holding.currency"
               :type="m.side === 'sell' ? 'income' : 'expense'"
             />
