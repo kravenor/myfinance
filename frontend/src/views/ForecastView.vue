@@ -412,8 +412,8 @@ onMounted(async () => {
           <h2 class="font-medium">Scenario applicato</h2>
           <p class="text-xs text-slate-500 mt-0.5">Scegli uno scenario per aggiungere le sue voci alla baseline; puoi applicare anche quelli inattivi.</p>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <select v-model.number="selectedScenarioId" class="input w-auto">
+        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <select v-model.number="selectedScenarioId" class="input sm:w-auto">
             <option value="">— Baseline (nessuno scenario) —</option>
             <option v-for="s in scenarios" :key="s.id" :value="s.id">{{ s.name }}</option>
           </select>
@@ -422,19 +422,19 @@ onMounted(async () => {
       </div>
 
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div class="card p-3">
-          <p class="text-xs uppercase text-slate-500">Entrate totali ({{ forecast.summary.months_count }} mesi)</p>
-          <Amount class="block text-lg font-semibold mt-1" :value="forecast.summary.total_income" :currency="baseCurrency" type="income" />
-        </div>
-        <div class="card p-3">
-          <p class="text-xs uppercase text-slate-500">Uscite totali</p>
-          <Amount class="block text-lg font-semibold mt-1" :value="forecast.summary.total_expense" :currency="baseCurrency" type="expense" />
-        </div>
-        <div class="card p-3">
-          <p class="text-xs uppercase text-slate-500">Resta totale</p>
+        <div class="card p-3 col-span-2 order-first md:col-span-1 md:order-none">
+          <p class="text-xs uppercase text-slate-500">Resta totale ({{ forecast.summary.months_count }} mesi)</p>
           <Amount class="block text-2xl font-semibold mt-1" :value="forecast.summary.total_net" :currency="baseCurrency" signed />
         </div>
-        <div class="card p-3">
+        <div class="card p-3 min-w-0">
+          <p class="text-xs uppercase text-slate-500">Entrate totali</p>
+          <Amount class="block text-base sm:text-lg font-semibold mt-1" :value="forecast.summary.total_income" :currency="baseCurrency" type="income" />
+        </div>
+        <div class="card p-3 min-w-0">
+          <p class="text-xs uppercase text-slate-500">Uscite totali</p>
+          <Amount class="block text-base sm:text-lg font-semibold mt-1" :value="forecast.summary.total_expense" :currency="baseCurrency" type="expense" />
+        </div>
+        <div class="card p-3 col-span-2 md:col-span-1">
           <p class="text-xs uppercase text-slate-500">Mese peggiore</p>
           <Amount class="block text-lg font-semibold mt-1" :value="forecast.summary.min_monthly_net" :currency="baseCurrency" signed />
           <p v-if="forecast.summary.min_monthly_net_period" class="text-xs text-slate-500 mt-1">
@@ -500,7 +500,27 @@ onMounted(async () => {
         </div>
         <p v-if="loading" class="text-xs text-slate-500">Aggiornamento…</p>
       </div>
-      <div class="table-responsive md:overflow-x-auto">
+      <ul class="md:hidden divide-y divide-slate-100 border-t border-slate-100">
+        <li v-for="t in forecast.totals_by_month" :key="t.period" class="flex items-start justify-between gap-3 py-3">
+          <div class="min-w-0">
+            <p class="font-medium">{{ periodLabel(t.period) }}</p>
+            <p class="flex flex-wrap gap-x-3 text-xs text-slate-500">
+              <span>Entrate <span class="num">{{ money(t.income, baseCurrency) }}</span></span>
+              <span>Uscite <span class="num">{{ money(t.expense_total, baseCurrency) }}</span></span>
+              <span v-if="forecast.scenario && parseFloat(t.scenario) > 0" class="text-primary-600">
+                Scenario <span class="num">+{{ money(t.scenario, baseCurrency) }}</span>
+              </span>
+            </p>
+          </div>
+          <div class="shrink-0 text-right">
+            <Amount class="block font-semibold" :value="t.net" :currency="baseCurrency" signed />
+            <span v-if="forecast.scenario" class="block text-xs num" :class="deltaClass(deltaNetForPeriod(t.period, parseFloat(t.net)))">
+              {{ deltaText(deltaNetForPeriod(t.period, parseFloat(t.net))) }}
+            </span>
+          </div>
+        </li>
+      </ul>
+      <div class="hidden md:block overflow-x-auto">
         <table class="table">
           <thead class="bg-slate-100">
             <tr>
@@ -514,16 +534,16 @@ onMounted(async () => {
           </thead>
           <tbody class="divide-y divide-slate-100">
             <tr v-for="t in forecast.totals_by_month" :key="t.period">
-              <td data-label="Mese" class="font-medium">{{ periodLabel(t.period) }}</td>
-              <td data-label="Entrate" class="md:text-right num">{{ money(t.income, baseCurrency) }}</td>
-              <td data-label="Uscite" class="md:text-right num">{{ money(t.expense_total, baseCurrency) }}</td>
-              <td v-if="forecast.scenario" data-label="di cui scenario" class="md:text-right num text-primary-600">
+              <td class="font-medium">{{ periodLabel(t.period) }}</td>
+              <td class="text-right num">{{ money(t.income, baseCurrency) }}</td>
+              <td class="text-right num">{{ money(t.expense_total, baseCurrency) }}</td>
+              <td v-if="forecast.scenario" class="text-right num text-primary-600">
                 {{ parseFloat(t.scenario) > 0 ? '+' + money(t.scenario, baseCurrency) : '—' }}
               </td>
-              <td data-label="Resta" class="md:text-right text-base font-semibold">
+              <td class="text-right text-base font-semibold">
                 <Amount :value="t.net" :currency="baseCurrency" signed />
               </td>
-              <td v-if="forecast.scenario" data-label="Δ baseline" class="md:text-right num"
+              <td v-if="forecast.scenario" class="text-right num"
                   :class="deltaClass(deltaNetForPeriod(t.period, parseFloat(t.net)))">
                 {{ deltaText(deltaNetForPeriod(t.period, parseFloat(t.net))) }}
               </td>
@@ -554,11 +574,11 @@ onMounted(async () => {
               v-for="row in compareRows"
               :key="row.id ?? 'baseline'"
               class="border-b border-slate-100"
-              :class="row.id === selectedScenarioId ? 'bg-primary-50/60' : ''"
+              :class="row.id === selectedScenarioId ? 'bg-primary-50' : 'bg-surface'"
             >
-              <td class="p-2 sticky left-0 bg-inherit">
+              <td class="p-2 sticky left-0 bg-inherit max-w-36 sm:max-w-none">
                 <span class="inline-flex items-center gap-2">
-                  <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
+                  <span class="inline-block w-2 h-2 shrink-0 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
                   <span class="font-medium">{{ row.name }}</span>
                 </span>
               </td>
@@ -586,18 +606,19 @@ onMounted(async () => {
       <ListSkeleton v-if="scenariosLoading && !scenarios.length" :rows="3" />
       <ul v-else-if="scenarios.length" class="divide-y divide-slate-100">
         <li v-for="s in scenarios" :key="s.id" class="py-2 flex items-center gap-3">
-          <span class="inline-block w-3 h-3 rounded-full" :style="{ backgroundColor: s.color ?? PRIMARY_COLOR }" />
+          <span class="inline-block w-3 h-3 shrink-0 rounded-full" :style="{ backgroundColor: s.color ?? PRIMARY_COLOR }" />
           <div class="flex-1 min-w-0">
             <p class="text-sm font-medium truncate">
               {{ s.name }}
               <span v-if="!s.is_active" class="ml-1 text-xs text-slate-500">(inattivo)</span>
             </p>
-            <p v-if="s.description" class="text-xs text-slate-500 truncate">{{ s.description }}</p>
+            <p class="text-xs text-slate-500 truncate">
+              <template v-if="s.items_count !== undefined">{{ s.items_count }} {{ s.items_count === 1 ? 'voce' : 'voci' }}</template>
+              <template v-if="s.items_count !== undefined && s.description"> · </template>
+              {{ s.description }}
+            </p>
           </div>
-          <span v-if="s.items_count !== undefined" class="text-xs text-slate-500">
-            {{ s.items_count }} {{ s.items_count === 1 ? 'voce' : 'voci' }}
-          </span>
-          <button class="btn-secondary text-xs py-1" @click="openItems(s)">Spese</button>
+          <button class="btn-secondary shrink-0 text-xs py-1" @click="openItems(s)">Spese</button>
           <RowActions @edit="startEditScenario(s)" @delete="deleteScenario(s)" />
         </li>
       </ul>
@@ -632,9 +653,9 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="row in forecast.categories" :key="(row.category_id ?? 'u') + ''" class="border-b border-slate-100">
-              <td class="p-2 sticky left-0 bg-surface">
+              <td class="p-2 sticky left-0 bg-surface max-w-36 sm:max-w-none">
                 <span class="inline-flex items-center gap-2">
-                  <span class="inline-block w-2 h-2 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
+                  <span class="inline-block w-2 h-2 shrink-0 rounded-full" :style="{ backgroundColor: row.color ?? MUTED_COLOR }" />
                   <span class="font-medium">{{ row.category_name }}</span>
                 </span>
               </td>
@@ -703,13 +724,13 @@ onMounted(async () => {
               <option value="income">{{ TX_TYPE_LABEL.income }}</option>
             </select>
           </div>
-          <div class="col-span-2">
-            <label class="label">Descrizione</label>
-            <input v-model="itemForm.description" type="text" maxlength="255" class="input" placeholder="es. Vacanza Sardegna" />
-          </div>
           <div>
             <label class="label">Importo</label>
             <input v-model="itemForm.amount" type="number" step="0.01" min="0.01" class="input" required />
+          </div>
+          <div class="col-span-2">
+            <label class="label">Descrizione</label>
+            <input v-model="itemForm.description" type="text" maxlength="255" class="input" placeholder="es. Vacanza Sardegna" />
           </div>
           <div>
             <label class="label">Conto</label>
