@@ -270,7 +270,7 @@ function resizeCharts(forPrint: boolean) {
 
     <template v-else>
       <template v-if="showComparison">
-        <div class="grid grid-cols-3 gap-3 transition-opacity" :class="{ 'opacity-60': loading }">
+        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 transition-opacity" :class="{ 'opacity-60': loading }">
           <div class="card p-3 sm:p-4">
             <p class="text-xs font-medium text-slate-500">Entrate</p>
             <p class="num mt-1 text-base font-semibold text-income-600 sm:text-xl">{{ formatCurrency(totals.income, baseCurrency) }}</p>
@@ -279,7 +279,7 @@ function resizeCharts(forPrint: boolean) {
             <p class="text-xs font-medium text-slate-500">Uscite</p>
             <p class="num mt-1 text-base font-semibold text-expense-600 sm:text-xl">{{ formatCurrency(totals.expense, baseCurrency) }}</p>
           </div>
-          <div class="card p-3 sm:p-4">
+          <div class="card col-span-2 p-3 sm:col-span-1 sm:p-4">
             <p class="text-xs font-medium text-slate-500">Saldo</p>
             <p class="num mt-1 text-base font-semibold sm:text-xl" :class="totals.net >= 0 ? 'text-income-600' : 'text-expense-600'">
               {{ totals.net > 0 ? '+' : totals.net < 0 ? '−' : '' }}{{ formatCurrency(Math.abs(totals.net), baseCurrency) }}
