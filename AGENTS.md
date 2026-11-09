@@ -22,7 +22,7 @@ Uso single-tenant (un utente principale), ma con multi-user scoping già a livel
 
 | Componente | Tecnologia | Versione |
 |------------|------------|----------|
-| Backend API | Laravel | 12.x |
+| Backend API | Laravel | 13.x |
 | Auth | Laravel Sanctum (SPA cookie) | — |
 | Frontend | Vue 3 + TypeScript | — |
 | Build frontend | Vite | — |
@@ -52,7 +52,7 @@ Finance/
 ├── .env                   # variabili reali (gitignored)
 ├── .gitignore
 │
-├── backend/               # progetto Laravel 12
+├── backend/               # progetto Laravel 13
 │   ├── app/Models/        # User, Account, Category, Transaction, Budget, RecurringTransaction, Tag, CategorizationRule, SavingsGoal, ExchangeRate, InvestmentHolding, InvestmentTransaction, Scenario, ScenarioItem
 │   │   ├── Concerns/      # BelongsToUser (trait: global scope + autofill user_id)
 │   │   └── Scopes/        # UserScope (global scope su Auth::id())
