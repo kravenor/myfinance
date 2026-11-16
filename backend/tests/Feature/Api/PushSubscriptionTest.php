@@ -95,15 +95,21 @@ class PushSubscriptionTest extends TestCase
         Notification::assertSentTo($plain, BudgetThresholdNotification::class, fn ($n, array $channels) => ! in_array(WebPushChannel::class, $channels, true));
     }
 
-    public function test_test_push_requires_an_active_subscription(): void
+    public function test_test_push_goes_only_to_the_requesting_device(): void
     {
         Notification::fake();
-        $user = User::factory()->create();
+        [$user, $other] = User::factory()->count(2)->create();
+        $user->updatePushSubscription(self::ENDPOINT, 'k', 't');
+        $user->updatePushSubscription('https://fcm.googleapis.com/fcm/send/altro-dispositivo', 'k', 't');
+        $other->updatePushSubscription('https://fcm.googleapis.com/fcm/send/di-un-altro', 'k', 't');
 
         $this->actingAs($user)->postJson('/api/push-subscriptions/test')->assertUnprocessable();
+        $this->actingAs($user)->postJson('/api/push-subscriptions/test', ['endpoint' => 'https://fcm.googleapis.com/fcm/send/di-un-altro'])
+            ->assertUnprocessable();
 
-        $user->updatePushSubscription(self::ENDPOINT, 'k', 't');
-        $this->actingAs($user)->postJson('/api/push-subscriptions/test')->assertOk();
-        Notification::assertSentTo($user, TestPushNotification::class);
+        $this->actingAs($user)->postJson('/api/push-subscriptions/test', ['endpoint' => self::ENDPOINT])->assertOk();
+        Notification::assertSentOnDemandTimes(TestPushNotification::class, 1);
+        Notification::assertSentOnDemand(TestPushNotification::class, fn ($n, $channels, $notifiable) => $notifiable->routes['WebPush']->pluck('endpoint')->all() === [self::ENDPOINT]);
+        Notification::assertNotSentTo($user, TestPushNotification::class);
     }
 }
