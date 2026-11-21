@@ -197,12 +197,19 @@ export interface SavingsGoal {
   updated_at: string
 }
 
-export type AssetType = 'stock' | 'etf' | 'fund' | 'bond' | 'crypto' | 'commodity' | 'certificate' | 'cash' | 'other'
+export type AssetType = 'stock' | 'etf' | 'fund' | 'bond' | 'crypto' | 'commodity' | 'certificate' | 'real_estate' | 'cash' | 'other'
 export interface InvestmentHolding {
   id: number
   account_id: number
   name: string
   symbol: string | null
+  omi_zone: string | null
+  omi_type: number | null
+  omi_state: OmiState | null
+  omi_zone_label?: string | null
+  surface_sqm: string | null
+  /** Superficie × €/m² OMI dell'ultimo semestre di zona, per l'immobile intero: solo confronto. */
+  omi_comparison: { semester: string; surface_basis: 'L' | 'N' | null; min: string; mid: string; max: string } | null
   isin: string | null
   asset_type: AssetType
   currency: string
@@ -214,6 +221,7 @@ export interface InvestmentHolding {
   effective_price: string
   price_source: 'auto' | 'manual' | 'cost'
   price_as_of: string | null
+  price_index: 'omi' | 'istat' | null
   cost_basis: string
   market_value: string
   unrealized_pl: string
@@ -223,6 +231,24 @@ export interface InvestmentHolding {
   realized_pl: string
   created_at: string
   updated_at: string
+}
+
+export type OmiState = 'OTTIMO' | 'NORMALE' | 'SCADENTE'
+export interface OmiZone {
+  link_zona: string
+  comune: string
+  prov: string
+  zona: string
+  zona_descr: string | null
+  /** semesters: semestri caricati in cui la combinazione compare, dal più vecchio. */
+  types: { cod_tip: number; tipologia: string; stato: OmiState; semesters: string[] }[]
+}
+export interface OmiSemester {
+  semester: string
+  comuni: number
+}
+export interface OmiImportResult extends OmiSemester {
+  rows: number
 }
 
 export interface InvestmentHistoryPoint {
