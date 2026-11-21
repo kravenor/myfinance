@@ -204,6 +204,10 @@ const initial = computed(() => (auth.user?.name || auth.user?.email || '?').char
                 <AppIcon name="cog-6-tooth" class="h-4 w-4" />
                 Impostazioni
               </RouterLink>
+              <RouterLink v-if="auth.user?.is_admin" :to="{ name: 'invitations' }" class="menu-item">
+                <AppIcon name="user-plus" class="h-4 w-4" />
+                Inviti
+              </RouterLink>
               <button type="button" class="menu-item w-full" @click="onLogout">
                 <AppIcon name="arrow-right-start-on-rectangle" class="h-4 w-4" />
                 Esci

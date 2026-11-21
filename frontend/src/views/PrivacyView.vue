@@ -29,6 +29,10 @@ import { LEGAL } from '@/lib/legal'
         <strong>Registro di sicurezza</strong>: data e ora, indirizzo IP, browser ed email usata per gli accessi riusciti e
         falliti, la verifica in due passaggi, i cambi di password e dell'indirizzo delle notifiche.
       </li>
+      <li>
+        <strong>Inviti</strong>: se un amministratore ti invita, l'indirizzo email a cui è destinato l'invito (se ne indica
+        uno), le date di creazione, scadenza e uso, e chi l'ha creato.
+      </li>
     </ul>
 
     <h2>Perché e su quale base</h2>
@@ -41,6 +45,10 @@ import { LEGAL } from '@/lib/legal'
         Per la sicurezza del servizio e la prevenzione degli abusi (art. 6.1.f, legittimo interesse): dati tecnici di
         sessione, limiti ai tentativi di accesso e registro di sicurezza.
       </li>
+      <li>
+        Per mandarti un invito che un amministratore ha deciso di inviarti (art. 6.1.f, legittimo interesse): l'email serve
+        solo a recapitarlo e a far valere l'invito per quell'indirizzo. Se non lo usi, scade da solo.
+      </li>
       <li>Non usiamo i tuoi dati per pubblicità o profilazione e non li vendiamo a nessuno.</li>
     </ul>
     <p>I dati finanziari sono facoltativi: li inserisci tu, e sei tu a decidere cosa registrare.</p>
@@ -50,7 +58,8 @@ import { LEGAL } from '@/lib/legal'
       <li>Al fornitore di hosting che ospita l'applicazione e il database ({{ LEGAL.hosting }}).</li>
       <li>
         Al fornitore del servizio email ({{ LEGAL.mail }}), solo per inviarti email che riguardano il tuo account:
-        reimpostazione della password e avvisi su budget e obiettivi, se li hai attivati.
+        reimpostazione della password, avvisi su budget e obiettivi se li hai attivati, e l'email di invito se un
+        amministratore te ne manda una.
       </li>
       <li>
         Se attivi le notifiche su un dispositivo, al servizio push del tuo browser (Google per Chrome, Edge e Android,
@@ -74,6 +83,9 @@ import { LEGAL } from '@/lib/legal'
         tutti gli altri.
       </li>
       <li>Link per reimpostare la password: valido 60 minuti.</li>
+      <li>
+        Inviti: il link vale 7 giorni e una sola volta; il record resta finché un amministratore non lo toglie dalla lista.
+      </li>
       <li>Registro di sicurezza: 90 giorni, poi viene cancellato automaticamente.</li>
     </ul>
 

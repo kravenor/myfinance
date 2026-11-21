@@ -23,6 +23,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Inviti
+    |--------------------------------------------------------------------------
+    | Gli admin (`users.is_admin`, assegnato da `php artisan user:admin`) creano
+    | link di registrazione monouso, validi anche a registrazione chiusa.
+    */
+    'invitations' => [
+        'expires_days' => (int) env('FINANCE_INVITATION_DAYS', 7),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Provider tassi di cambio
     |--------------------------------------------------------------------------
     | Frankfurter (https://frankfurter.dev) espone i tassi di riferimento BCE

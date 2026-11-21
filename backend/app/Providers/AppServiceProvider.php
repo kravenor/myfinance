@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Mail\Markdown;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 
@@ -30,6 +32,9 @@ class AppServiceProvider extends ServiceProvider
         Markdown::withSecuredEncoding();
 
         RateLimiter::for('api', fn (Request $request) => Limit::perMinute(300)->by($request->user()?->id ?: $request->ip()));
+
+        // Gestione inviti. Il ruolo si assegna solo da console (`user:admin`).
+        Gate::define('admin', fn (User $user): bool => $user->is_admin);
 
         // Il link di reset password punta alla rotta SPA del frontend.
         ResetPassword::createUrlUsing(function (object $notifiable, string $token): string {

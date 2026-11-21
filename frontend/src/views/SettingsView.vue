@@ -572,5 +572,18 @@ onMounted(async () => {
         </label>
       </div>
     </section>
+
+    <section v-if="auth.user?.is_admin" class="card p-4 sm:p-6 space-y-4">
+      <div>
+        <h2 class="font-medium">Inviti</h2>
+        <p class="text-sm text-slate-500 mt-1">
+          Sei admin: puoi mandare link di registrazione monouso a persone scelte, anche con la registrazione chiusa.
+        </p>
+      </div>
+      <RouterLink :to="{ name: 'invitations' }" class="btn-secondary inline-flex items-center gap-2">
+        <AppIcon name="user-plus" class="h-4 w-4" />
+        Gestisci inviti
+      </RouterLink>
+    </section>
   </div>
 </template>
