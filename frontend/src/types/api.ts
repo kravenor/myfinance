@@ -21,6 +21,20 @@ export interface User {
   month_start_day: number
   notification_preferences?: NotificationPreferences
   two_factor_enabled?: boolean
+  is_admin?: boolean
+  created_at: string
+}
+
+export type InvitationStatus = 'pending' | 'accepted' | 'expired'
+
+export interface Invitation {
+  id: number
+  email: string | null
+  status: InvitationStatus
+  invited_by?: string | null
+  accepted_by?: string | null
+  expires_at: string
+  accepted_at: string | null
   created_at: string
 }
 

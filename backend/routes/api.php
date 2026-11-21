@@ -9,6 +9,7 @@ use App\Http\Controllers\ExchangeRateController;
 use App\Http\Controllers\InvestmentController;
 use App\Http\Controllers\InvestmentHoldingController;
 use App\Http\Controllers\InvestmentTransactionController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationPreferenceController;
 use App\Http\Controllers\OmiQuotationController;
@@ -26,6 +27,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/auth/registration', [AuthController::class, 'registrationStatus'])->name('auth.registration');
 Route::post('/auth/register', [AuthController::class, 'register'])->middleware('throttle:5,1')->name('auth.register');
+Route::get('/auth/invitations/{token}', [AuthController::class, 'invitation'])->middleware('throttle:10,1')->name('auth.invitation');
 Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
 Route::post('/auth/two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:5,1')->name('auth.two-factor.challenge');
 Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:5,1')->name('password.email');
@@ -44,6 +46,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::delete('/auth/two-factor', [AuthController::class, 'disableTwoFactor'])->name('auth.two-factor.disable');
         Route::post('/auth/two-factor/recovery-codes', [AuthController::class, 'regenerateRecoveryCodes'])->name('auth.two-factor.recovery-codes');
     });
+
+    Route::apiResource('invitations', InvitationController::class)
+        ->only(['index', 'store', 'destroy'])
+        ->middleware('can:admin');
 
     Route::get('exchange-rates', [ExchangeRateController::class, 'index'])->name('exchange-rates.index');
     Route::get('exchange-rates/convert', [ExchangeRateController::class, 'convert'])->name('exchange-rates.convert');

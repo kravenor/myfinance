@@ -4,6 +4,7 @@ import type {
   Cadence,
   CategoryType,
   InvestmentSide,
+  InvitationStatus,
   RuleAppliesTo,
   RuleMatchType,
   SavingsGoalRecurrence,
@@ -99,6 +100,12 @@ const CADENCE_UNIT: Record<Cadence, [string, string]> = {
 export function cadenceText(interval: number, cadence: Cadence): string {
   const [one, many] = CADENCE_UNIT[cadence]
   return interval > 1 ? `ogni ${interval} ${many}` : `ogni ${one}`
+}
+
+export const INVITATION_STATUS_LABEL: Record<InvitationStatus, string> = {
+  pending: 'In attesa',
+  accepted: 'Usato',
+  expired: 'Scaduto',
 }
 
 export const NOTIFICATION_LEVEL_LABEL: Record<string, string> = {

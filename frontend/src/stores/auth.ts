@@ -58,11 +58,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // null: token inesistente, scaduto o già usato (il backend non distingue).
+  async function invitation(token: string): Promise<{ email: string | null; expires_at: string } | null> {
+    try {
+      const { data } = await api.get<{ email: string | null; expires_at: string }>(
+        `/auth/invitations/${encodeURIComponent(token)}`,
+      )
+      return data
+    } catch {
+      return null
+    }
+  }
+
   async function register(payload: {
     name: string
     email: string
     password: string
     password_confirmation: string
+    invitation_token?: string
   }): Promise<void> {
     loading.value = true
     try {
@@ -108,6 +121,7 @@ export const useAuthStore = defineStore('auth', () => {
     twoFactorChallenge,
     register,
     registrationEnabled,
+    invitation,
     logout,
     forgotPassword,
     resetPassword,

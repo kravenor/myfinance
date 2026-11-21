@@ -57,6 +57,12 @@ export const router = createRouter({
         { path: 'forecast', name: 'forecast', component: () => import('@/views/ForecastView.vue') },
         { path: 'import-export', name: 'import-export', component: () => import('@/views/ImportExportView.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/views/SettingsView.vue') },
+        {
+          path: 'invitations',
+          name: 'invitations',
+          component: () => import('@/views/InvitationsView.vue'),
+          meta: { admin: true },
+        },
       ],
     },
     // Pubbliche per chiunque: niente meta.guest (rimbalzerebbe chi è loggato) né requiresAuth.
@@ -76,6 +82,10 @@ router.beforeEach(async (to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (to.meta.guest && auth.isAuthenticated) {
+    return { name: 'dashboard' }
+  }
+  // Solo comodità: il backend risponde 403 a chi non è admin.
+  if (to.meta.admin && !auth.user?.is_admin) {
     return { name: 'dashboard' }
   }
 })
