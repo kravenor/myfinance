@@ -18,12 +18,16 @@ use Illuminate\Support\Facades\Auth;
  * quotazione più recente <= al punto della serie; dove non ne esiste ancora
  * una si usa il costo medio di quel momento, che all'inizio di un PAC è il
  * prezzo a cui hai appena comprato (e non un valore inventato). `last_price`
- * non entra: è un prezzo di oggi, privo di significato su un mese passato.
+ * non entra: è un prezzo di oggi, privo di significato su un mese passato
+ * (eccezione: gli immobili, dove è una stima datata da indicizzare).
  * Motivazioni e alternative in docs/adr/0002-registro-movimenti-investimenti.md (D7, D8).
  */
 class InvestmentHistoryService
 {
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly RealEstateIndex $realEstateIndex,
+    ) {}
 
     /**
      * Con $holdingId la serie (e XIRR/TWR) è di quel solo holding; lo scope
@@ -55,6 +59,7 @@ class InvestmentHistoryService
         }
 
         $quotes = $this->quotesBySymbol($holdings);
+        $indexes = $this->realEstateIndex->series($holdings, $quotes);
 
         // Stato che avanza con la serie: un cursore per holding sui suoi
         // movimenti già ordinati, così ogni movimento viene letto una volta sola.
@@ -121,8 +126,8 @@ class InvestmentHistoryService
                     continue;
                 }
 
-                $price = $this->priceAt($quotes, $holding, $at, $base)
-                    ?? ($costBasis[$id] / $quantity[$id]);
+                $avgCost = $costBasis[$id] / $quantity[$id];
+                $price = $this->priceAt($quotes, $indexes, $holding, $at, $avgCost, $movements[$id]->first()->occurred_at) ?? $avgCost;
 
                 $marketValue += $this->converter->convert(
                     $quantity[$id] * $price,
@@ -264,15 +269,22 @@ class InvestmentHistoryService
         );
     }
 
-    /** Ultima quotazione <= $at nella valuta dell'holding, o null se non ce n'è ancora. */
-    private function priceAt($quotes, InvestmentHolding $holding, Carbon $at, string $base): ?float
+    /**
+     * Ultima quotazione <= $at nella valuta dell'holding, o null se non ce n'è ancora.
+     * Per gli immobili è il valore indicizzato sulla serie di RealEstateIndex ($indexes),
+     * vedi InvestmentHolding::indexedPrice().
+     */
+    private function priceAt($quotes, Collection $indexes, InvestmentHolding $holding, Carbon $at, float $avgCost, Carbon $firstMovementAt): ?float
     {
+        if ($holding->isIndexed()) {
+            return $holding->indexedPrice($indexes[$holding->id], $at, $avgCost, $firstMovementAt);
+        }
+
         if (! $holding->symbol) {
             return null;
         }
 
-        $quote = ($quotes[$holding->priceKey()] ?? collect())
-            ->last(fn (InstrumentPrice $p) => $p->as_of->lte($at));
+        $quote = ($quotes[$holding->priceKey()] ?? collect())->last(fn (InstrumentPrice $p) => $p->as_of->lte($at));
 
         if ($quote === null) {
             return null;

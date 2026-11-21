@@ -60,9 +60,10 @@ import { LEGAL } from '@/lib/legal'
       </li>
     </ul>
     <p>
-      Per tassi di cambio e quotazioni il server interroga fonti pubbliche di dati di mercato (Frankfurter/BCE, Yahoo
-      Finance, CoinGecko, Borsa Italiana, Teleborsa). A queste fonti arrivano solo codici di valute e di strumenti
-      finanziari (es. un ticker o un ISIN), mai dati che ti identificano. Il tuo browser non contatta altri servizi esterni, salvo il servizio push se attivi le notifiche.
+      Per tassi di cambio, quotazioni e indici dei prezzi delle abitazioni il server interroga fonti pubbliche di dati
+      (Frankfurter/BCE, Yahoo Finance, CoinGecko, Borsa Italiana, Teleborsa, ISTAT, BIS). A queste fonti arrivano solo
+      codici di valute, di strumenti finanziari (es. un ticker o un ISIN) e di territori (es. «Centro»), mai dati che ti
+      identificano. Il tuo browser non contatta altri servizi esterni, salvo il servizio push se attivi le notifiche.
     </p>
 
     <h2>Per quanto tempo</h2>

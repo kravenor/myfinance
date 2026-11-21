@@ -22,7 +22,7 @@ class InvestmentHoldingController extends Controller
     {
         $this->authorize('viewAny', InvestmentHolding::class);
 
-        $query = InvestmentHolding::query()->withSum('transactions', 'fees')->orderBy('name');
+        $query = InvestmentHolding::query()->withSum('transactions', 'fees')->with('omiZone')->orderBy('name');
 
         if ($request->filled('account_id')) {
             $query->where('account_id', $request->integer('account_id'));
@@ -50,13 +50,13 @@ class InvestmentHoldingController extends Controller
             // La posizione dichiarata alla creazione entra nel registro come
             // movimento di apertura: da qui in poi la governano i movimenti.
             if ((float) $data['quantity'] > 0) {
-                $this->recalculator->openingMovement($holding, (float) $data['quantity'], (float) $data['avg_cost']);
+                $this->recalculator->openingMovement($holding, (float) $data['quantity'], (float) $data['avg_cost'], $data['opened_at'] ?? null);
             }
 
             return $holding;
         });
 
-        return (new InvestmentHoldingResource($holding))
+        return (new InvestmentHoldingResource($holding->load('omiZone')))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
     }
@@ -65,7 +65,7 @@ class InvestmentHoldingController extends Controller
     {
         $this->authorize('view', $investmentHolding);
 
-        $priceResolver->hydrate(collect([$investmentHolding]));
+        $priceResolver->hydrate(collect([$investmentHolding->load('omiZone')]));
 
         return new InvestmentHoldingResource($investmentHolding);
     }
@@ -76,7 +76,7 @@ class InvestmentHoldingController extends Controller
 
         $investmentHolding->update($request->validated());
 
-        return new InvestmentHoldingResource($investmentHolding);
+        return new InvestmentHoldingResource($investmentHolding->load('omiZone'));
     }
 
     public function destroy(InvestmentHolding $investmentHolding): Response

@@ -37,8 +37,21 @@ export const ASSET_TYPE_LABEL: Record<AssetType, string> = {
   crypto: 'Cripto',
   commodity: 'Materia prima',
   certificate: 'Certificato',
+  real_estate: 'Immobile',
   cash: 'Liquidità',
   other: 'Altro',
+}
+
+/** Territori dell'indice ISTAT dei prezzi delle abitazioni (symbol degli immobili). */
+export const IPAB_AREA_LABEL: Record<string, string> = {
+  IT: 'Italia',
+  ITC: 'Nord-ovest',
+  ITD: 'Nord-est',
+  ITE: 'Centro',
+  ITFG: 'Sud e Isole',
+  ITC11: 'Torino',
+  ITC45: 'Milano',
+  ITE43: 'Roma',
 }
 
 export const INVESTMENT_SIDE_LABEL: Record<InvestmentSide, string> = { buy: 'Acquisto', sell: 'Vendita', fee: 'Costo' }

@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\InstrumentPrice;
 use App\Models\InvestmentHolding;
+use App\Models\InvestmentTransaction;
+use App\Models\OmiQuotation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -18,7 +20,10 @@ use Illuminate\Support\Collection;
  */
 class InvestmentPriceResolver
 {
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly RealEstateIndex $realEstateIndex,
+    ) {}
 
     /**
      * Imposta su ogni holding la quotazione automatica più recente con
@@ -37,19 +42,38 @@ class InvestmentPriceResolver
 
         // ponytail: carica tutte le quote dei symbol e tiene la più recente <= asOf.
         // Ok per poche decine di symbol; con storico ampio passare a una subquery MAX(as_of).
+        // Anche le quote successive ad asOf: l'indice degli immobili si raccorda sulla serie intera.
         $quotesBySymbol = InstrumentPrice::query()
             ->whereIn('symbol', $symbols)
-            ->where('as_of', '<=', $asOf->toDateString())
             ->orderBy('as_of')
             ->get()
             ->groupBy(fn (InstrumentPrice $p) => InstrumentPrice::key($p->provider, $p->symbol));
 
+        $omi = $this->realEstateIndex->omiQuotations($holdings);
+        $indexes = $this->realEstateIndex->series($holdings, $quotesBySymbol, $omi);
+        $firstMovementAt = $this->firstMovementDates($holdings->filter->isIndexed());
+
         foreach ($holdings as $holding) {
-            $quote = $holding->symbol
-                ? ($quotesBySymbol[$holding->priceKey()] ?? null)?->last()
-                : null;
+            // Riferimento per il confronto con la superficie: la media OMI di zona al semestre di asOf.
+            if ($holding->surface_sqm !== null) {
+                $holding->usingOmiReference(($omi[$holding->id] ?? collect())->last(fn (OmiQuotation $q) => $q->semester->lte($asOf)));
+            }
+
+            $quotes = $holding->isIndexed()
+                ? $indexes[$holding->id]
+                : ($holding->symbol ? ($quotesBySymbol[$holding->priceKey()] ?? collect()) : collect());
+            $quote = $quotes->last(fn (InstrumentPrice $p) => $p->as_of->lte($asOf));
 
             if ($quote === null) {
+                continue;
+            }
+
+            if ($holding->isIndexed()) {
+                $price = $holding->indexedPrice($quotes, $asOf, (float) $holding->avg_cost, $firstMovementAt[$holding->id] ?? null);
+                if ($price !== null) {
+                    $holding->usingResolvedPrice($price, $quote->as_of->toDateString(), $quote->provider);
+                }
+
                 continue;
             }
 
@@ -63,6 +87,27 @@ class InvestmentPriceResolver
                 $quote->as_of->toDateString(),
             );
         }
+    }
+
+    /**
+     * Data del primo movimento per holding, ancora del costo negli holding indicizzati.
+     * Senza scope utente: gli id arrivano dalla collection già filtrata dal chiamante.
+     *
+     * @param  Collection<int, InvestmentHolding>  $holdings
+     * @return Collection<int, Carbon>
+     */
+    private function firstMovementDates(Collection $holdings): Collection
+    {
+        if ($holdings->isEmpty()) {
+            return collect();
+        }
+
+        return InvestmentTransaction::withoutGlobalScopes()
+            ->whereIn('investment_holding_id', $holdings->pluck('id'))
+            ->groupBy('investment_holding_id')
+            ->selectRaw('investment_holding_id, MIN(occurred_at) as first_at')
+            ->pluck('first_at', 'investment_holding_id')
+            ->map(fn (string $at) => Carbon::parse($at));
     }
 
     /**

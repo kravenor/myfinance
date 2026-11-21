@@ -11,6 +11,7 @@ use App\Http\Controllers\InvestmentHoldingController;
 use App\Http\Controllers\InvestmentTransactionController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\NotificationPreferenceController;
+use App\Http\Controllers\OmiQuotationController;
 use App\Http\Controllers\PushSubscriptionController;
 use App\Http\Controllers\RecurringTransactionController;
 use App\Http\Controllers\ReportController;
@@ -68,6 +69,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('investments/lookup', [InvestmentController::class, 'lookup'])->middleware('throttle:10,1,prices-lookup')->name('investments.lookup');
     Route::get('investments/history', [InvestmentController::class, 'history'])->name('investments.history');
     Route::post('investments/refresh-prices', [InvestmentController::class, 'refreshPrices'])->middleware('throttle:2,1,prices-refresh')->name('investments.refresh-prices');
+    Route::get('omi-quotations', [OmiQuotationController::class, 'index'])->name('omi-quotations.index');
+    Route::post('omi-quotations/import', [OmiQuotationController::class, 'import'])->middleware('throttle:10,1')->name('omi-quotations.import');
+    Route::get('omi-quotations/zones', [OmiQuotationController::class, 'zones'])->name('omi-quotations.zones');
     Route::apiResource('investment-holdings', InvestmentHoldingController::class)
         ->parameter('investment-holdings', 'investment_holding');
     Route::apiResource('investment-holdings.transactions', InvestmentTransactionController::class)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDate, formatMonth } from '@/lib/date'
+import { formatDate, formatMonth, toIsoDate } from '@/lib/date'
 import ListSkeleton from '@/components/ui/ListSkeleton.vue'
 import { Line } from 'vue-chartjs'
 import {
@@ -12,7 +12,7 @@ import {
   PointElement,
   Tooltip,
 } from 'chart.js'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { api } from '@/lib/api'
 import { useCrud } from '@/composables/useCrud'
@@ -23,10 +23,11 @@ import FieldError from '@/components/ui/FieldError.vue'
 import FormErrors from '@/components/ui/FormErrors.vue'
 import { useFormDirty } from '@/composables/useFormDirty'
 import { MUTED_COLOR, PRIMARY_COLOR } from '@/lib/chartTheme'
-import { ACCOUNT_TYPE_LABEL, ASSET_TYPE_LABEL } from '@/lib/labels'
+import { ACCOUNT_TYPE_LABEL, ASSET_TYPE_LABEL, IPAB_AREA_LABEL } from '@/lib/labels'
 import { useToastStore } from '@/stores/toast'
 import RowActions from '@/components/ui/RowActions.vue'
 import HoldingMovements from '@/components/HoldingMovements.vue'
+import OmiZonePicker from '@/components/OmiZonePicker.vue'
 import { CURRENCIES, formatCurrency } from '@/lib/money'
 import type {
   Account,
@@ -35,6 +36,7 @@ import type {
   InvestmentHistory,
   InvestmentHolding,
   InvestmentOverview,
+  OmiState,
   Paginated,
 } from '@/types/api'
 import { confirmAction } from '@/composables/useConfirm'
@@ -98,7 +100,7 @@ const chartOptions = {
   plugins: { legend: { position: 'bottom' as const } },
 }
 
-const assetTypes: AssetType[] = ['etf', 'stock', 'fund', 'bond', 'crypto', 'commodity', 'certificate', 'cash', 'other']
+const assetTypes: AssetType[] = ['etf', 'stock', 'fund', 'bond', 'crypto', 'commodity', 'certificate', 'real_estate', 'cash', 'other']
 
 const assetTypeColors: Record<AssetType, string> = {
   stock: '#2563eb',
@@ -108,6 +110,7 @@ const assetTypeColors: Record<AssetType, string> = {
   crypto: '#ea580c',
   commodity: '#65a30d',
   certificate: '#db2777',
+  real_estate: '#0f766e',
   cash: '#475569',
   other: '#64748b',
 }
@@ -124,7 +127,13 @@ const form = ref({
   currency: 'EUR',
   quantity: '',
   avg_cost: '',
+  opened_at: '',
   last_price: '',
+  last_price_at: '',
+  omi_zone: '',
+  omi_type: null as number | null,
+  omi_state: null as OmiState | null,
+  surface_sqm: '',
   notes: '',
 })
 const dirty = useFormDirty(form, showForm)
@@ -135,6 +144,52 @@ const lookupError = ref('')
 const refreshingPrices = ref(false)
 
 const investmentAccounts = computed(() => accounts.value.filter((a) => a.type === 'investment'))
+const isProperty = computed(() => form.value.asset_type === 'real_estate')
+
+// Un immobile ha per symbol il territorio dell'indice ISTAT: un ticker rimasto dal tipo precedente non vale.
+watch(isProperty, (property) => {
+  if (property && !(form.value.symbol in IPAB_AREA_LABEL)) form.value.symbol = 'IT'
+})
+
+function symbolLabel(h: InvestmentHolding): string | null {
+  if (h.asset_type !== 'real_estate' || !h.symbol) return h.symbol
+  if (h.omi_zone_label) return `Zona OMI ${h.omi_zone_label}`
+  return `Indice ${IPAB_AREA_LABEL[h.symbol] ?? h.symbol}`
+}
+
+// Immobili: il prezzo «auto» è il valore indicizzato all'ultimo semestre OMI o trimestre ISTAT usato.
+function priceBadge(h: InvestmentHolding): string {
+  if (!h.price_as_of) return h.asset_type === 'real_estate' ? 'ISTAT' : 'auto'
+  if (h.asset_type !== 'real_estate') return `auto · ${formatDate(h.price_as_of)}`
+  const [year, month] = h.price_as_of.split('-')
+  if (h.price_index === 'omi') return `OMI · S${Number(month) <= 6 ? 1 : 2} ${year}`
+  return `ISTAT · T${Math.ceil(Number(month) / 3)} ${year}`
+}
+
+// Confronto della stima (immobile intero) con superficie × media OMI di zona.
+function omiComparisonText(h: InvestmentHolding): string {
+  const c = h.omi_comparison
+  if (!c) return ''
+  const diff = Math.round((parseFloat(h.effective_price) / parseFloat(c.mid) - 1) * 100)
+  return `media zona ${formatCurrency(c.mid, h.currency)} · stima ${diff > 0 ? '+' : ''}${diff}%`
+}
+
+function omiComparisonTitle(h: InvestmentHolding): string {
+  const c = h.omi_comparison
+  if (!c) return ''
+  const [year, month] = c.semester.split('-')
+  const basis = c.surface_basis === 'N' ? 'superficie netta' : 'superficie lorda'
+  return `${h.surface_sqm} m² × quotazioni OMI S${Number(month) <= 6 ? 1 : 2} ${year} (${basis}): da ${formatCurrency(c.min, h.currency)} a ${formatCurrency(c.max, h.currency)}. Solo un confronto, il valore non ne dipende.`
+}
+
+function priceTitle(h: InvestmentHolding): string {
+  if (h.asset_type === 'real_estate') {
+    return h.price_index === 'omi'
+      ? 'Valore rivalutato con le quotazioni OMI della zona'
+      : "Valore rivalutato con l'indice ISTAT dei prezzi delle abitazioni"
+  }
+  return h.price_as_of ? `Quotazione automatica aggiornata il ${formatDate(h.price_as_of)}` : 'Quotazione automatica'
+}
 
 function accountName(id: number | null): string {
   if (!id) return '—'
@@ -170,7 +225,13 @@ function reset() {
     currency: investmentAccounts.value[0]?.currency ?? 'EUR',
     quantity: '',
     avg_cost: '',
+    opened_at: '',
     last_price: '',
+    last_price_at: '',
+    omi_zone: '',
+    omi_type: null,
+    omi_state: null,
+    surface_sqm: '',
     notes: '',
   }
 }
@@ -189,7 +250,13 @@ function startEdit(h: InvestmentHolding) {
     currency: h.currency,
     quantity: h.quantity,
     avg_cost: h.avg_cost,
+    opened_at: '',
     last_price: h.last_price ?? '',
+    last_price_at: h.last_price_at?.slice(0, 10) ?? '',
+    omi_zone: h.omi_zone ?? '',
+    omi_type: h.omi_type,
+    omi_state: h.omi_state,
+    surface_sqm: h.surface_sqm ?? '',
     notes: h.notes ?? '',
   }
   showForm.value = true
@@ -241,12 +308,24 @@ async function onSubmit() {
     last_price: form.value.last_price === '' ? null : form.value.last_price,
     notes: form.value.notes || null,
   }
+  if (isProperty.value) {
+    payload.omi_zone = form.value.omi_zone || null
+    payload.omi_type = form.value.omi_zone ? form.value.omi_type : null
+    payload.omi_state = form.value.omi_zone ? form.value.omi_state : null
+    payload.surface_sqm = form.value.surface_sqm === '' ? null : form.value.surface_sqm
+  }
   // In modifica quantità e carico arrivano dal registro movimenti: l'API li ignora.
   if (editing.value) {
     delete payload.quantity
     delete payload.avg_cost
+  } else if (form.value.opened_at) {
+    payload.opened_at = form.value.opened_at
   }
-  if (form.value.last_price !== '') payload.last_price_at = new Date().toISOString()
+  // La data di un prezzo manuale cambia solo se cambia il prezzo; per un immobile è la data della valutazione.
+  if (form.value.last_price !== '') {
+    if (isProperty.value) payload.last_price_at = form.value.last_price_at || toIsoDate(new Date())
+    else if (form.value.last_price !== (editing.value?.last_price ?? '')) payload.last_price_at = new Date().toISOString()
+  }
 
   try {
     if (editing.value) {
@@ -339,6 +418,7 @@ onMounted(async () => {
       <ul>
         <li>Quantità, prezzo di carico e versato si ricalcolano dal registro movimenti di ogni posizione: per cambiarli aggiungi o correggi un movimento, non la posizione.</li>
         <li>Ogni mattina la quotazione arriva da sola in base al tipo (Yahoo Finance per azioni, ETF e fondi, CoinGecko per le crypto, Borsa Italiana o Teleborsa per obbligazioni e certificati); senza quotazione vale il prezzo corrente inserito a mano, altrimenti il carico.</li>
+        <li>Gli immobili non hanno quotazione: valgono il costo d'acquisto, o la tua ultima valutazione, rivalutato con l'indice ISTAT dei prezzi delle abitazioni esistenti del territorio scelto. L'indice è una media, esce ogni trimestre con circa sei mesi di ritardo: aggiorna la valutazione ogni tanto. Per seguire il quartiere invece della media scegli una zona OMI: le quotazioni dell'Agenzia delle Entrate le carichi tu, un semestre alla volta, dal form dell'immobile.</li>
         <li>Il P/L latente è il valore attuale meno il costo delle quote che hai ancora; il P/L realizzato nasce solo da vendite e costi e lo trovi nel registro movimenti.</li>
         <li>L'annualizzato (XIRR) è il rendimento medio per anno che tiene conto di quando hai versato ogni importo: compare dopo almeno un anno dal primo movimento.</li>
         <li>Il TWR misura quanto hanno reso gli strumenti, ignorando quando e quanto hai versato: se è più alto dell'XIRR, i versamenti sono arrivati in momenti sfavorevoli; se è più basso, in momenti favorevoli.</li>
@@ -418,14 +498,30 @@ onMounted(async () => {
           <FormErrors
             class="col-span-full"
             :errors="fieldErrors"
-            :shown="['name', 'symbol', 'isin', 'account_id', 'asset_type', 'currency', 'quantity', 'avg_cost', 'last_price', 'notes']"
+            :shown="['name', 'symbol', 'isin', 'account_id', 'asset_type', 'currency', 'quantity', 'avg_cost', 'opened_at', 'last_price', 'last_price_at', 'omi_zone', 'omi_type', 'omi_state', 'surface_sqm', 'notes']"
           />
           <div class="sm:col-span-2 md:col-span-1">
             <label class="label">Nome</label>
             <input v-model="form.name" class="input" :class="{ 'input-invalid': fieldErrors.name }" required />
             <FieldError :errors="fieldErrors" name="name" />
           </div>
-          <div>
+          <div v-if="isProperty">
+            <label class="label">Indice ISTAT</label>
+            <select v-model="form.symbol" class="input" :class="{ 'input-invalid': fieldErrors.symbol }" aria-describedby="hint-symbol">
+              <option v-for="(label, code) in IPAB_AREA_LABEL" :key="code" :value="code">{{ label }}</option>
+            </select>
+            <p id="hint-symbol" class="field-hint">
+              Territorio dell'indice dei prezzi delle abitazioni che aggiorna il valore ogni trimestre: scegli la città se c'è, altrimenti la zona.
+            </p>
+            <FieldError :errors="fieldErrors" name="symbol" />
+          </div>
+          <div v-if="isProperty" class="sm:col-span-2 md:col-span-3">
+            <OmiZonePicker v-model:zone="form.omi_zone" v-model:type="form.omi_type" v-model:state="form.omi_state" />
+            <FieldError :errors="fieldErrors" name="omi_zone" />
+            <FieldError :errors="fieldErrors" name="omi_type" />
+            <FieldError :errors="fieldErrors" name="omi_state" />
+          </div>
+          <div v-else>
             <label class="label">Ticker / Symbol</label>
             <input v-model="form.symbol" class="input" :class="{ 'input-invalid': fieldErrors.symbol }" placeholder="es. CSSPX.MI (auto da ISIN)" aria-describedby="hint-symbol" />
             <p v-if="form.asset_type === 'bond'" id="hint-symbol" class="field-hint">
@@ -447,7 +543,7 @@ onMounted(async () => {
             </p>
             <FieldError :errors="fieldErrors" name="symbol" />
           </div>
-          <div>
+          <div v-if="!isProperty">
             <label class="label">ISIN</label>
             <div class="flex gap-2">
               <input v-model="form.isin" class="input uppercase" :class="{ 'input-invalid': fieldErrors.isin }" maxlength="12" placeholder="es. IE00B5BMR087" aria-describedby="hint-isin" />
@@ -512,24 +608,52 @@ onMounted(async () => {
             <input v-model="form.quantity" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.quantity }" required aria-describedby="hint-quantity" />
             <p id="hint-quantity" class="field-hint">
               <template v-if="form.asset_type === 'bond'">Per le obbligazioni è il valore nominale (es. 5000), non il numero di lotti. </template>
-              Con il prezzo di carico diventa il primo acquisto del registro, datato oggi; metti 0 per partire dai movimenti.
+              <template v-if="isProperty">1 per l'immobile intero, 0.5 se ne possiedi metà. </template>
+              Con il prezzo di carico diventa il primo acquisto del registro; metti 0 per partire dai movimenti.
             </p>
             <FieldError :errors="fieldErrors" name="quantity" />
           </div>
           <div v-if="!editing">
-            <label class="label">Prezzo di carico ({{ form.currency }})</label>
+            <label class="label">{{ isProperty ? "Costo d'acquisto" : 'Prezzo di carico' }} ({{ form.currency }})</label>
             <input v-model="form.avg_cost" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.avg_cost }" required aria-describedby="hint-avg-cost" />
-            <p id="hint-avg-cost" class="field-hint">Prezzo medio pagato per quota, commissioni comprese.</p>
+            <p id="hint-avg-cost" class="field-hint">
+              {{ isProperty ? "Prezzo pagato più notaio, imposte e agenzia, per l'immobile intero." : 'Prezzo medio pagato per quota, commissioni comprese.' }}
+            </p>
             <FieldError :errors="fieldErrors" name="avg_cost" />
+          </div>
+          <div v-if="!editing">
+            <label class="label">{{ isProperty ? "Data d'acquisto" : 'Data di carico' }}</label>
+            <input v-model="form.opened_at" type="date" :max="toIsoDate(new Date())" class="input" :class="{ 'input-invalid': fieldErrors.opened_at }" aria-describedby="hint-opened-at" />
+            <p id="hint-opened-at" class="field-hint">
+              {{ isProperty ? "Da qui parte l'indicizzazione del costo: se vuota vale oggi." : 'Data del primo acquisto nel registro: se vuota vale oggi.' }}
+            </p>
+            <FieldError :errors="fieldErrors" name="opened_at" />
           </div>
           <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded-sm p-3">
             Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
           </div>
           <div>
-            <label class="label">Prezzo corrente ({{ form.currency }})</label>
+            <label class="label">{{ isProperty ? 'Valutazione' : 'Prezzo corrente' }} ({{ form.currency }})</label>
             <input v-model="form.last_price" type="number" step="0.00000001" min="0" class="input" :class="{ 'input-invalid': fieldErrors.last_price }" placeholder="= carico se vuoto" aria-describedby="hint-last-price" />
-            <p id="hint-last-price" class="field-hint">Prezzo manuale: conta solo finché non c'è una quotazione automatica; se vuoto vale il prezzo di carico.</p>
+            <p id="hint-last-price" class="field-hint">
+              <template v-if="isProperty">Stima tua, di un'agenzia o di un perito, per l'intero immobile: dalla sua data la aggiorna l'indice ISTAT. Se vuota si rivaluta il costo d'acquisto.</template>
+              <template v-else>Prezzo manuale: conta solo finché non c'è una quotazione automatica; se vuoto vale il prezzo di carico.</template>
+            </p>
             <FieldError :errors="fieldErrors" name="last_price" />
+          </div>
+          <div v-if="isProperty">
+            <label class="label">Data valutazione</label>
+            <input v-model="form.last_price_at" type="date" :max="toIsoDate(new Date())" class="input" :class="{ 'input-invalid': fieldErrors.last_price_at }" aria-describedby="hint-last-price-at" />
+            <p id="hint-last-price-at" class="field-hint">Se vuota vale oggi.</p>
+            <FieldError :errors="fieldErrors" name="last_price_at" />
+          </div>
+          <div v-if="isProperty">
+            <label class="label">Superficie (m²)</label>
+            <input v-model="form.surface_sqm" type="number" step="0.01" min="1" class="input" :class="{ 'input-invalid': fieldErrors.surface_sqm }" placeholder="facoltativa" aria-describedby="hint-surface" />
+            <p id="hint-surface" class="field-hint">
+              Commerciale, muri e quota di balconi compresi: con una zona OMI mostra la media della zona accanto alla stima, per confronto. Non cambia il valore.
+            </p>
+            <FieldError :errors="fieldErrors" name="surface_sqm" />
           </div>
           <div class="sm:col-span-2 md:col-span-3">
             <label class="label">Note</label>
@@ -594,13 +718,12 @@ onMounted(async () => {
                 >{{ ASSET_TYPE_LABEL[h.asset_type] }}</span>
               </p>
               <p class="text-xs text-slate-500 mt-0.5 truncate">{{ accountName(h.account_id) }}</p>
-              <p v-if="h.symbol" class="text-xs text-slate-500 mt-0.5 truncate">{{ h.symbol }}</p>
+              <p v-if="h.symbol" class="text-xs text-slate-500 mt-0.5 truncate">{{ symbolLabel(h) }}</p>
               <p class="num text-xs text-slate-500 mt-0.5 truncate">
                 {{ h.quantity }} × {{ formatCurrency(h.effective_price, h.currency) }}
               </p>
-              <p v-if="h.price_source === 'auto'" class="text-xs text-income-700 mt-0.5 truncate">
-                auto<template v-if="h.price_as_of"> · {{ formatDate(h.price_as_of) }}</template>
-              </p>
+              <p v-if="h.price_source === 'auto'" class="text-xs text-income-700 mt-0.5 truncate">{{ priceBadge(h) }}</p>
+              <p v-if="h.omi_comparison" class="num text-xs text-slate-500 mt-0.5 truncate" :title="omiComparisonTitle(h)">{{ omiComparisonText(h) }}</p>
             </div>
             <div class="text-right shrink-0">
               <Amount class="block font-semibold whitespace-nowrap" :value="h.market_value" :currency="h.currency" />
@@ -648,7 +771,7 @@ onMounted(async () => {
           <tr v-for="h in items" :key="h.id">
             <td class="font-medium">
               {{ h.name }}
-              <span v-if="h.symbol" class="block text-xs text-slate-500">{{ h.symbol }}</span>
+              <span v-if="h.symbol" class="block text-xs text-slate-500">{{ symbolLabel(h) }}</span>
               <span v-if="h.isin" class="block text-xs text-slate-500">{{ h.isin }}</span>
             </td>
             <td>
@@ -666,10 +789,9 @@ onMounted(async () => {
               <span
                 v-if="h.price_source === 'auto'"
                 class="block text-xs text-income-700"
-                :title="h.price_as_of ? `Quotazione automatica aggiornata il ${formatDate(h.price_as_of)}` : 'Quotazione automatica'"
-              >
-                auto<template v-if="h.price_as_of"> · {{ formatDate(h.price_as_of) }}</template>
-              </span>
+                :title="priceTitle(h)"
+              >{{ priceBadge(h) }}</span>
+              <span v-if="h.omi_comparison" class="num block text-xs text-slate-500 whitespace-nowrap" :title="omiComparisonTitle(h)">{{ omiComparisonText(h) }}</span>
             </td>
             <td class="text-right font-medium"><Amount :value="h.market_value" :currency="h.currency" /></td>
             <td class="text-right" :class="plClass(h.unrealized_pl)">
