@@ -5,6 +5,7 @@ namespace Tests\Feature\Api;
 use App\Models\CategorizationRule;
 use App\Models\Category;
 use App\Models\User;
+use App\Services\CategorizationRuleMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -67,6 +68,47 @@ class CategorizationRuleTest extends TestCase
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['pattern']);
+    }
+
+    public function test_regex_rules_are_capped_per_user(): void
+    {
+        $user = User::factory()->create();
+        $category = Category::factory()->for($user)->create();
+        CategorizationRule::factory()->for($user)->for($category)->count(CategorizationRule::MAX_REGEX_RULES)
+            ->create(['match_type' => 'regex', 'pattern' => 'x']);
+        $payload = ['category_id' => $category->id, 'name' => 'r', 'match_type' => 'regex', 'pattern' => 'y'];
+
+        $this->actingAs($user)->postJson('/api/categorization-rules', $payload)
+            ->assertUnprocessable()->assertJsonValidationErrors(['match_type']);
+        $this->actingAs($user)->postJson('/api/categorization-rules', ['match_type' => 'contains'] + $payload)
+            ->assertCreated();
+        $contains = CategorizationRule::query()->where('match_type', 'contains')->firstOrFail();
+        $this->actingAs($user)->patchJson("/api/categorization-rules/{$contains->id}", ['match_type' => 'regex'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['match_type']);
+    }
+
+    public function test_catastrophic_regex_is_cheap_and_skipped_after_its_first_error(): void
+    {
+        $user = User::factory()->create();
+        $category = Category::factory()->for($user)->create(['type' => 'expense']);
+        CategorizationRule::factory()->for($user)->for($category)->create([
+            'match_type' => 'regex', 'pattern' => '(a+)+$', 'applies_to_type' => 'any', 'priority' => 0, 'is_active' => true,
+        ]);
+        $fallback = CategorizationRule::factory()->for($user)->for($category)->create([
+            'match_type' => 'contains', 'pattern' => 'aaa', 'applies_to_type' => 'any', 'priority' => 1, 'is_active' => true,
+        ]);
+        $this->actingAs($user);
+        $matcher = app(CategorizationRuleMatcher::class);
+        $limit = ini_get('pcre.backtrack_limit');
+
+        $start = hrtime(true);
+        for ($i = 0; $i < 1000; $i++) {
+            $this->assertSame($fallback->id, $matcher->match(str_repeat('a', 40).'!', 'expense')?->id);
+        }
+
+        // Prima del limite: ~2 ms a valutazione, oltre 2 s per 1000 righe.
+        $this->assertLessThan(1.0, (hrtime(true) - $start) / 1e9);
+        $this->assertSame($limit, ini_get('pcre.backtrack_limit'));
     }
 
     public function test_index_is_scoped_to_user(): void

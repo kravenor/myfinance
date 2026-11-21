@@ -36,10 +36,14 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property string|null $notes
  * @property-read Account|null $account
  * @property-read Collection<int, InvestmentTransaction> $transactions
+ * @property-read string|null $transactions_sum_fees solo con withSum('transactions', 'fees')
  */
 class InvestmentHolding extends Model
 {
     use BelongsToUser, HasFactory;
+
+    /** Strumenti per utente: lo storico mensile e le quotazioni notturne lavorano su ognuno. */
+    public const MAX_PER_USER = 200;
 
     protected $fillable = [
         'user_id',

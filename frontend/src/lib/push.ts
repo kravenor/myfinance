@@ -73,5 +73,7 @@ export async function disablePush(): Promise<PushState> {
 }
 
 export async function sendTestPush(): Promise<void> {
-  await api.post('/push-subscriptions/test')
+  const sub = await (await registration())?.pushManager.getSubscription()
+  if (!sub) throw new Error('Nessuna iscrizione push su questo dispositivo')
+  await api.post('/push-subscriptions/test', { endpoint: sub.endpoint })
 }

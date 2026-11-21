@@ -6,7 +6,6 @@ use App\Http\Requests\Budget\StoreBudgetRequest;
 use App\Http\Requests\Budget\UpdateBudgetRequest;
 use App\Http\Resources\BudgetResource;
 use App\Models\Budget;
-use App\Models\Transaction;
 use App\Models\User;
 use App\Services\BudgetAlertService;
 use App\Support\FinancialMonth;
@@ -107,16 +106,19 @@ class BudgetController extends Controller
      */
     private function attachSpent(array $budgets): void
     {
-        foreach ($budgets as $budget) {
-            [$start, $end] = FinancialMonth::forYearMonth($budget->year, $budget->month);
+        $service = app(BudgetAlertService::class);
 
-            $spent = Transaction::query()
-                ->where('type', 'expense')
-                ->where('category_id', $budget->category_id)
-                ->whereBetween('occurred_at', [$start->toDateString(), $end->toDateString()])
-                ->sum('amount');
+        // Una query per periodo distinto (di solito uno solo: la lista è filtrata per mese).
+        foreach (collect($budgets)->groupBy(fn (Budget $b) => $b->year.'-'.$b->month) as $group) {
+            $spent = $service->spentByCategory(
+                $group->pluck('category_id')->unique()->values()->all(),
+                $group->first()->year,
+                $group->first()->month,
+            );
 
-            $budget->setAttribute('spent', $spent);
+            foreach ($group as $budget) {
+                $budget->setAttribute('spent', $spent[$budget->category_id] ?? 0);
+            }
         }
     }
 }

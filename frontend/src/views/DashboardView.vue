@@ -245,7 +245,7 @@ onMounted(async () => {
                     <span class="truncate font-medium text-slate-800">{{ al.category_name ?? '—' }}</span>
                   </span>
                   <span
-                    class="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium"
+                    class="shrink-0 rounded-sm px-1.5 py-0.5 text-xs font-medium"
                     :class="al.status === 'exceeded' ? 'bg-danger-50 text-danger-700' : 'bg-warning-50 text-warning-800'"
                   >
                     {{ al.status === 'exceeded' ? 'Sforato' : 'In allerta' }} · {{ al.percent }}%

@@ -46,6 +46,7 @@ class InvestmentHoldingResource extends JsonResource
             // Derivati dal registro movimenti: cassa netta immessa e P/L chiuso sulle vendite.
             'net_invested' => $this->net_invested,
             'realized_pl' => $this->realized_pl,
+            'total_fees' => $this->whenAggregated('transactions', 'fees', 'sum', fn ($sum) => $this->money((float) $sum)),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
         ];

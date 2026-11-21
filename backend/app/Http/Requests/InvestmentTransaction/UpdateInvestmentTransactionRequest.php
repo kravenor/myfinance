@@ -30,7 +30,8 @@ class UpdateInvestmentTransactionRequest extends FormRequest
 
         return [
             'side' => ['sometimes', 'required', Rule::in(['buy', 'sell', 'fee'])],
-            'occurred_at' => ['sometimes', 'required', 'date'],
+            // Limite inferiore: lo storico mensile itera dal primo movimento a oggi.
+            'occurred_at' => ['sometimes', 'required', 'date', 'after_or_equal:1970-01-01'],
             'quantity' => ['sometimes', 'required', 'numeric', $isFee ? 'in:0' : 'gt:0', 'between:0,9999999999999.99999999'],
             'price' => ['sometimes', 'required', 'numeric', 'min:0', 'between:0,9999999999999.99999999'],
             'fees' => ['sometimes', 'numeric', $isFee ? 'gt:0' : 'min:0', 'max:9999999999999.99'],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\CategorizationRule;
 
+use App\Models\CategorizationRule;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
@@ -39,6 +40,11 @@ class StoreCategorizationRuleRequest extends FormRequest
     {
         $validator->after(function (Validator $v) {
             if ($this->input('match_type') !== 'regex') {
+                return;
+            }
+            if (CategorizationRule::query()->where('match_type', 'regex')->count() >= CategorizationRule::MAX_REGEX_RULES) {
+                $v->errors()->add('match_type', 'Puoi avere al massimo '.CategorizationRule::MAX_REGEX_RULES.' regole con espressione regolare.');
+
                 return;
             }
             $pattern = (string) $this->input('pattern', '');

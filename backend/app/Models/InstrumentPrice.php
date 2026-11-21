@@ -32,10 +32,13 @@ class InstrumentPrice extends Model
         'as_of',
     ];
 
-    /** Chiave con cui i lettori raggruppano le quote: mai il solo simbolo. */
+    /**
+     * Chiave con cui i lettori raggruppano le quote: mai il solo simbolo. Ignora le maiuscole
+     * come la collation di MySQL, che restituisce le quote di VWCE.DE anche a chi ha scritto vwce.de.
+     */
     public static function key(?string $provider, ?string $symbol): string
     {
-        return $provider.'|'.$symbol;
+        return $provider.'|'.mb_strtolower((string) $symbol);
     }
 
     protected function casts(): array

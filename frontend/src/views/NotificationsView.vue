@@ -70,7 +70,7 @@ onMounted(() => store.fetch())
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
               <span class="font-medium">{{ n.title }}</span>
-              <span v-if="n.level" class="text-xs px-2 py-0.5 rounded" :class="levelClass(n.level)">
+              <span v-if="n.level" class="text-xs px-2 py-0.5 rounded-sm" :class="levelClass(n.level)">
                 {{ NOTIFICATION_LEVEL_LABEL[n.level] ?? n.level }}
               </span>
             </div>

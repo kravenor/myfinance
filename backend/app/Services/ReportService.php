@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Support\BusinessDay;
 use App\Support\Cadence;
 use App\Support\FinancialMonth;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -31,7 +32,7 @@ class ReportService
         private readonly HoldingPositionRecalculator $positions,
     ) {}
 
-    /** @var Collection<int, Collection<int, InvestmentTransaction>>|null movimenti per holding, caricati una volta per richiesta */
+    /** @var Collection<int|string, EloquentCollection<int, InvestmentTransaction>>|null movimenti per holding, caricati una volta per richiesta */
     private ?Collection $movementsByHolding = null;
 
     /**
@@ -558,14 +559,15 @@ class ReportService
         return $values;
     }
 
-    /** @return Collection<int, Collection<int, InvestmentTransaction>> */
+    /** @return Collection<int|string, EloquentCollection<int, InvestmentTransaction>> */
     private function movementsByHolding(): Collection
     {
         return $this->movementsByHolding ??= InvestmentTransaction::query()
             ->orderBy('occurred_at')
             ->orderBy('id')
             ->get()
-            ->groupBy('investment_holding_id');
+            ->groupBy('investment_holding_id')
+            ->toBase();
     }
 
     /**

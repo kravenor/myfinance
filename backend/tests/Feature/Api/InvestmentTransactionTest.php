@@ -45,6 +45,21 @@ class InvestmentTransactionTest extends TestCase
         $this->getJson("/api/investment-holdings/{$holding->id}/transactions")->assertUnauthorized();
     }
 
+    public function test_movement_date_has_a_lower_bound(): void
+    {
+        $user = User::factory()->create();
+        $holding = $this->holding($user);
+
+        // Lo storico mensile itera dal primo movimento: l'anno 1000 sarebbero ~12.000 mesi per strumento.
+        $this->buy($user, $holding, ['occurred_at' => '1000-01-01', 'quantity' => 1, 'price' => 1])
+            ->assertUnprocessable()->assertJsonValidationErrors(['occurred_at']);
+        $this->buy($user, $holding, ['occurred_at' => '1970-01-01', 'quantity' => 1, 'price' => 1])->assertCreated();
+
+        $movement = $holding->transactions()->firstOrFail();
+        $this->actingAs($user)->patchJson("/api/investment-holdings/{$holding->id}/transactions/{$movement->id}", ['occurred_at' => '1969-12-31'])
+            ->assertUnprocessable()->assertJsonValidationErrors(['occurred_at']);
+    }
+
     public function test_successive_buys_build_the_weighted_average_position(): void
     {
         $user = User::factory()->create();
@@ -169,6 +184,26 @@ class InvestmentTransactionTest extends TestCase
         $holding->refresh();
         $this->assertSame('45.00000000', $holding->avg_cost);
         $this->assertSame('450.00', $holding->net_invested);
+    }
+
+    public function test_updating_an_automatic_pac_buy_confirms_it(): void
+    {
+        $user = User::factory()->create();
+        $holding = $this->holding($user);
+        $movement = $holding->transactions()->create([
+            'user_id' => $user->id,
+            'side' => 'buy',
+            'occurred_at' => '2026-01-02',
+            'quantity' => 2,
+            'price' => 50,
+            'fees' => 0,
+            'needs_confirmation' => true,
+        ]);
+
+        $this->actingAs($user)
+            ->patchJson("/api/investment-holdings/{$holding->id}/transactions/{$movement->id}", ['occurred_at' => '2026-01-05', 'quantity' => 1.98, 'price' => 50.5])
+            ->assertOk()
+            ->assertJsonPath('data.needs_confirmation', false);
     }
 
     public function test_creating_a_holding_with_a_position_records_an_opening_movement(): void

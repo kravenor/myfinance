@@ -404,6 +404,9 @@ onMounted(async () => {
         <p class="text-xs text-slate-500 mt-1">
           Costo: <Amount :value="overview.total_cost_basis" :currency="overview.base_currency" />
         </p>
+        <p class="text-xs text-slate-500 mt-1" title="Commissioni di acquisti e vendite più costi (bollo, custodia, gestione) di tutto lo storico">
+          Spese totali: <Amount :value="overview.total_fees" :currency="overview.base_currency" />
+        </p>
       </div>
       <div class="card p-4">
         <p class="text-xs uppercase text-slate-500">Plus/minus latente</p>
@@ -505,7 +508,7 @@ onMounted(async () => {
           </div>
           <div v-if="lookupResults.length || lookupError" class="sm:col-span-2 md:col-span-3">
             <p v-if="lookupError" class="text-sm text-danger-600">{{ lookupError }}</p>
-            <ul v-else class="border border-slate-200 rounded divide-y divide-slate-100 text-sm">
+            <ul v-else class="border border-slate-200 rounded-sm divide-y divide-slate-100 text-sm">
               <li
                 v-for="c in lookupResults"
                 :key="c.symbol"
@@ -573,7 +576,7 @@ onMounted(async () => {
             </p>
             <FieldError :errors="fieldErrors" name="opened_at" />
           </div>
-          <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded p-3">
+          <div v-else class="sm:col-span-2 text-xs text-slate-500 bg-slate-50 rounded-sm p-3">
             Quantità e prezzo di carico si modificano dal registro movimenti, non da qui.
           </div>
           <div>
@@ -687,7 +690,7 @@ onMounted(async () => {
       </ul>
 
       <!-- Desktop / tablet: tabella classica da md in su. -->
-      <table v-if="!(loading && !items.length)" class="table hidden md:table">
+      <table v-if="!(loading && !items.length)" class="table max-md:hidden">
         <thead class="bg-slate-100">
           <tr>
             <th>Asset</th>

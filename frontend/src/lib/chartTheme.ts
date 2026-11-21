@@ -1,6 +1,6 @@
 import { Chart as ChartJS } from 'chart.js'
 
-// Colori dei grafici Chart.js, allineati ai token di tailwind.config.js
+// Colori dei grafici Chart.js, allineati ai token di theme.css
 // (income = emerald-500, expense = rose-500, primary = indigo-500).
 export const INCOME_COLOR = '#10b981'
 export const EXPENSE_COLOR = '#f43f5e'

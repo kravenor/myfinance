@@ -43,7 +43,7 @@ const toneIconClass = {
         <p class="flex-1 text-sm text-slate-800">{{ t.message }}</p>
         <button
           type="button"
-          class="-mr-1 inline-flex h-6 w-6 items-center justify-center rounded text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+          class="-mr-1 inline-flex h-6 w-6 items-center justify-center rounded-sm text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-primary-500"
           aria-label="Chiudi"
           @click="toast.dismiss(t.id)"
         >

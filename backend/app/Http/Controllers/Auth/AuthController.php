@@ -110,11 +110,18 @@ class AuthController extends Controller
         $status = Password::reset(
             $request->only('email', 'password', 'password_confirmation', 'token'),
             function (User $user, string $password) {
+                // Il reset prova il possesso della casella: i canali collegati prima (anche da chi
+                // ha registrato l'indirizzo senza possederlo) non devono continuare a ricevere avvisi.
+                $preferences = $user->notification_preferences ?? [];
+                unset($preferences['email_address']);
+
                 $user->forceFill([
                     'password' => Hash::make($password),
+                    'notification_preferences' => $preferences ?: null,
                 ])->setRememberToken(Str::random(60));
 
                 $user->save();
+                $user->pushSubscriptions()->delete();
                 SecurityLog::record('password.reset', $user->id);
 
                 event(new PasswordReset($user));

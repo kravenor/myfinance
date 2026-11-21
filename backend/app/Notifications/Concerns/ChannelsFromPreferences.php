@@ -3,6 +3,7 @@
 namespace App\Notifications\Concerns;
 
 use App\Models\User;
+use App\Support\MailText;
 use Illuminate\Notifications\Messages\MailMessage;
 use NotificationChannels\WebPush\WebPushChannel;
 use NotificationChannels\WebPush\WebPushMessage;
@@ -53,7 +54,7 @@ trait ChannelsFromPreferences
 
         return (new MailMessage)
             ->subject($data['title'])
-            ->line($data['message'])
+            ->line(MailText::escape($data['message']))
             ->action('Apri Finance', url($data['url']));
     }
 

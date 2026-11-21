@@ -163,6 +163,19 @@ class NotificationPreferenceTest extends TestCase
         );
     }
 
+    public function test_password_check_is_throttled(): void
+    {
+        $user = User::factory()->create(['password' => Hash::make('Password123!')]);
+
+        // Con la sola sessione non si deve poter indovinare la password a 300 tentativi al minuto.
+        for ($i = 0; $i < 5; $i++) {
+            $this->actingAs($user)->putJson('/api/notification-preferences', ['current_password' => "sbagliata-$i"])
+                ->assertUnprocessable();
+        }
+        $this->actingAs($user)->putJson('/api/notification-preferences', ['current_password' => 'Password123!'])
+            ->assertTooManyRequests();
+    }
+
     public function test_other_preferences_and_the_same_address_need_no_password(): void
     {
         Notification::fake();

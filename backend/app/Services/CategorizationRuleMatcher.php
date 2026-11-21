@@ -8,11 +8,17 @@ use Illuminate\Support\Facades\DB;
 
 class CategorizationRuleMatcher
 {
+    /** Passi di backtracking per una regex utente (default PHP 1.000.000, ~2 ms su un pattern catastrofico). */
+    private const REGEX_BACKTRACK_LIMIT = 10000;
+
     /** @var Collection<int, CategorizationRule>|null */
     private ?Collection $cache = null;
 
     /** @var array<int, int> */
     private array $hits = [];
+
+    /** @var array<int, true> Regole regex andate in errore in questo run. */
+    private array $brokenRegex = [];
 
     public function preload(): void
     {
@@ -82,6 +88,7 @@ class CategorizationRuleMatcher
     {
         $this->cache = null;
         $this->hits = [];
+        $this->brokenRegex = [];
     }
 
     private function matches(string $desc, CategorizationRule $rule): bool
@@ -92,8 +99,34 @@ class CategorizationRuleMatcher
             'contains' => str_contains($desc, $needle),
             'starts_with' => str_starts_with($desc, $needle),
             'equals' => $desc === $needle,
-            'regex' => @preg_match('/'.str_replace('/', '\/', $rule->pattern).'/iu', $desc) === 1,
+            'regex' => $this->matchesRegex($desc, $rule),
             default => false,
         };
+    }
+
+    /**
+     * Le regex sono scritte dall'utente e girano su ogni transazione (import fino a
+     * 5000 righe, applica regole): limite di backtracking basso perché un pattern
+     * catastrofico costi poco, e la regola che va in errore si salta per il resto del run.
+     */
+    private function matchesRegex(string $desc, CategorizationRule $rule): bool
+    {
+        if (isset($this->brokenRegex[$rule->id])) {
+            return false;
+        }
+
+        $previous = ini_set('pcre.backtrack_limit', (string) self::REGEX_BACKTRACK_LIMIT);
+        $result = @preg_match('/'.str_replace('/', '\/', $rule->pattern).'/iu', $desc);
+        if ($previous !== false) {
+            ini_set('pcre.backtrack_limit', $previous);
+        }
+
+        if ($result === false) {
+            $this->brokenRegex[$rule->id] = true;
+
+            return false;
+        }
+
+        return $result === 1;
     }
 }

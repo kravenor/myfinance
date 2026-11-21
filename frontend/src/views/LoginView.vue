@@ -152,7 +152,7 @@ function backToPassword() {
       </div>
       <div class="flex items-center justify-between gap-3 -mt-2">
         <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer py-2">
-          <input v-model="remember" type="checkbox" class="h-4 w-4 rounded border-slate-300" />
+          <input v-model="remember" type="checkbox" class="h-4 w-4 rounded-sm border-slate-300" />
           Ricordami
         </label>
         <RouterLink to="/forgot-password" class="text-sm text-primary-600 hover:underline py-2">

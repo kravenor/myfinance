@@ -488,13 +488,13 @@ onMounted(async () => {
             />
             <h2 class="font-semibold truncate">{{ g.name }}</h2>
           </div>
-          <span class="text-xs px-1.5 py-0.5 rounded whitespace-nowrap" :class="statusBadge[g.status]">
+          <span class="text-xs px-1.5 py-0.5 rounded-sm whitespace-nowrap" :class="statusBadge[g.status]">
             {{ statusLabel[g.status] }}
           </span>
         </div>
 
         <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-          <span class="px-1.5 py-0.5 rounded bg-slate-100">{{ RECURRENCE_LABEL[g.recurrence] }}</span>
+          <span class="px-1.5 py-0.5 rounded-sm bg-slate-100">{{ RECURRENCE_LABEL[g.recurrence] }}</span>
           <span v-if="g.account_id">· {{ accountName(g.account_id) }}</span>
           <span v-else class="text-warning-700">· nessun conto collegato</span>
         </div>
@@ -505,9 +505,9 @@ onMounted(async () => {
         </div>
 
         <div>
-          <div class="bg-slate-200 rounded h-2.5">
+          <div class="bg-slate-200 rounded-sm h-2.5">
             <div
-              class="h-2.5 rounded transition-all"
+              class="h-2.5 rounded-sm transition-all"
               :class="barClass(g)"
               :style="{ width: Math.min(100, g.progress ?? 0) + '%' }"
             />
@@ -520,7 +520,7 @@ onMounted(async () => {
 
         <!-- Ritmo / scadenza -->
         <div v-if="g.pace" class="flex flex-wrap items-center gap-2 text-xs">
-          <span class="px-1.5 py-0.5 rounded font-medium" :class="PACE_BADGE[g.pace.status]">
+          <span class="px-1.5 py-0.5 rounded-sm font-medium" :class="PACE_BADGE[g.pace.status]">
             {{ PACE_LABEL[g.pace.status] }}
           </span>
           <span v-if="g.pace.status !== 'completed'" class="text-slate-500">
@@ -644,7 +644,7 @@ onMounted(async () => {
               <tr v-for="t in transactions" :key="t.id">
                 <td data-label="Data">{{ formatDate(t.occurred_at) }}</td>
                 <td data-label="Tipo">
-                  <span class="text-xs px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
+                  <span class="text-xs px-1.5 py-0.5 rounded-sm bg-slate-100 text-slate-600">
                     {{ TX_TYPE_LABEL[t.type] }}
                   </span>
                 </td>

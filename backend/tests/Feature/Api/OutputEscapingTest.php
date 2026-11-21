@@ -23,11 +23,14 @@ class OutputEscapingTest extends TestCase
             'description' => '=HYPERLINK("https://evil.example";"Apri")',
             'notes' => 'Nota normale',
         ]);
+        Transaction::factory()->for($user)->for($account, 'account')->create(['description' => 'RIMBORSO;=1+1;']);
 
         $body = $this->actingAs($user)->get('/api/transactions/export')->streamedContent();
 
         $this->assertStringContainsString('"\'=HYPERLINK(""https://evil.example"";""Apri"")"', $body);
         $this->assertStringContainsString("'@Conto", $body);
+        // Excel in italiano divide le colonne sul `;`.
+        $this->assertStringContainsString("RIMBORSO;'=1+1;", $body);
         // Il testo normale resta com'è.
         $this->assertStringContainsString(',"Nota normale",', $body);
     }
@@ -43,6 +46,21 @@ class OutputEscapingTest extends TestCase
         $html = (string) (new LargeExpenseNotification($tx, 500, 'EUR', null))->toMail($user)->render();
 
         $this->assertStringNotContainsString('href="https://phish.example"', $html);
+    }
+
+    public function test_a_backslash_before_the_bracket_does_not_bring_the_link_back(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $tx = Transaction::factory()->for($user)->for($account, 'account')->create([
+            'description' => '\[Verifica il conto](https://phish.example)',
+        ]);
+
+        $html = (string) (new LargeExpenseNotification($tx, 500, 'EUR', null))->toMail($user)->render();
+
+        $this->assertStringNotContainsString('href="https://phish.example"', $html);
+        // Resta testo leggibile, non un link.
+        $this->assertStringContainsString('[Verifica il conto](https://phish.example)', html_entity_decode($html));
     }
 
     public function test_patching_only_the_pattern_of_a_regex_rule_is_validated(): void

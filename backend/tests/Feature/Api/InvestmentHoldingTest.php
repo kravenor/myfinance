@@ -46,6 +46,24 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.price_as_of', null);
     }
 
+    public function test_holdings_are_capped_per_user(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+        InvestmentHolding::factory()->for($user)->count(InvestmentHolding::MAX_PER_USER)->create(['account_id' => $account->id]);
+
+        $this->actingAs($user)->postJson('/api/investment-holdings', [
+            'account_id' => $account->id, 'name' => 'Uno di troppo', 'asset_type' => 'etf', 'quantity' => 0, 'avg_cost' => 0,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['holdings']);
+
+        // Il tetto è per utente.
+        $other = User::factory()->create();
+        $otherAccount = Account::factory()->for($other)->create(['type' => 'investment', 'currency' => 'EUR']);
+        $this->actingAs($other)->postJson('/api/investment-holdings', [
+            'account_id' => $otherAccount->id, 'name' => 'Primo', 'asset_type' => 'etf', 'quantity' => 0, 'avg_cost' => 0,
+        ])->assertCreated();
+    }
+
     public function test_bond_uses_isin_as_symbol_when_symbol_is_empty(): void
     {
         $user = User::factory()->create();
@@ -180,6 +198,38 @@ class InvestmentHoldingTest extends TestCase
             ->assertJsonPath('data.total_unrealized_pl', '100.00')
             ->assertJsonPath('data.by_asset_type.0.asset_type', 'etf')
             ->assertJsonPath('data.by_asset_type.0.pct', '100.00');
+    }
+
+    public function test_overview_sums_fees_of_all_movements(): void
+    {
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+        $holding = InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['currency' => 'EUR']);
+
+        $this->actingAs($user);
+        $holding->transactions()->create(['side' => 'buy', 'occurred_at' => '2026-01-05', 'quantity' => 1, 'price' => 98.5, 'fees' => 1.5]);
+        $holding->transactions()->create(['side' => 'fee', 'occurred_at' => '2026-06-30', 'quantity' => 0, 'price' => 0, 'fees' => 2]);
+
+        $this->getJson('/api/investments/overview')
+            ->assertOk()
+            ->assertJsonPath('data.total_fees', '3.50');
+    }
+
+    public function test_index_sums_fees_per_holding(): void
+    {
+        $user = User::factory()->create(['currency' => 'EUR']);
+        $account = Account::factory()->for($user)->create(['type' => 'investment', 'currency' => 'EUR']);
+        $holding = InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['name' => 'A', 'currency' => 'EUR']);
+        InvestmentHolding::factory()->for($user)->for($account, 'account')->create(['name' => 'B', 'currency' => 'EUR']);
+
+        $this->actingAs($user);
+        $holding->transactions()->create(['side' => 'buy', 'occurred_at' => '2026-01-05', 'quantity' => 1, 'price' => 98.5, 'fees' => 1.5]);
+        $holding->transactions()->create(['side' => 'fee', 'occurred_at' => '2026-06-30', 'quantity' => 0, 'price' => 0, 'fees' => 2]);
+
+        $this->getJson('/api/investment-holdings')
+            ->assertOk()
+            ->assertJsonPath('data.0.total_fees', '3.50')
+            ->assertJsonPath('data.1.total_fees', null);
     }
 
     public function test_overview_uses_auto_quote_over_manual_price(): void

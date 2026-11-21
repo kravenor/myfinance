@@ -1,4 +1,4 @@
-/* Palette come variabili RGB: Tailwind le legge da tailwind.config.js, la classe .dark su <html> le inverte.
+/* Palette come variabili RGB: Tailwind le legge dal blocco @theme di style.css, la classe .dark su <html> le inverte.
    Generato dalla palette Tailwind (slate, indigo, emerald, rose, sky, amber, red). */
 :root {
   --c-slate-50: 248 250 252;

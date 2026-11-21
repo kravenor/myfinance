@@ -239,7 +239,7 @@ onMounted(async () => {
         </div>
 
         <div v-if="loading" class="space-y-3" aria-busy="true" aria-label="Caricamento">
-          <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded bg-slate-100" />
+          <div v-for="i in 3" :key="i" class="h-10 animate-pulse rounded-sm bg-slate-100" />
         </div>
 
         <template v-else>
@@ -498,7 +498,7 @@ onMounted(async () => {
       <div>
         <h2 class="font-medium">Notifiche su questo dispositivo</h2>
         <p class="text-sm text-slate-500 mt-1">
-          Ricevi gli avvisi anche ad app chiusa, come le notifiche delle altre app. Si attivano dispositivo per dispositivo.
+          Ricevi gli avvisi anche ad app chiusa, come le notifiche delle altre app. Si attivano dispositivo per dispositivo e si spengono quando esci dall'account.
         </p>
       </div>
       <p v-if="push === null" class="text-sm text-slate-500">Verifica in corso…</p>

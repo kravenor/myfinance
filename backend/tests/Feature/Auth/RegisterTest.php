@@ -11,6 +11,13 @@ class RegisterTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Chiusa di default: questi test provano la registrazione aperta.
+        config(['finance.registration' => true]);
+    }
+
     public function test_user_can_register(): void
     {
         $response = $this->postJson('/api/auth/register', [

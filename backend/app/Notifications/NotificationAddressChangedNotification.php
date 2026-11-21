@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Support\MailText;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -27,7 +28,7 @@ class NotificationAddressChangedNotification extends Notification implements Sho
     {
         return (new MailMessage)
             ->subject('Indirizzo delle notifiche cambiato')
-            ->line("Da ora Finance invia le notifiche email a {$this->newAddress}.")
+            ->line('Da ora Finance invia le notifiche email a '.MailText::escape($this->newAddress).'.')
             ->line("Se il cambio non l'hai fatto tu, accedi subito, cambia la password e rimetti il tuo indirizzo nelle Impostazioni.")
             ->action('Apri le Impostazioni', url('/settings'));
     }
