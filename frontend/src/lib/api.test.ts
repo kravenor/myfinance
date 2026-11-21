@@ -1,5 +1,5 @@
 import { AxiosError, type AxiosAdapter, type InternalAxiosRequestConfig } from 'axios'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }))
 const router = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 type ApiModule = typeof import('./api')
 
 let api: ApiModule['api']
-let csrfGet: ReturnType<typeof vi.fn>
+let csrfGet: MockInstance
 let adapter: ReturnType<typeof vi.fn<AxiosAdapter>>
 
 function ok(config: InternalAxiosRequestConfig, data: unknown = {}) {
@@ -36,8 +36,7 @@ beforeEach(async () => {
 
   // Modulo nuovo a ogni test: il flag csrfReady riparte da false.
   const axios = (await import('axios')).default
-  csrfGet = vi.fn().mockResolvedValue({})
-  vi.spyOn(axios, 'get').mockImplementation(csrfGet)
+  csrfGet = vi.spyOn(axios, 'get').mockResolvedValue({})
   ;({ api } = await import('./api'))
   adapter = vi.fn<AxiosAdapter>((config) => ok(config))
   api.defaults.adapter = adapter
