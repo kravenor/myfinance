@@ -24,6 +24,11 @@ updates:
         patterns: ['vue', 'vue-router', 'pinia', '@vue/*']
       npm-minor:
         update-types: [minor, patch]
+    # TypeScript 7 non ha l'API JS usata da vue-tsc e typescript-eslint: resta su 6.0
+    # finché non la supportano (AGENTS.md §6).
+    ignore:
+      - dependency-name: typescript
+        versions: ['>=7']
 
   - package-ecosystem: github-actions
     directory: /

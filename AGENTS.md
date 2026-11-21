@@ -249,7 +249,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Test**: PHPUnit / Pest, feature test per ogni endpoint. Test DB su SQLite in-memory (vedi `phpunit.xml`). `phpunit.xml` dà ai test cache di config, rotte ed eventi separate (`APP_*_CACHE`), così un `artisan optimize` in sviluppo non li manda sul MySQL; `Tests\TestCase::setUpTraits()` si ferma prima di `RefreshDatabase` se la connessione non è sqlite in memoria.
 
 ### Frontend (Vue)
-- **TypeScript** obbligatorio
+- **TypeScript** obbligatorio, fermo a **6.0** (`~6.0.3`): la 7.0 non ha l'API JavaScript su cui si basano `vue-tsc` e typescript-eslint (`<6.1`), quindi lint e type-check non partono; Dependabot ignora `typescript >=7`. Si passa alla 7 quando entrambi la supportano. In `tsconfig.json` niente `baseUrl` (deprecato dalla 6): `paths` è relativo al file
 - **Composition API** + `<script setup>`
 - **State**: Pinia store per dominio (auth, accounts, transactions, …)
 - **HTTP**: client axios centralizzato in `src/lib/api.ts` con interceptor CSRF e gestione errori
