@@ -3,7 +3,7 @@
 > Questo documento è la **fonte di verità** per qualsiasi agente AI (Claude Code, Codex, Cursor, ecc.) che lavora su questo repository.
 > Mantienilo aggiornato a ogni modifica strutturale, ogni nuova fase completata, ogni nuova convenzione introdotta.
 
-Ultimo aggiornamento: **2026-11-20**
+Ultimo aggiornamento: **2026-11-21**
 Fase corrente: **nessuna in corso** — secondo audit di sicurezza chiuso, ipotesi validate; prossimi candidati nella coda «Da fare» di §7
 
 ---
@@ -253,6 +253,7 @@ make restore FILE=backups/finance-....sql.gz   # ripristino (chiede conferma)
 - **Composition API** + `<script setup>`
 - **State**: Pinia store per dominio (auth, accounts, transactions, …)
 - **HTTP**: client axios centralizzato in `src/lib/api.ts` con interceptor CSRF e gestione errori
+- **Test**: Vitest in ambiente node, senza DOM né `@vue/test-utils`; file `*.test.ts` accanto al modulo. Coperti `lib/date`, `lib/money`, `lib/api` (interceptor: adapter axios sostituito, router/store con `vi.mock`, `vi.resetModules` per azzerare il flag CSRF), `useCrud` (`@/lib/api` mockato) e `useQueryFilters` (`vue-router` mockato con una route `reactive`, fake timer per il debounce)
 - **Formattazione**: punto di verità unico per valuta (`src/lib/money.ts` → `formatCurrency`) e date (`src/lib/date.ts` → `formatDate`, che applica la preferenza `auth.user.date_format`; `formatDateWith` per un formato esplicito; `formatMonth` per i periodi mensili `YYYY-MM` dei report, che deriva il formato mese da quello utente togliendo il giorno). Nessuna view deve formattare date a mano (`toLocaleDateString`, `slice(0, 10)`): l'unica eccezione è `ForecastView.periodLabel` (etichetta mese/anno breve). Gli `<input type="date">` restano nativi (valore ISO): la preferenza agisce solo sul display in lettura. Il "mese corrente" lato frontend si costruisce con `financialMonthStart`/`financialMonthRange` (stesso `lib/date.ts`), mai con `getMonth()` a mano.
 - **Routing**: lazy import per ogni route
 - **Stile**: Tailwind utility-first, componenti riusabili in `src/components/ui/`. Colori **semantici** dal blocco `@theme` di [style.css](frontend/src/style.css): `primary` (accento/azioni), `income`, `expense`, `transfer`, `warning`, `danger` — niente `green-600`/`red-600`/`indigo-600` grezzi nel codice nuovo. Grafici: colori e palette solo da [chartTheme.ts](frontend/src/lib/chartTheme.ts) (`paletteColor(i)`, `INCOME_COLOR`, …), mai esadecimali nelle view. **Colore della categoria**: dove compare una categoria (liste, ciambelle, linee di trend) si usa il suo `color` con `paletteColor(i)` solo come ripiego (`c.category_color || paletteColor(i)`), così la stessa categoria ha lo stesso colore in Dashboard, Report e Statistiche; nelle liste il pallino è `<CategoryDot :color>` (grigio se assente). Gli endpoint che restituiscono categorie (`by-category`, `category-trend`, `budgets/alerts`, previsione) espongono `category_color`. Importi in lettura con `<Amount>` (`type` per colore/segno da tipo transazione, `signed` per saldi/P/L): il colore non è mai l'unico segnale, c'è sempre il segno `+`/`−`. Classi `.num` (cifre tabulari), `.input-invalid` + `.field-error` per gli errori di campo.
