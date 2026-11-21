@@ -19,6 +19,7 @@ use NotificationChannels\WebPush\HasPushSubscriptions;
  * @property list<string>|null $two_factor_recovery_codes
  * @property Carbon|null $two_factor_confirmed_at
  * @property int|null $two_factor_last_timestep
+ * @property bool $is_admin
  */
 class User extends Authenticatable
 {
@@ -48,6 +49,7 @@ class User extends Authenticatable
     protected $attributes = [
         'date_format' => 'd/m/Y',
         'month_start_day' => 1,
+        'is_admin' => false,
     ];
 
     protected $fillable = [
@@ -80,6 +82,7 @@ class User extends Authenticatable
             'two_factor_recovery_codes' => 'encrypted:array',
             'two_factor_confirmed_at' => 'datetime',
             'two_factor_last_timestep' => 'integer',
+            'is_admin' => 'boolean',
         ];
     }
 

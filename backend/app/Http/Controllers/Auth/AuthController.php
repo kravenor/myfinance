@@ -9,11 +9,13 @@ use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Requests\Auth\UpdatePasswordRequest;
 use App\Http\Resources\UserResource;
+use App\Models\Invitation;
 use App\Models\User;
 use App\Services\TwoFactorAuthenticator;
 use App\Support\FinancialMonth;
 use App\Support\SecurityLog;
 use Database\Seeders\CategorySeeder;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Auth\SessionGuard;
 use Illuminate\Http\JsonResponse;
@@ -44,11 +46,37 @@ class AuthController extends Controller
         return response()->json(['enabled' => (bool) config('finance.registration')]);
     }
 
+    /**
+     * Dati dell'invito per precompilare la registrazione. Stessa risposta per token
+     * inesistente, scaduto o già usato.
+     */
+    public function invitation(string $token): JsonResponse
+    {
+        $invitation = Invitation::findUsable($token);
+        if ($invitation === null) {
+            return response()->json(['message' => 'Invito non valido o scaduto.'], Response::HTTP_NOT_FOUND);
+        }
+
+        return response()->json([
+            'email' => $invitation->email,
+            'expires_at' => $invitation->expires_at->toIso8601String(),
+        ]);
+    }
+
     public function register(RegisterRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $invitation = $request->invitation();
 
-        $user = DB::transaction(function () use ($data) {
+        $user = DB::transaction(function () use ($data, $invitation) {
+            if ($invitation !== null) {
+                // Riletto sotto lock: due registrazioni in parallelo con lo stesso link, una sola passa.
+                $locked = Invitation::query()->usable()->whereKey($invitation->id)->lockForUpdate()->first();
+                if ($locked === null) {
+                    throw new AuthorizationException('Invito non valido o scaduto.');
+                }
+            }
+
             $user = User::create([
                 'name' => $data['name'],
                 'email' => $data['email'],
@@ -59,11 +87,18 @@ class AuthController extends Controller
 
             (new CategorySeeder)->seedFor($user);
 
+            if ($invitation !== null) {
+                Invitation::whereKey($invitation->id)->update([
+                    'accepted_at' => now(),
+                    'accepted_user_id' => $user->id,
+                ]);
+            }
+
             return $user;
         });
 
         Auth::login($user);
-        SecurityLog::record('register', $user->id);
+        SecurityLog::record('register', $user->id, ['invitation_id' => $invitation?->id]);
 
         if ($request->hasSession()) {
             $request->session()->regenerate();

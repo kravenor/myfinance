@@ -27,6 +27,7 @@ class UserResource extends JsonResource
             'month_start_day' => FinancialMonth::clamp($this->month_start_day),
             'notification_preferences' => $this->notificationPreferences(),
             'two_factor_enabled' => $this->hasTwoFactor(),
+            'is_admin' => (bool) $this->is_admin,
             'created_at' => $this->created_at?->toIso8601String(),
         ];
     }
