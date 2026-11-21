@@ -25,6 +25,13 @@ class InvestmentHoldingResource extends JsonResource
             'account_id' => $this->account_id,
             'name' => $this->name,
             'symbol' => $this->symbol,
+            'omi_zone' => $this->omi_zone,
+            'omi_type' => $this->omi_type,
+            'omi_state' => $this->omi_state,
+            'omi_zone_label' => $this->omi_zone ? $this->whenLoaded('omiZone', fn () => $this->omiZone ? trim("{$this->omiZone->comune} {$this->omiZone->zona} {$this->omiZone->zona_descr}") : null) : null,
+            'surface_sqm' => $this->surface_sqm,
+            // Superficie × €/m² OMI dell'ultimo semestre di zona: solo un confronto, il valore non ne dipende.
+            'omi_comparison' => $this->omiComparison(),
             'isin' => $this->isin,
             'asset_type' => $this->asset_type,
             'currency' => $this->currency,
@@ -38,6 +45,8 @@ class InvestmentHoldingResource extends JsonResource
             'effective_price' => $this->money($this->effectivePrice()),
             'price_source' => $this->priceSource(),
             'price_as_of' => $this->resolvedAsOf(),
+            // Immobili: indice dell'ultimo punto usato, 'omi' (zona) o 'istat' (territorio).
+            'price_index' => $this->resolvedIndex(),
             // Valori calcolati nella valuta dell'holding.
             'cost_basis' => $this->money($costBasis),
             'market_value' => $this->money($marketValue),
@@ -49,6 +58,25 @@ class InvestmentHoldingResource extends JsonResource
             'total_fees' => $this->whenAggregated('transactions', 'fees', 'sum', fn ($sum) => $this->money((float) $sum)),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+        ];
+    }
+
+    /** @return array<string, string|null>|null */
+    private function omiComparison(): ?array
+    {
+        $reference = $this->omiReference();
+        if ($reference === null || $this->surface_sqm === null) {
+            return null;
+        }
+
+        $surface = (float) $this->surface_sqm;
+
+        return [
+            'semester' => $reference->semester->toDateString(),
+            'surface_basis' => $reference->sup_nl, // L lorda, N netta
+            'min' => $this->money($surface * (float) $reference->compr_min),
+            'mid' => $this->money($surface * $reference->mid()),
+            'max' => $this->money($surface * (float) $reference->compr_max),
         ];
     }
 

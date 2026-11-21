@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection as SupportCollection;
 
@@ -24,6 +25,10 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property int $account_id
  * @property string $name
  * @property string|null $symbol
+ * @property string|null $omi_zone LinkZona OMI (solo immobili, vedi RealEstateIndex)
+ * @property int|null $omi_type Cod_Tip OMI (tipologia)
+ * @property string|null $omi_state stato conservativo OMI
+ * @property string|null $surface_sqm m² dell'immobile, solo per il confronto con la media OMI
  * @property string|null $isin
  * @property string $asset_type
  * @property string $currency
@@ -35,6 +40,7 @@ use Illuminate\Support\Collection as SupportCollection;
  * @property Carbon|null $last_price_at
  * @property string|null $notes
  * @property-read Account|null $account
+ * @property-read OmiQuotation|null $omiZone
  * @property-read Collection<int, InvestmentTransaction> $transactions
  * @property-read string|null $transactions_sum_fees solo con withSum('transactions', 'fees')
  */
@@ -50,6 +56,10 @@ class InvestmentHolding extends Model
         'account_id',
         'name',
         'symbol',
+        'omi_zone',
+        'omi_type',
+        'omi_state',
+        'surface_sqm',
         'isin',
         'asset_type',
         'currency',
@@ -71,6 +81,12 @@ class InvestmentHolding extends Model
     /** Data (Y-m-d) della quotazione automatica risolta; null se non risolta. */
     private ?string $resolvedAsOf = null;
 
+    /** Fonte dell'indice dell'ultimo punto usato, per gli immobili: 'omi' o 'istat'. */
+    private ?string $resolvedIndex = null;
+
+    /** Ultima quotazione OMI della zona scelta, per il confronto con la superficie. */
+    private ?OmiQuotation $omiReference = null;
+
     protected static function booted(): void
     {
         // Obbligazioni e certificati non hanno un ticker: l'auto-fetch
@@ -86,12 +102,21 @@ class InvestmentHolding extends Model
             if ($holding->asset_type === 'real_estate' && ! $holding->symbol) {
                 $holding->symbol = 'IT';
             }
+            // La zona OMI ha senso solo per un immobile, e solo completa di tipologia e stato.
+            if ($holding->asset_type !== 'real_estate' || ! $holding->omi_zone) {
+                $holding->omi_zone = $holding->omi_type = $holding->omi_state = null;
+            }
+            if ($holding->asset_type !== 'real_estate') {
+                $holding->surface_sqm = null;
+            }
         });
     }
 
     protected function casts(): array
     {
         return [
+            'omi_type' => 'integer',
+            'surface_sqm' => 'decimal:2',
             'quantity' => 'decimal:8',
             'avg_cost' => 'decimal:8',
             'realized_pl' => 'decimal:2',
@@ -101,10 +126,11 @@ class InvestmentHolding extends Model
         ];
     }
 
-    public function usingResolvedPrice(?float $price, ?string $asOf = null): static
+    public function usingResolvedPrice(?float $price, ?string $asOf = null, ?string $index = null): static
     {
         $this->resolvedPrice = $price;
         $this->resolvedAsOf = $asOf;
+        $this->resolvedIndex = $index;
 
         return $this;
     }
@@ -117,6 +143,23 @@ class InvestmentHolding extends Model
     public function resolvedAsOf(): ?string
     {
         return $this->resolvedAsOf;
+    }
+
+    public function resolvedIndex(): ?string
+    {
+        return $this->resolvedIndex;
+    }
+
+    public function usingOmiReference(?OmiQuotation $quotation): static
+    {
+        $this->omiReference = $quotation;
+
+        return $this;
+    }
+
+    public function omiReference(): ?OmiQuotation
+    {
+        return $this->omiReference;
     }
 
     /**
@@ -208,6 +251,12 @@ class InvestmentHolding extends Model
     }
 
     /** Registro dei movimenti da cui è derivata la posizione. */
+    /** Quotazione più recente della zona OMI scelta, per mostrarne comune e nome. */
+    public function omiZone(): HasOne
+    {
+        return $this->hasOne(OmiQuotation::class, 'link_zona', 'omi_zone')->latestOfMany('semester');
+    }
+
     public function transactions(): HasMany
     {
         return $this->hasMany(InvestmentTransaction::class);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\InvestmentHolding;
 
+use App\Models\OmiQuotation;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -37,6 +38,11 @@ class UpdateInvestmentHoldingRequest extends FormRequest
                 $this->input('asset_type', $this->route('investment_holding')?->asset_type) === 'real_estate',
                 [Rule::in(config('finance.prices.istat.areas'))],
             )],
+            // Zona OMI caricata dall'utente (solo immobili): tipologia e stato vanno con la zona.
+            'omi_zone' => ['sometimes', 'nullable', 'string', 'max:16', Rule::exists('omi_quotations', 'link_zona')->where('user_id', $this->user()->id)],
+            'omi_type' => ['sometimes', 'nullable', 'required_with:omi_zone', 'integer', 'min:1', 'max:65535'],
+            'omi_state' => ['sometimes', 'nullable', 'required_with:omi_zone', Rule::in(OmiQuotation::STATES)],
+            'surface_sqm' => ['sometimes', 'nullable', 'numeric', 'min:1', 'max:999999'],
             'isin' => ['sometimes', 'nullable', 'string', 'regex:/^[A-Z]{2}[A-Z0-9]{9}[0-9]$/'],
             'asset_type' => ['sometimes', 'required', Rule::in(['stock', 'etf', 'fund', 'bond', 'crypto', 'commodity', 'certificate', 'real_estate', 'cash', 'other'])],
             'currency' => ['sometimes', 'string', 'size:3'],

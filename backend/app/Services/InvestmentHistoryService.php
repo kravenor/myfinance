@@ -24,7 +24,10 @@ use Illuminate\Support\Facades\Auth;
  */
 class InvestmentHistoryService
 {
-    public function __construct(private readonly CurrencyConverter $converter) {}
+    public function __construct(
+        private readonly CurrencyConverter $converter,
+        private readonly RealEstateIndex $realEstateIndex,
+    ) {}
 
     /**
      * Con $holdingId la serie (e XIRR/TWR) è di quel solo holding; lo scope
@@ -56,6 +59,7 @@ class InvestmentHistoryService
         }
 
         $quotes = $this->quotesBySymbol($holdings);
+        $indexes = $this->realEstateIndex->series($holdings, $quotes);
 
         // Stato che avanza con la serie: un cursore per holding sui suoi
         // movimenti già ordinati, così ogni movimento viene letto una volta sola.
@@ -123,7 +127,7 @@ class InvestmentHistoryService
                 }
 
                 $avgCost = $costBasis[$id] / $quantity[$id];
-                $price = $this->priceAt($quotes, $holding, $at, $avgCost, $movements[$id]->first()->occurred_at) ?? $avgCost;
+                $price = $this->priceAt($quotes, $indexes, $holding, $at, $avgCost, $movements[$id]->first()->occurred_at) ?? $avgCost;
 
                 $marketValue += $this->converter->convert(
                     $quantity[$id] * $price,
@@ -267,21 +271,20 @@ class InvestmentHistoryService
 
     /**
      * Ultima quotazione <= $at nella valuta dell'holding, o null se non ce n'è ancora.
-     * Per gli immobili è il valore indicizzato, vedi InvestmentHolding::indexedPrice().
+     * Per gli immobili è il valore indicizzato sulla serie di RealEstateIndex ($indexes),
+     * vedi InvestmentHolding::indexedPrice().
      */
-    private function priceAt($quotes, InvestmentHolding $holding, Carbon $at, float $avgCost, Carbon $firstMovementAt): ?float
+    private function priceAt($quotes, Collection $indexes, InvestmentHolding $holding, Carbon $at, float $avgCost, Carbon $firstMovementAt): ?float
     {
+        if ($holding->isIndexed()) {
+            return $holding->indexedPrice($indexes[$holding->id], $at, $avgCost, $firstMovementAt);
+        }
+
         if (! $holding->symbol) {
             return null;
         }
 
-        $index = $quotes[$holding->priceKey()] ?? collect();
-
-        if ($holding->isIndexed()) {
-            return $holding->indexedPrice($index, $at, $avgCost, $firstMovementAt);
-        }
-
-        $quote = $index->last(fn (InstrumentPrice $p) => $p->as_of->lte($at));
+        $quote = ($quotes[$holding->priceKey()] ?? collect())->last(fn (InstrumentPrice $p) => $p->as_of->lte($at));
 
         if ($quote === null) {
             return null;
